@@ -35,9 +35,7 @@ def get_fields(layer_name):
 
 def get_field_types(layer_name):
     layer = getLayerByName(layer_name)
-    return {i.name(): i.type() for i in layer.dataProvider().fields()}
-
-
+    return {i.name(): i.typeName() for i in layer.dataProvider().fields()}
 
 
 # delete saved copy of temporary layer
@@ -106,6 +104,9 @@ def read_shp_to_multi_graph(layer_name, tolerance=None, simplify=True):
     return net
 
 
+# TODO check if any of the edge created is a point
+
+
 def edges_from_line(geom, attrs, tolerance=None, simplify=True):
     """
     Generate edges for each line in geom
@@ -163,5 +164,6 @@ def edges_from_line(geom, attrs, tolerance=None, simplify=True):
             edge_attrs["Wkt"] = segment.ExportToWkt()
             del segment
             yield (pt1, pt2, edge_attrs)
+
 
 
