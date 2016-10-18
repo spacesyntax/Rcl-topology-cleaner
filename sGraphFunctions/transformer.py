@@ -73,6 +73,7 @@ class transformer:
             prflds = parameters['prfields'][0]
             qgsflds = parameters['qgsfields']
             new_fields = []
+            # TODO: work with field type not name (for example you may have Integer64)
             for i in prflds:
                 if i in qgsflds.keys():
                     new_fields.append(QgsField(i,qgsflds_types[qgsflds[i]]))
