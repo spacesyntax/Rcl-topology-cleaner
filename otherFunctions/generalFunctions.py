@@ -37,7 +37,11 @@ def keep_decimals(number, number_decimals):
 
 def keep_decimals_string(string, number_decimals):
     integer_part = string.split(".")[0]
-    decimal_part = string.split(".")[1][0:number_decimals]
+    # if the input is an integer there is no decimal part
+    if len(string.split("."))== 1:
+        decimal_part = str(0)*number_decimals
+    else:
+        decimal_part = string.split(".")[1][0:number_decimals]
     if len(decimal_part) < number_decimals:
         zeros = str(0) * int((number_decimals - len(decimal_part)))
         decimal_part = decimal_part + zeros
