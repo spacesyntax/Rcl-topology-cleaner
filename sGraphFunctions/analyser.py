@@ -51,14 +51,35 @@ class analyser:
                 elif f_geom.intersection(g_geom):
                     pass
 
-
-    def find_cont_lines(self, id_column):
+    def find_islands_orphans(self, id_column):
         pass
 
-    def find_islands(self, id_column):
-        pass
+    def find_cont_lines(self, dGraph):
+        # 2. merge lines from intersection to intersection
+        # Is there a grass function for QGIS 2.14???
+        # sets of connected nodes (edges of primary graph)
+        sets = []
+        for j in connected_components(dGraph):
+            sets.append(list(j))
+        sets_in_order = [set_con for set_con in sets if len(set_con) == 2 or len(set_con) == 1]
+        for set in sets:
+            if len(set) > 2:
+                edges = []
+                for n in set:
+                    if len(dGraph.neighbors(n)) > 2 or len(dGraph.neighbors(n)) == 1:
+                        edges.append(n)
+                        # find all shortest paths and keep longest between edges
+                if len(edges) == 0:
+                    edges = [set[0], set[0]]
+                list_paths = [i for i in nx.all_simple_paths(dGraph, edges[0], edges[1])]
+                if len(list_paths) == 1:
+                    set_in_order = list_paths[0]
+                else:
+                    set_in_order = max(enumerate(list_paths), key=lambda tup: len(tup[1]))[1]
+                    del set_in_order[-1]
+                sets_in_order.append(set_in_order)
 
-    def find_orphans(self, id_column):
-        pass
+        return sets_in_order
+
 
 
