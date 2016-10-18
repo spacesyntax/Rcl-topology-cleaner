@@ -47,10 +47,8 @@ class transformer:
 
         # ----- fGRAPH TO SHP
 
-        # TODO: limitation only temp, add path
-
         elif self.transformation_type == 'fm_to_shp':
-            if parameters['path'] == None:
+            if parameters['path'] is None:
                 network = QgsVectorLayer('LineString?crs=' + parameters['crs'].toWkt(), parameters['name'], "memory")
             else:
                 # provider.fields()
