@@ -17,6 +17,7 @@ class transformer:
         # ----- SHP TO SGRAPH
 
         if self.transformation_type == 'shp_to_pgr':
+            # TODO: check the parallel lines (1 of the parallel edges is not correct connected)
             primal_graph = read_shp_to_multi_graph(parameters['layer_name'], parameters['tolerance'], parameters['simplify'])
             self.result = primal_graph
 
