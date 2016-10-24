@@ -41,7 +41,6 @@ def make_point_from_wkt(wkt, number_decimals):
 # read a wkt for a polyline and return QgsGeometry object
 # TODO test
 
-
 def make_pl_from_wkt(wkt, number_decimals):
     wkt = make_snapped_wkt(wkt, number_decimals)
     points = []

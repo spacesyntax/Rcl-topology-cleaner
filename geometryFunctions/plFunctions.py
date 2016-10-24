@@ -48,7 +48,6 @@ def edges_from_line_qgs(geom, attrs, tolerance=None, simplify=True):
         for i in range(0, len(geom.asPolyline()) - 1):
             pt1 = geom.asPolyline()[i]
             pt2 = geom.asPolyline()[i + 1]
-            # TODO: construct segment geom
             if tolerance is not None:
                 pt1 = QgsPoint(snap_coord(pt1[0], tolerance), snap_coord(pt1[1], tolerance))
                 pt2 = QgsPoint(snap_coord(pt1[0], tolerance), snap_coord(pt1[1], tolerance))

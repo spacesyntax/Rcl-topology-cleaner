@@ -15,7 +15,6 @@ def listIterator(any_list):
 # source: https://docs.python.org/2/library/itertools.html
 # make pair of current and next item in a list
 
-
 def pairwise(iterable):
     a, b = tee(iterable)
     next(b, None)

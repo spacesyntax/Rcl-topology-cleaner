@@ -153,7 +153,6 @@ def edges_from_line(geom, attrs, tolerance=None, simplify=True):
         for i in range(0, geom.GetPointCount() - 1):
             pt1 = geom.GetPoint_2D(i)
             pt2 = geom.GetPoint_2D(i + 1)
-            # TODO: construct segment geom
             if tolerance is not None:
                 pt1 = (snap_coord(pt1[0], tolerance), snap_coord(pt1[1], tolerance))
                 pt2 = (snap_coord(pt2[0], tolerance), snap_coord(pt2[1], tolerance))
@@ -166,4 +165,8 @@ def edges_from_line(geom, attrs, tolerance=None, simplify=True):
             yield (pt1, pt2, edge_attrs)
 
 
-
+def inv_mlParts(name, uid):
+    layer = getLayerByName(name)
+    invalids = [i[uid] for i in layer.getFeatures() if not i.geometry().isGeosValid()]
+    multiparts = [i[uid] for i in layer.getFeatures() if i.geometry().isMultipart()]
+    return invalids, multiparts
