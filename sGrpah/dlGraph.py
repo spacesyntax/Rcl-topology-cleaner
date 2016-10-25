@@ -1,5 +1,4 @@
-
-
+from networkx import connected_components, all_simple_paths
 
 class dlGraph:
 

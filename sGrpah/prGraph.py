@@ -24,7 +24,6 @@ class prGraph:
                 feat = QgsFeature()
                 feat.setGeometry(QgsGeometry.fromWkt(edge[2]['Wkt']))
                 feat.initAttributes(self.n_attributes)
-                # TODO: define order of attributes to be recorded
                 feat.setAttributes([edge[2][attr] for attr in self.prflds])
                 feat.setFeatureId(count)
                 features.append(feat)
@@ -67,7 +66,6 @@ class prGraph:
         new_fields = []
 
         # TODO: work with field type not name (for example you may have Integer64)
-        # TODO: synchronize order of fields with feature attributes
 
         for i in prflds:
             if i in qgsflds.keys():
@@ -89,7 +87,6 @@ class prGraph:
         for f in self.features:
             spIndex.insertFeature(f)
         # find lines intersecting other linesp
-        # TODO: change rectangle based on xmin,xmax/ ymin, ymax of all vertices
         for i in self.features:
             # bbox_points = find_max_bbox(i.geometry())
             inter_lines = spIndex.intersects(i.geometry().boundingBox())

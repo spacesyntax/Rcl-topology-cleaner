@@ -1,4 +1,4 @@
-from networkx  import connected_components, all_simple_paths 
+
 # imports
 execfile(u'/Users/joe/Rcl-topology-validation/geometryFunctions/wktFunctions.py'.encode('utf-8'))
 execfile(u'/Users/joe/Rcl-topology-validation/otherFunctions/utilityFunctions.py'.encode('utf-8'))
