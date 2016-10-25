@@ -1,3 +1,4 @@
+from networkx  import connected_components, all_simple_paths 
 # imports
 execfile(u'/Users/joe/Rcl-topology-validation/geometryFunctions/wktFunctions.py'.encode('utf-8'))
 execfile(u'/Users/joe/Rcl-topology-validation/otherFunctions/utilityFunctions.py'.encode('utf-8'))
@@ -38,7 +39,7 @@ invalids, multiparts = inv_mlParts(layer_name, base_id)
 
 # clean duplicates, overlaps
 
-clean_graph = any_primal_graph.rmv_dupl_overlaps()
+#clean_graph = any_primal_graph.rmv_dupl_overlaps()
 
 # TODO: setup constants of project
 n = getLayerByName(layer_name)
@@ -49,21 +50,21 @@ name = 'network'
 path = None
 qgsflds = get_field_types(layer_name)
 
-clean_shp = clean_graph.to_shp(path, name, crs, encoding, geom_type, qgsflds)
+clean_shp = any_primal_graph.to_shp(path, name, crs, encoding, geom_type, qgsflds)
 
 # TODO Add change coordinate reference system
 
 # Break at intersections
 
-broken_primal = clean_graph.break_at_intersections(tolerance, simplify)
-broken_clean_primal = broken_primal.rmv_dupl_overlaps()
+broken_primal = any_primal_graph.break_at_intersections(tolerance, simplify)
+#broken_clean_primal = broken_primal.rmv_dupl_overlaps()
 
 name = 'broken_network'
-broken_clean_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds)
+broken_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds)
 
 # transform primal graph to dual graph
 
-centroids = broken_clean_primal.get_centroids_dict()
+centroids = broken_primal.get_centroids_dict()
 broken_dual = dlGraph(broken_primal.to_dual(True), broken_primal.uid, centroids, True)
 
 print broken_dual.obj.size()
@@ -80,4 +81,6 @@ broken_dual.to_shp(path, name, crs, encoding, geom_type)
 #broken_dual_all.to_shp(path, name, crs, encoding, geom_type)
 
 sets = broken_dual.find_cont_lines()
+
+merged_dual = broken_dual.merge(broken_primal, tolerance, simplify)
 
