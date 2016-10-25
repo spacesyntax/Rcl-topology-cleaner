@@ -48,6 +48,9 @@ class dlGraph:
         network.commitChanges()
         return network
 
+    def to_shp_vertices(self):
+        pass
+
     # Code source: ESS TOOLKIT https://github.com/SpaceGroupUCL/qgisSpaceSyntaxToolkit.git
 
     # only orphans not islands ?
@@ -99,6 +102,45 @@ class dlGraph:
 
         return sets_in_order
 
+    def merge(self, prGraph, tolerance, simplify):
+        geom_dict = prGraph.get_geom_dict()
+        attr_dict = prGraph.get_attr_dict()
 
-    def to_shp_vertices():
-        pass
+        primal_merged = nx.MultiGraph()
+
+        count = 0
+        for set_to_merge in self.find_cont_lines():
+            if len(set_to_merge) == 1:
+                attrs = attr_dict[set_to_merge[0]]
+                attrs['merged_id'] = attrs['broken_id']
+                ogr_geom = ogr.Geometry(ogr.wkbLineString)
+                for i in geom_dict[set_to_merge[0]].asPolyline():
+                    ogr_geom.AddPoint_2D(i[0], i[1])
+                for edge in edges_from_line(ogr_geom, attrs, tolerance, simplify):
+                    e1, e2, attr = edge
+                    attr['Wkt'] = ogr_geom.ExportToWkt()
+                    primal_merged.add_edge(e1, e2, attr_dict=attr)
+            else:
+                attrs = attr_dict[set_to_merge[0]]
+                attrs['merged_id'] = attrs['broken_id'] + '_mr_' + str(count)
+                new_geom = geom_dict[set_to_merge[0]]
+                geom_to_merge = [geom_dict[i] for i in set_to_merge]
+                # TODO: check when combining with multipolyline
+                for ind, line in enumerate(geom_to_merge[1:], start=1):
+                    second_geom = geom_dict[set_to_merge[ind]]
+                    first_geom = geom_to_merge[(ind - 1) % len(set_to_merge)]
+                    new_geom = second_geom.combine(first_geom)
+                    geom_to_merge[ind] = new_geom
+                ogr_geom = ogr.Geometry(ogr.wkbLineString)
+                for i in new_geom.asPolyline():
+                    ogr_geom.AddPoint_2D(i[0], i[1])
+                for edge in edges_from_line(ogr_geom, attrs, tolerance, simplify):
+                    e1, e2, attr = edge
+                    attr['Wkt'] = ogr_geom.ExportToWkt()
+                    primal_merged.add_edge(e1, e2, attr_dict=attr)
+
+        return primal_merged
+
+
+
+
