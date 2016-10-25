@@ -108,10 +108,30 @@ class prGraph:
 
     # iterator of dual graph edges from prGraph edges
 
-    def dl_edges_from_pr_graph(self, break_at_intersections):
+    def dl_edges_from_pr_graph(self, break_at_intersections, angular_cost = True, polylines=False):
+        geometries = self.get_geom_dict()
         for point, edges in self.topology_iter(break_at_intersections):
             for x in itertools.combinations(edges, 2):
-                yield x
+                inter_point = geometries[x[0]].intersection(geometries[x[1]])
+                if angular_cost:
+                    if polylines:
+                        vertex1 = geometries[x[0]].asPolyline()[-2]
+                        if inter_point.asPoint() == geometries[x[0]].asPolyline()[0]:
+                            vertex1 = geometries[x[0]].asPolyline()[1]
+                        vertex2 = geometries[x[1]].asPolyline()[-2]
+                        if inter_point.asPoint() == geometries[x[1]].asPolyline()[0]:
+                            vertex2 = geometries[x[1]].asPolyline()[1]
+                    else:
+                        vertex1 = geometries[x[0]].asPolyline()[0]
+                        if inter_point.asPoint() == geometries[x[0]].asPolyline()[0]:
+                            vertex1 = geometries[x[0]].asPolyline()[-1]
+                        vertex2 = geometries[x[1]].asPolyline()[0]
+                        if inter_point.asPoint() == geometries[x[1]].asPolyline()[0]:
+                            vertex2 = geometries[x[1]].asPolyline()[-1]
+                    angle = angle_3_points(inter_point, vertex1, vertex2)
+                    yield (x[0], x[1], angle)
+                else:
+                    yield x
 
     # iterator of dual graph nodes from prGraph edges
 
@@ -159,7 +179,7 @@ class prGraph:
         network.commitChanges()
         return network
 
-    def to_dual(self, break_at_intersections):
+    def to_dual(self, break_at_intersections, angular_cost=False, polylines=False):
         dual_graph = nx.MultiGraph()
         # TODO: check if add_edge is quicker
         dual_graph.add_edges_from(
