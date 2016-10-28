@@ -30,16 +30,9 @@ any_primal_graph = prGraph(primal_graph, base_id, True)
 print any_primal_graph.obj.size()
 print any_primal_graph.obj.__len__()
 
-
-# _________________________ DIAGNOSIS ______________________________
-
 # identify multiparts invalids from shpefile
 
 invalids, multiparts = inv_mlParts(layer_name, base_id)
-
-# clean duplicates, overlaps
-
-#clean_graph = any_primal_graph.rmv_dupl_overlaps()
 
 # TODO: setup constants of project
 n = getLayerByName(layer_name)
@@ -56,16 +49,16 @@ clean_shp = any_primal_graph.to_shp(path, name, crs, encoding, geom_type, qgsfld
 
 # Break at intersections
 
-broken_primal = any_primal_graph.break_at_intersections(tolerance, simplify)
-#broken_clean_primal = broken_primal.rmv_dupl_overlaps()
+broken_primal = any_primal_graph.break_graph(tolerance, simplify)
+broken_clean_primal = broken_primal.rmv_dupl_overlaps()
 
 name = 'broken_network'
-broken_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds)
+broken_clean_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds)
 
 # transform primal graph to dual graph
 
-centroids = broken_primal.get_centroids_dict()
-broken_dual = dlGraph(broken_primal.to_dual(True), broken_primal.uid, centroids, True)
+centroids = broken_clean_primal.get_centroids_dict()
+broken_dual = dlGraph(broken_clean_primal.to_dual(True), broken_clean_primal.uid, centroids, True)
 
 print broken_dual.obj.size()
 print broken_dual.obj.__len__()
@@ -73,14 +66,20 @@ print broken_dual.obj.__len__()
 name = 'dual_network'
 broken_dual.to_shp(path, name, crs, encoding, geom_type)
 
-#broken_dual_all = dlGraph(broken_primal.to_dual(False), broken_primal.uid, centroids, True)
-#print broken_dual_all.obj.size()
-#print broken_dual_all.obj.__len__()
+# Merge between intersections
+# sets = broken_dual.find_cont_lines()
 
-#name = 'dual_network_all'
-#broken_dual_all.to_shp(path, name, crs, encoding, geom_type)
+merged_primal = broken_dual.merge(broken_clean_primal, tolerance, simplify)
+merged_clean_primal = merged_primal.rmv_dupl_overlaps()
 
-sets = broken_dual.find_cont_lines()
+name = 'merged_network'
+merged_clean_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds)
 
-merged_dual = broken_dual.merge(broken_primal, tolerance, simplify)
+centroids = merged_clean_primal.get_centroids_dict()
 
+merged_dual_all = dlGraph(merged_clean_primal.to_dual(False,True,True), merged_clean_primal.uid, centroids, True)
+print merged_dual_all.obj.size()
+print merged_dual_all.obj.__len__()
+
+name = 'dual'
+merged_dual_all.to_shp(path, name, crs, encoding, geom_type)
