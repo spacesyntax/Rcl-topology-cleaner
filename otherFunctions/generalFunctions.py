@@ -76,4 +76,4 @@ def angle_3_points(inter_point, vertex1, vertex2):
         cos_angle = int(-1)
     if cos_angle > 1:
         cos_angle = int(1)
-    return math.acos(cos_angle)
+    return math.degrees(math.acos(cos_angle))
