@@ -9,8 +9,8 @@ import ogr
 
 class prGraph:
 
-    def __init__(self, prGraph, id_column, make_feat = True):
-        self.obj = prGraph
+    def __init__(self, any_primal_graph, id_column, make_feat = True):
+        self.obj = any_primal_graph
         self.uid = id_column
         self.n_attributes = len(self.obj.edges(data=True)[0][2].keys())
         self.uid_index = (self.obj.edges(data=True)[0][2].keys()).index(self.uid)
@@ -129,7 +129,7 @@ class prGraph:
                         if inter_point.asPoint() == geometries[x[1]].asPolyline()[0]:
                             vertex2 = geometries[x[1]].asPolyline()[-1]
                     angle = angle_3_points(inter_point, vertex1, vertex2)
-                    yield (x[0], x[1], angle)
+                    yield (x[0], x[1], {'cost': angle})
                 else:
                     yield x
 
@@ -179,11 +179,11 @@ class prGraph:
         network.commitChanges()
         return network
 
-    def to_dual(self, break_at_intersections, angular_cost=False, polylines=False):
+    def to_dual(self, break_at_intersections, angular_cost=True, polylines=False):
         dual_graph = nx.MultiGraph()
         # TODO: check if add_edge is quicker
         dual_graph.add_edges_from(
-            [edge for edge in self.dl_edges_from_pr_graph(break_at_intersections)])
+            [edge for edge in self.dl_edges_from_pr_graph(break_at_intersections, angular_cost, polylines)])
         # add nodes (some lines are not connected to others because they are pl)
         # TODO: add node if node not in graph
         dual_graph.add_nodes_from(
@@ -200,17 +200,24 @@ class prGraph:
             for line in inter_lines:
                 g_geom = geometries[line]
                 intersection = f_geom.intersection(g_geom)
+                # intersecting geometries at point
                 if intersection.wkbType() == 1 and point_is_vertex(intersection, f_geom):
                     breakages.append(intersection)
                 # TODO: test multipoints
+                #intersecting geometries at multiple points
                 elif intersection.wkbType() == 4:
                     for point in intersection.asGeometryCollection():
                         if point_is_vertex(intersection, f_geom):
                             breakages.append(point)
+                # overalpping geometries
+                elif intersection.wkbType() == 2:
+                    breakages += [QgsGeometry.fromPoint(QgsPoint(intersection.asPolyline()[0])), QgsGeometry.fromPoint(QgsPoint(intersection.asPolyline()[-1]))]
+                elif intersection.wkbType() == 5:
+                    breakages += [QgsGeometry.fromPoint(QgsPoint(intersection.asGeometryCollection()[0].asPolyline()[0])), QgsGeometry.fromPoint(QgsPoint(intersection.asGeometryCollection()[-1].asPolyline()[-1]))]
             if len(breakages) > 0:
                 yield feat, set([vertex for vertex in find_vertex_index(breakages, feat, geometries)])
 
-    def break_at_intersections(self, tolerance, simplify):
+    def break_graph(self, tolerance, simplify):
         count = 1
         geom_vertices = self.get_geom_vertices_dict()
         attr_dict = self.get_attr_dict()
@@ -266,13 +273,45 @@ class prGraph:
                 elif g_geom.length() == f_geom.length() and uid[line] < uid[feat]:
                     yield feat, 'del duplicate'
 
+    # SOURCE ess toolkit
+    def find_dupl_overlaps_ssx(self):
+        geometries = self.get_geom_dict()
+        uid = self.uid_to_fid
+        for feat, inter_lines in self.inter_lines_bb_iter():
+            f_geom = geometries[feat]
+            for line in inter_lines:
+                g_geom = geometries[line]
+                if uid[line] < uid[feat]:
+                    # duplicate geometry
+                    if f_geom.isGeosEqual(g_geom):
+                        yield line, 'del duplicate'
+                    # geometry overlaps
+                    #if f_geom.overlaps(g_geom):
+                    #    yield feat, 'del overlap'
+
+    # TODO: test speed
+    def get_invalid_duplicate_geoms_ids(self):
+        geometries = self.get_geom_dict()
+        dupl_geoms_ids = []
+        list_lengths = [keep_decimals(i.geometry().length(), 6) for i in shp.getFeatures()]
+        dupl_lengths = list(set([k for k, v in Counter(list_lengths).items() if v > 1]))
+        for item in dupl_lengths:
+            dupl_geoms_ids.append([i[0] for i in zip(count(), list_lengths) if i[1] == item])
+        #for i in dupl_geoms_ids:
+        #    i.remove(i[0])
+        dupl_geoms_ids_to_rem = [x for x in dupl_geoms_ids[1:]]
+
+        return dupl_geoms_ids_to_rem
+
     def rmv_dupl_overlaps(self):
         edges = {edge[2][self.uid]: (edge[0], edge[1]) for edge in self.obj.edges(data=True)}
         edges_to_remove = []
 
-        for edge, action in self.find_dupl_overlaps():
+        # TODO: remove edge with sepcific attributes
+        for edge, action in self.find_dupl_overlaps_ssx():
             edges_to_remove.append(edges[edge])
 
+        # TODO: test reconstructing the graph for speed purposes
         self.obj.remove_edges_from(edges_to_remove)
 
         return prGraph(self.obj, self.uid, make_feat=True)
