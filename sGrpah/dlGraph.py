@@ -2,7 +2,7 @@ from networkx import connected_components, all_simple_paths
 
 class dlGraph:
 
-    def __init__(self, dlGraph, id_column, centroids, make_feat = True):
+    def __init__(self, dlGraph, id_column, centroids, make_feat=True):
         self.obj = dlGraph
         self.uid = id_column
         self.attributes = ['line1', 'line2', 'cost']
@@ -52,27 +52,25 @@ class dlGraph:
 
     # Code source: ESS TOOLKIT https://github.com/SpaceGroupUCL/qgisSpaceSyntaxToolkit.git
 
-    # only orphans not islands ?
-
-    def find_islands_orphans(self, id_column):
+    def find_islands_orphans(self):
         # order based on length
-        components = sorted(connected_components(self.settings['dlGraph']), key=len, reverse=True)
+        components = sorted(connected_components(self.obj), key=len, reverse=True)
+        islands = []
+        orphans = []
         if len(components) > 1:
             islands = []
             # get vertex ids
             for cluster in components[1:len(components)]:  # excludes the first giant component
                 # identify orphans
                 if len(cluster) == 1:
-                    node = cluster.pop()
-                    # TODO: change
-                    self.axial_errors['orphan'].append(node)
-                    self.problem_nodes.append(node)
+                    islands.append(cluster.pop())
                 # identify islands
                 elif len(cluster) > 1:
-                    nodes = list(cluster)
-                    islands.append(nodes)
-                    # TODO: change
-                    self.problem_nodes.extend(nodes)
+                    orphan = list(cluster)
+                    orphans.append(orphan)
+
+        return islands, orphans
+
 
     def find_cont_lines(self):
         # 2. merge lines from intersection to intersection
@@ -101,9 +99,9 @@ class dlGraph:
 
         return sets_in_order
 
-    def merge(self, prGraph, tolerance, simplify):
-        geom_dict = prGraph.get_geom_dict()
-        attr_dict = prGraph.get_attr_dict()
+    def merge(self, primal_graph, tolerance, simplify):
+        geom_dict = primal_graph.get_geom_dict()
+        attr_dict = primal_graph.get_attr_dict()
 
         primal_merged = nx.MultiGraph()
 
@@ -130,15 +128,25 @@ class dlGraph:
                     first_geom = geom_to_merge[(ind - 1) % len(set_to_merge)]
                     new_geom = second_geom.combine(first_geom)
                     geom_to_merge[ind] = new_geom
-                ogr_geom = ogr.Geometry(ogr.wkbLineString)
-                for i in new_geom.asPolyline():
-                    ogr_geom.AddPoint_2D(i[0], i[1])
-                for edge in edges_from_line(ogr_geom, attrs, tolerance, simplify):
-                    e1, e2, attr = edge
-                    attr['Wkt'] = ogr_geom.ExportToWkt()
-                    primal_merged.add_edge(e1, e2, attr_dict=attr)
+                if new_geom.wkbType() == 5:
+                    for linestring in new_geom.asGeometryCollection():
+                        ogr_geom = ogr.Geometry(ogr.wkbLineString)
+                        for i in linestring.asPolyline():
+                            ogr_geom.AddPoint_2D(i[0], i[1])
+                        for edge in edges_from_line(ogr_geom, attrs, tolerance, simplify):
+                            e1, e2, attr = edge
+                            attr['Wkt'] = ogr_geom.ExportToWkt()
+                            primal_merged.add_edge(e1, e2, attr_dict=attr)
+                elif new_geom.wkbType() == 2:
+                    ogr_geom = ogr.Geometry(ogr.wkbLineString)
+                    for i in new_geom.asPolyline():
+                        ogr_geom.AddPoint_2D(i[0], i[1])
+                    for edge in edges_from_line(ogr_geom, attrs, tolerance, simplify):
+                        e1, e2, attr = edge
+                        attr['Wkt'] = ogr_geom.ExportToWkt()
+                        primal_merged.add_edge(e1, e2, attr_dict=attr)
 
-        return primal_merged
+        return prGraph(primal_merged, 'merged_id', make_feat=True)
 
 
 
