@@ -43,8 +43,53 @@ class RoadNetworkCleanerDockWidget(QtGui.QDockWidget, FORM_CLASS):
         # http://qt-project.org/doc/qt-4.8/designer-using-a-ui-file.html
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
+        self.outputText.setPlaceholderText("Save as temporary layer...")
+        self.browseButton.clicked.connect(self.setOutput)
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
         event.accept()
 
+    def getNetwork(self):
+        return self.inputCombo.currentText()
+
+    def setOutput(self):
+        file_name = QtGui.QFileDialog.getSaveFileName(self, "Save output file ", "cleaned_network", '*.shp')
+        if file_name:
+            self.outputText.setText(file_name)
+
+    def getOutput(self):
+        return self.outputText.text()
+
+    def getInput(self):
+        name = self.getNetwork()
+        layer = None
+        for i in self.iface.legendInterface().layers():
+            if i.name() == name:
+                layer = i
+        return layer
+
+    def popActiveLayers(self, layers_list):
+        self.inputCombo.clear()
+        self.inputCombo.addItems(layers_list)
+
+    def get_settings(self):
+        settings = {'input': self.getNetwork(), 'output': self.getOutput()}
+        return settings
+
+    def giveWarningMessage(self, message):
+        # Gives warning according to message
+        self.iface.messageBar().pushMessage(
+            "Rcl simplification: ",
+            "%s" % (message),
+            level=QgsMessageBar.WARNING,
+            duration=5)
+
+    def cancel(self):
+        pass
+
+    def diagnose(self):
+        pass
+
+    def clean(self):
+        pass
