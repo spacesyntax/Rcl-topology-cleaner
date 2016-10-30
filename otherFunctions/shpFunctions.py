@@ -1,31 +1,14 @@
 
-# imports
-# import utilityFunctions as uF
+# plugin module imports
+from utilityFunctions import getLayerByName, getLayerPath4ogr
+from plFunctions import make_snapped_wkt, snap_coord
+
+# other import
 import networkx as nx
-# import generalFunctions as gF
-# import wktFunctions as wF
 import os
 
 
 # copy a temporary layer
-
-
-def copy_shp(temp_layer, path):
-    features_to_copy = getAllFeatures(temp_layer)
-    provider = temp_layer.dataProvider()
-    writer = QgsVectorFileWriter(path, provider.encoding(), provider.fields(), provider.geometryType(), provider.crs(),
-                                 "ESRI Shapefile")
-
-    # TODO: push message
-    if writer.hasError() != QgsVectorFileWriter.NoError:
-        print "Error when creating shapefile: ", writer.errorMessage()
-
-    for fet in features_to_copy.values():
-        writer.addFeature(fet)
-
-    del writer
-    layer = QgsVectorLayer(path, temp_layer.name(), "ogr")
-    return layer
 
 
 def get_fields(layer_name):

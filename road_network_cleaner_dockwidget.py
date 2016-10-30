@@ -73,8 +73,16 @@ class RoadNetworkCleanerDockWidget(QtGui.QDockWidget, FORM_CLASS):
         self.inputCombo.clear()
         self.inputCombo.addItems(layers_list)
 
+    def popTolerance(self):
+        self.toleranceCombo.clear()
+        self.toleranceCombo.addItems(['mm', 'cm', 'dm', 'm'])
+
+    def getTolerance(self):
+        return self.toleranceCombo.currentText()
+
     def get_settings(self):
-        settings = {'input': self.getNetwork(), 'output': self.getOutput()}
+        decimal_tolerance = {'m': 1,'dm': 2, 'cm': 3, 'mm': 4}
+        settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'tolerance': decimal_tolerance[self.getTolerance()]}
         return settings
 
     def giveWarningMessage(self, message):

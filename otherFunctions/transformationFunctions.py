@@ -1,9 +1,6 @@
 
-# imports
-import networkx as nx
-# import utilityFunctions as uF
-# import shpFunctions as sF
-# import superGraph
+# plugin module imports
+from shpFunctions import read_shp_to_multi_graph
 
 # ----- TRANSFORMATION TYPES -----
 

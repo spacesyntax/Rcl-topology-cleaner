@@ -1,11 +1,18 @@
 
-# imports
+# plugin module imports
+
+# pl_midpoint
+# angle_3_points
+# point_is_vertex
+# edges_from_line
+
+# other imports
 import itertools
 from PyQt4.QtCore import QVariant
-qgsflds_types = {u'Real': QVariant.Double , u'String': QVariant.String}
 import networkx as nx
 import ogr
 
+qgsflds_types = {u'Real': QVariant.Double , u'String': QVariant.String}
 
 class prGraph:
 

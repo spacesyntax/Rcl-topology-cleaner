@@ -1,7 +1,8 @@
 
-# imports
+# plugin module imports
+
+# other imports
 from os.path import expanduser
-# import shpFunctions as sF
 
 
 # source: ess utility functions
@@ -14,6 +15,22 @@ def getLayerByName(name):
             layer = i
     return layer
 
+def copy_shp(temp_layer, path):
+    features_to_copy = getAllFeatures(temp_layer)
+    provider = temp_layer.dataProvider()
+    writer = QgsVectorFileWriter(path, provider.encoding(), provider.fields(), provider.geometryType(), provider.crs(),
+                                 "ESRI Shapefile")
+
+    # TODO: push message
+    if writer.hasError() != QgsVectorFileWriter.NoError:
+        print "Error when creating shapefile: ", writer.errorMessage()
+
+    for fet in features_to_copy.values():
+        writer.addFeature(fet)
+
+    del writer
+    layer = QgsVectorLayer(path, temp_layer.name(), "ogr")
+    return layer
 
 # source: ess utility functions
 

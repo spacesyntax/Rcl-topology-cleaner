@@ -22,6 +22,8 @@
 """
 from PyQt4.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, Qt
 from PyQt4.QtGui import QAction, QIcon
+from qgis.core import QgsMapLayer
+
 # Initialize Qt resources from file resources.py
 import resources
 
@@ -29,6 +31,17 @@ import resources
 from road_network_cleaner_dockwidget import RoadNetworkCleanerDockWidget
 import os.path
 
+#import analysis
+
+# Import the debug library
+# set is_debug to False in release version
+is_debug = False
+try:
+    import pydevd
+    has_pydevd = False
+except ImportError, e:
+    has_pydevd = False
+    is_debug = False
 
 class RoadNetworkCleaner:
     """QGIS Plugin Implementation."""
@@ -71,7 +84,18 @@ class RoadNetworkCleaner:
         #print "** INITIALIZING RoadNetworkCleaner"
 
         self.pluginIsActive = False
-        self.dockwidget = None
+
+        # TODO: CHECK IF IT NEEDS TO GET BACK TO self.dockwidget == None
+        self.dockwidget = RoadNetworkCleanerDockWidget()
+
+        # Setup debugger
+        if has_pydevd and is_debug:
+            pydevd.settrace('localhost', port=53100, stdoutToServer=True, stderrToServer=True, suspend=True)
+
+        # setup GUI signals
+        self.dockwidget.validateButton.clicked.connect(self.runValidation)
+        self.dockwidget.cleanButton.clicked.connect(self.runCleaning)
+        self.dockwidget.cancelButton.clicked.connect(self.killAnalysis)
 
 
     # noinspection PyMethodMayBeStatic
@@ -208,6 +232,84 @@ class RoadNetworkCleaner:
 
     #--------------------------------------------------------------------------
 
+    def getActiveLayers(self):
+        layers_list = []
+        for layer in self.iface.legendInterface().layers():
+            if layer.isValid() and layer.type() == QgsMapLayer.VectorLayer:
+                if layer.hasGeometryType() and (layer.wkbType() == 2 or layer.wkbType() == 5):
+                    layers_list.append(layer.name())
+        return layers_list
+
+    def runCleaning(self, settings):
+        settings = self.dockwidget.get_settings()
+        return analysis.clean(settings).run()
+
+    def runValidation(self):
+        pass
+
+    # SOURCE: Network Segmenter https://github.com/OpenDigitalWorks/NetworkSegmenter
+
+    def runAnalysis(self):
+        self.dlg.analysisProgress.reset()
+        # Create an analysis instance
+        settings = self.getSettings()
+        analysis = clean(settings).run()
+        # Create new thread and move the analysis class to it
+        analysis_thread = QThread()
+        analysis.moveToThread(analysis_thread)
+        # Setup signals
+        analysis.finished.connect(self.finishAnalysis)
+        analysis.error.connect(self.analysisError)
+        analysis.warning.connect(self.giveWarningMessage)
+        analysis.progress.connect(self.dlg.analysisProgress.setValue)
+        # Start analysis
+        analysis_thread.started.connect(analysis.analysis)
+        analysis_thread.start()
+        self.analysis_thread = analysis_thread
+        self.analysis = analysis
+
+    def finishAnalysis(self, output):
+        # Clean up thread and analysis
+        self.analysis_thread.quit()
+        self.analysis_thread.wait()
+        self.analysis_thread.deleteLater()
+        self.analysis.deleteLater()
+        # Render output
+        if output:
+            self.renderNetwork(output)
+        else:
+            self.giveWarningMessage('Something went wrong')
+        # Closing the dialog
+        self.dlg.closeDialog()
+
+    def analysisError(self, e, exception_string):
+        QgsMessageLog.logMessage(
+            'Catchment Analyser raised an exception: %s' % exception_string,
+            level=QgsMessageLog.CRITICAL)
+        # Closing the dialog
+        self.dlg.closeDialog()
+
+    def killAnalysis(self):
+        # Check if the analysis is running
+        if self.analysis:
+            # Disconnect signals
+            self.analysis.finished.disconnect(self.finishAnalysis)
+            self.analysis.error.disconnect(self.analysisError)
+            self.analysis.warning.disconnect(self.giveWarningMessage)
+            self.analysis.progress.disconnect(self.dlg.analysisProgress.setValue)
+            # Clean up thread and analysis
+            self.analysis.kill()
+            self.analysis.deleteLater()
+            self.analysis_thread.quit()
+            self.analysis_thread.wait()
+            self.analysis_thread.deleteLater()
+            self.analysis = None
+            # Closing the dialog
+            self.dlg.closeDialog()
+        else:
+            self.dlg.closeDialog()
+
+
     def run(self):
         """Run method that loads and starts the plugin"""
 
@@ -230,4 +332,6 @@ class RoadNetworkCleaner:
             # TODO: fix to allow choice of dock location
             self.iface.addDockWidget(Qt.RightDockWidgetArea, self.dockwidget)
             self.dockwidget.show()
+            self.dockwidget.popActiveLayers(self.getActiveLayers())
+            self.dockwidget.popTolerance()
 

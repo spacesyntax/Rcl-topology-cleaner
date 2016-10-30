@@ -8,14 +8,16 @@ execfile(u'/Users/joe/Rcl-topology-validation/sGrpah/prGraph.py'.encode('utf-8')
 execfile(u'/Users/joe/Rcl-topology-validation/geometryFunctions/plFunctions.py'.encode('utf-8'))
 execfile(u'/Users/joe/Rcl-topology-validation/otherFunctions/generalFunctions.py'.encode('utf-8'))
 execfile(u'/Users/joe/Rcl-topology-validation/sGrpah/dlGraph.py'.encode('utf-8'))
-execfile(u'/Users/joe/Rcl-topology-validation/sGraphFunctions/transformer.py'.encode('utf-8'))
+execfile(u'/Users/joe/Rcl-topology-validation/otherFunctions/transformer.py'.encode('utf-8'))
+execfile(u'/Users/joe/Rcl-topology-validation/clean.py'.encode('utf-8'))
+
 
 # _________________________ TRANSFORMATIONS ______________________________
 
 # transform shapefile to primal graph
 
 from PyQt4.QtCore import QVariant
-qgsflds_types = {u'Real': QVariant.Double , u'String': QVariant.String}
+qgsflds_types = {u'Real': QVariant.Double, u'String': QVariant.String}
 
 layer_name = 'nyc_streets_shp'
 
@@ -58,7 +60,7 @@ broken_clean_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds)
 # transform primal graph to dual graph
 
 centroids = broken_clean_primal.get_centroids_dict()
-broken_dual = dlGraph(broken_clean_primal.to_dual(True), broken_clean_primal.uid, centroids, True)
+broken_dual = dlGraph(broken_clean_primal.to_dual(True,False,False), broken_clean_primal.uid, centroids, True)
 
 print broken_dual.obj.size()
 print broken_dual.obj.__len__()

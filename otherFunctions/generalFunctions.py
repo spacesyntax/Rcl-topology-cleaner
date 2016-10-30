@@ -1,4 +1,3 @@
-
 # imports
 from itertools import tee, izip
 import math
