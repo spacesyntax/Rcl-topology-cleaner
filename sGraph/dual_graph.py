@@ -1,12 +1,11 @@
-
-# plugin module imports
-
-
-# other imports
+# general imports
 import networkx as nx
 from networkx import connected_components, all_simple_paths
 import ogr
 
+# plugin module imports
+from primal_graph import prGraph
+from shpFunctions import edges_from_line
 
 class dlGraph:
 

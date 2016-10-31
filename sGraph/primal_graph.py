@@ -1,16 +1,17 @@
 
-# plugin module imports
 
-# pl_midpoint
-# angle_3_points
-# point_is_vertex
-# edges_from_line
-
-# other imports
+# general imports
 import itertools
 from PyQt4.QtCore import QVariant
 import networkx as nx
 import ogr
+
+# plugin module imports
+
+from generalFunctions import angle_3_points, keep_decimals
+from plFunctions import pl_midpoint, point_is_vertex, find_vertex_index
+from shpFunctions import edges_from_line
+
 
 qgsflds_types = {u'Real': QVariant.Double , u'String': QVariant.String}
 
