@@ -1,13 +1,8 @@
-# other imports
-
 
 # plugin module imports
 
-from sGraph import dual_graph
-
-from otherFunctions.utilityFunctions import getLayerByName
-from otherFunctions.shpFunctions import get_field_types
-from otherFunctions.transformationFunctions import transformer
+from sGraph.dual_graph import *
+from sGraph.shpFunctions import *
 
 class clean:
 
@@ -42,7 +37,7 @@ class clean:
 
         # transform primal graph to dual graph
         centroids = broken_clean_primal.get_centroids_dict()
-        broken_dual = dual_graph.dlGraph(broken_clean_primal.to_dual(True, False, False), broken_clean_primal.uid, centroids, True)
+        broken_dual = dlGraph(broken_clean_primal.to_dual(True, False, False), broken_clean_primal.uid, centroids, True)
 
         # Merge between intersections
         merged_primal = broken_dual.merge(broken_clean_primal, tolerance, simplify)
