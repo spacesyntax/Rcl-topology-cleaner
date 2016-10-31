@@ -31,7 +31,7 @@ import resources
 from road_network_cleaner_dockwidget import RoadNetworkCleanerDockWidget
 import os.path
 
-#import analysis
+import analysis
 
 # Import the debug library
 # set is_debug to False in release version
