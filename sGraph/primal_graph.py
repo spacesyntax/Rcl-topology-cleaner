@@ -3,6 +3,7 @@
 # general imports
 import itertools
 from PyQt4.QtCore import QVariant
+from qgis.core import QgsFeature, QgsGeometry, QgsField, QgsSpatialIndex, QgsVectorLayer, QgsVectorFileWriter, QgsPoint, QgsMapLayerRegistry
 import networkx as nx
 import ogr
 
@@ -172,9 +173,8 @@ class prGraph:
         if path is None:
             network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), name, "memory")
         else:
-            # provider.fields()
-            file_writer = QgsVectorFileWriter(path, encoding, None, geom_type,
-                                              crs.crs(), "ESRI Shapefile")
+            file_writer = QgsVectorFileWriter(path, encoding, self.get_qgs_fields(qgsflds), geom_type,
+                                              crs, "ESRI Shapefile")
             if file_writer.hasError() != QgsVectorFileWriter.NoError:
                 print "Error when creating shapefile: ", file_writer.errorMessage()
             del file_writer
@@ -182,7 +182,8 @@ class prGraph:
         QgsMapLayerRegistry.instance().addMapLayer(network)
         pr = network.dataProvider()
         network.startEditing()
-        pr.addAttributes(self.get_qgs_fields(qgsflds))
+        if path is None:
+            pr.addAttributes(self.get_qgs_fields(qgsflds))
         pr.addFeatures(self.features)
         network.commitChanges()
         return network

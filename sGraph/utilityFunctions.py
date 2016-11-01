@@ -2,6 +2,9 @@
 from os.path import expanduser
 
 # plugin module imports
+from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsDataSourceURI, QgsField
+from PyQt4.QtCore import QVariant
+
 
 
 # source: ess utility functions

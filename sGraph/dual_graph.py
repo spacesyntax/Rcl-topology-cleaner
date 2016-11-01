@@ -3,6 +3,9 @@ import networkx as nx
 from networkx import connected_components, all_simple_paths
 import ogr
 
+from PyQt4.QtCore import QVariant
+from qgis.core import QgsField, QgsFeature, QgsGeometry, QgsPoint, QgsVectorLayer, QgsVectorFileWriter, QgsMapLayerRegistry
+
 # plugin module imports
 from primal_graph import prGraph
 from shpFunctions import edges_from_line

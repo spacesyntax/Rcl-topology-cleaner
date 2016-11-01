@@ -1,10 +1,12 @@
 # general import
 import networkx as nx
 import os
+from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsDataSourceURI, QgsField
 
 # plugin module imports
 from utilityFunctions import getLayerByName, getLayerPath4ogr, getAllFeatures
 from plFunctions import make_snapped_wkt, snap_coord
+
 
 
 # ----- SHAPEFILE OPERATIONS -----
@@ -111,6 +113,7 @@ def read_shp_to_multi_graph(layer_name, tolerance=None, simplify=True):
 
 # TODO check if any of the edge created is a point
 # source : networkx
+# TODO: add unique id column
 
 def edges_from_line(geom, attrs, tolerance=None, simplify=True):
 

@@ -1,5 +1,6 @@
 # general imports
 import math
+from qgis.core import QgsPoint, QgsGeometry
 
 # plugin module imports
 from generalFunctions import mid, snap_coord, keep_decimals_string
