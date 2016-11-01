@@ -29,7 +29,7 @@ class clean:
         simplify = True
         parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify, 'id_column': base_id}
         primal_graph = transformer(parameters, transformation_type).result
-        any_primal_graph = primal_graph.prGraph(primal_graph, base_id, True)
+        any_primal_graph = prGraph(primal_graph, base_id, True)
 
         # break at intersections and overlaping geometries
         broken_primal = any_primal_graph.break_graph(tolerance, simplify)
