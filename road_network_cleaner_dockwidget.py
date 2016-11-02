@@ -93,11 +93,3 @@ class RoadNetworkCleanerDockWidget(QtGui.QDockWidget, FORM_CLASS):
             level=QgsMessageBar.WARNING,
             duration=5)
 
-    def cancel(self):
-        pass
-
-    def diagnose(self):
-        pass
-
-    def clean(self):
-        pass

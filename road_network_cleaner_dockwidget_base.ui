@@ -6,108 +6,139 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>393</width>
-    <height>307</height>
+    <width>246</width>
+    <height>326</height>
    </rect>
-  </property>
-  <property name="sizePolicy">
-   <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-    <horstretch>0</horstretch>
-    <verstretch>0</verstretch>
-   </sizepolicy>
   </property>
   <property name="windowTitle">
    <string>RoadNetworkCleaner</string>
   </property>
   <widget class="QWidget" name="dockWidgetContents">
-   <widget class="QWidget" name="gridLayoutWidget_2">
+   <widget class="QWidget" name="">
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>10</y>
-      <width>371</width>
-      <height>261</height>
+      <y>0</y>
+      <width>221</width>
+      <height>291</height>
      </rect>
     </property>
-    <layout class="QGridLayout" name="gridLayout_2">
-     <item row="4" column="1">
-      <widget class="QPushButton" name="browseButton">
-       <property name="text">
-        <string>...</string>
+    <layout class="QVBoxLayout" name="verticalLayout">
+     <item>
+      <widget class="QGroupBox" name="groupBox">
+       <property name="title">
+        <string>Parameters</string>
        </property>
+       <widget class="QWidget" name="gridLayoutWidget_2">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>20</y>
+          <width>201</width>
+          <height>171</height>
+         </rect>
+        </property>
+        <layout class="QGridLayout" name="gridLayout_2">
+         <item row="5" column="0">
+          <widget class="QLabel" name="label_4">
+           <property name="text">
+            <string>Errors</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="0">
+          <widget class="QLabel" name="label">
+           <property name="text">
+            <string>Layer to clean</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="label_2">
+           <property name="text">
+            <string>Cleaned layer</string>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="0">
+          <layout class="QHBoxLayout" name="horizontalLayout_2">
+           <item>
+            <widget class="QLineEdit" name="outputText"/>
+           </item>
+          </layout>
+         </item>
+         <item row="6" column="0">
+          <layout class="QHBoxLayout" name="horizontalLayout_3">
+           <item>
+            <widget class="QLineEdit" name="outputText_2"/>
+           </item>
+          </layout>
+         </item>
+         <item row="6" column="1">
+          <widget class="QPushButton" name="browseButton_2">
+           <property name="text">
+            <string>...</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <layout class="QHBoxLayout" name="horizontalLayout">
+           <item>
+            <widget class="QLabel" name="label_3">
+             <property name="text">
+              <string>Snap decimal precision </string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item row="1" column="0" colspan="2">
+          <widget class="QComboBox" name="inputCombo"/>
+         </item>
+         <item row="2" column="1">
+          <widget class="QComboBox" name="toleranceCombo"/>
+         </item>
+         <item row="4" column="1">
+          <widget class="QPushButton" name="browseButton">
+           <property name="text">
+            <string>...</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
       </widget>
      </item>
-     <item row="6" column="0">
+     <item>
       <widget class="QProgressBar" name="progressBar">
        <property name="value">
         <number>24</number>
        </property>
       </widget>
      </item>
-     <item row="5" column="0">
-      <widget class="QTextEdit" name="textEdit"/>
-     </item>
-     <item row="3" column="0">
-      <widget class="QLabel" name="label_2">
+     <item>
+      <widget class="QPushButton" name="cleanButton">
        <property name="text">
-        <string>Output layer</string>
+        <string>Clean</string>
        </property>
       </widget>
      </item>
-     <item row="1" column="0">
-      <widget class="QComboBox" name="inputCombo"/>
-     </item>
-     <item row="4" column="0">
-      <widget class="QLineEdit" name="outputText"/>
-     </item>
-     <item row="5" column="1">
-      <layout class="QVBoxLayout" name="verticalLayout_2">
-       <item>
-        <widget class="QPushButton" name="validateButton">
-         <property name="text">
-          <string>Validate</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="cleanButton">
-         <property name="text">
-          <string>Clean</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="cancelButton">
-         <property name="text">
-          <string>Cancel</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-     <item row="0" column="0">
-      <widget class="QLabel" name="label">
+     <item>
+      <widget class="QPushButton" name="cancelButton">
        <property name="text">
-        <string>Input layer </string>
+        <string>Cancel</string>
        </property>
       </widget>
-     </item>
-     <item row="2" column="0">
-      <layout class="QHBoxLayout" name="horizontalLayout">
-       <item>
-        <widget class="QLabel" name="label_3">
-         <property name="text">
-          <string>Snap endpoints precision </string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QComboBox" name="toleranceCombo"/>
-       </item>
-      </layout>
      </item>
     </layout>
    </widget>
+   <zorder>cancelButton</zorder>
+   <zorder>cleanButton</zorder>
+   <zorder>groupBox</zorder>
+   <zorder></zorder>
+   <zorder>progressBar</zorder>
+   <zorder>progressBar</zorder>
+   <zorder></zorder>
   </widget>
  </widget>
  <resources/>

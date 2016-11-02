@@ -93,7 +93,6 @@ class RoadNetworkCleaner:
             pydevd.settrace('localhost', port=53100, stdoutToServer=True, stderrToServer=True, suspend=True)
 
         # setup GUI signals
-        self.dockwidget.validateButton.clicked.connect(self.runValidation)
         self.dockwidget.cleanButton.clicked.connect(self.runCleaning)
         self.dockwidget.cancelButton.clicked.connect(self.killAnalysis)
 
