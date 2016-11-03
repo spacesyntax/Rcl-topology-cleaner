@@ -20,7 +20,7 @@
  *                                                                         *
  ***************************************************************************/
 """
-from PyQt4.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, Qt
+from PyQt4.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, Qt, QThread
 from PyQt4.QtGui import QAction, QIcon
 from qgis.core import QgsMapLayer
 
@@ -239,9 +239,8 @@ class RoadNetworkCleaner:
                     layers_list.append(layer.name())
         return layers_list
 
-    def runCleaning(self, settings):
-        settings = self.dockwidget.get_settings()
-        return analysis.clean(settings).run()
+    def runCleaning(self):
+        pass
 
     def runValidation(self):
         pass
@@ -249,20 +248,20 @@ class RoadNetworkCleaner:
     # SOURCE: Network Segmenter https://github.com/OpenDigitalWorks/NetworkSegmenter
 
     def runAnalysis(self):
-        self.dlg.analysisProgress.reset()
+        self.dockwidget.analysisProgress.reset()
         # Create an analysis instance
-        settings = self.getSettings()
-        analysis = clean(settings).run()
+        settings = self.dockwidget.get_settings()
+        cleaning = analysis.clean(settings)
         # Create new thread and move the analysis class to it
         analysis_thread = QThread()
-        analysis.moveToThread(analysis_thread)
+        cleaning.moveToThread(analysis_thread)
         # Setup signals
-        analysis.finished.connect(self.finishAnalysis)
+        cleaning.finished.connect(self.finishAnalysis)
         analysis.error.connect(self.analysisError)
-        analysis.warning.connect(self.giveWarningMessage)
-        analysis.progress.connect(self.dlg.analysisProgress.setValue)
+        analysis.warning.connect(self.dockwidget.giveWarningMessage())
+        analysis.progress.connect(self.dockwidget.analysisProgress.setValue)
         # Start analysis
-        analysis_thread.started.connect(analysis.analysis)
+        analysis_thread.started.connect(cleaning.run())
         analysis_thread.start()
         self.analysis_thread = analysis_thread
         self.analysis = analysis
@@ -277,9 +276,9 @@ class RoadNetworkCleaner:
         if output:
             self.renderNetwork(output)
         else:
-            self.giveWarningMessage('Something went wrong')
+            self.dockwidget.giveWarningMessage('Something went wrong')
         # Closing the dialog
-        self.dlg.closeDialog()
+        self.dockwidget.closeDialog()
 
     def analysisError(self, e, exception_string):
         QgsMessageLog.logMessage(

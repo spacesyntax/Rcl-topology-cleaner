@@ -59,7 +59,10 @@ class RoadNetworkCleanerDockWidget(QtGui.QDockWidget, FORM_CLASS):
             self.outputText.setText(file_name)
 
     def getOutput(self):
-        return self.outputText.text()
+        if len(self.outputText.text())>0:
+            return self.outputText.text()
+        else:
+            return None
 
     def getInput(self):
         name = self.getNetwork()
