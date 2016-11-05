@@ -1,11 +1,7 @@
 # general imports
 from os.path import expanduser
-
-# plugin module imports
 from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsDataSourceURI, QgsField
 from PyQt4.QtCore import QVariant
-
-
 
 # source: ess utility functions
 
@@ -16,6 +12,7 @@ def getLayerByName(name):
         if i.name() == name:
             layer = i
     return layer
+
 
 def copy_shp(temp_layer, path):
     features_to_copy = getAllFeatures(temp_layer)
