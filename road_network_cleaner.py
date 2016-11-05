@@ -22,7 +22,10 @@
 """
 from PyQt4.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, Qt, QThread
 from PyQt4.QtGui import QAction, QIcon
-from qgis.core import QgsMapLayer
+from qgis.core import QgsMapLayer, QgsMapLayerRegistry, QgsMessageLog
+from qgis.gui import QgsMessageBar
+
+from qgis.utils import *
 
 # Initialize Qt resources from file resources.py
 import resources
@@ -38,7 +41,7 @@ import analysis
 is_debug = False
 try:
     import pydevd
-    has_pydevd = False
+    has_pydevd = True
 except ImportError, e:
     has_pydevd = False
     is_debug = False
@@ -87,14 +90,16 @@ class RoadNetworkCleaner:
 
         # TODO: CHECK IF IT NEEDS TO GET BACK TO self.dockwidget == None
         self.dockwidget = RoadNetworkCleanerDockWidget()
+        self.cleaning = None
 
         # Setup debugger
         if has_pydevd and is_debug:
             pydevd.settrace('localhost', port=53100, stdoutToServer=True, stderrToServer=True, suspend=True)
 
         # setup GUI signals
-        self.dockwidget.cleanButton.clicked.connect(self.runCleaning)
-        self.dockwidget.cancelButton.clicked.connect(self.killAnalysis)
+        # self.dockwidget.cleanButton.clicked.connect(self.runCleaning)
+        self.dockwidget.cleanButton.clicked.connect(self.startCleaning)
+        self.dockwidget.cancelButton.clicked.connect(self.killCleaning)
 
 
     # noinspection PyMethodMayBeStatic
@@ -231,82 +236,83 @@ class RoadNetworkCleaner:
 
     #--------------------------------------------------------------------------
 
-    def getActiveLayers(self):
+    def getActiveLayers(self, iface):
         layers_list = []
-        for layer in self.iface.legendInterface().layers():
+        for layer in iface.legendInterface().layers():
             if layer.isValid() and layer.type() == QgsMapLayer.VectorLayer:
                 if layer.hasGeometryType() and (layer.wkbType() == 2 or layer.wkbType() == 5):
                     layers_list.append(layer.name())
         return layers_list
 
     def runCleaning(self):
-        pass
-
-    def runValidation(self):
-        pass
+        settings = self.dockwidget.get_settings()
+        return analysis.clean(settings).run()
 
     # SOURCE: Network Segmenter https://github.com/OpenDigitalWorks/NetworkSegmenter
 
-    def runAnalysis(self):
-        self.dockwidget.analysisProgress.reset()
-        # Create an analysis instance
+    def giveMessage(self, message, level):
+        # Gives warning according to message
+        self.iface.messageBar().pushMessage(
+            "Road network cleaner: ", "%s" % (message),
+            level,duration=5)
+
+    def startCleaning(self, settings):
+        self.dockwidget.cleaningProgress.reset()
         settings = self.dockwidget.get_settings()
-        cleaning = analysis.clean(settings)
-        # Create new thread and move the analysis class to it
-        analysis_thread = QThread()
-        cleaning.moveToThread(analysis_thread)
-        # Setup signals
-        cleaning.finished.connect(self.finishAnalysis)
-        analysis.error.connect(self.analysisError)
-        analysis.warning.connect(self.dockwidget.giveWarningMessage())
-        analysis.progress.connect(self.dockwidget.analysisProgress.setValue)
-        # Start analysis
-        analysis_thread.started.connect(cleaning.run())
-        analysis_thread.start()
-        self.analysis_thread = analysis_thread
-        self.analysis = analysis
+        cleaning = analysis.clean(settings, self.iface)
 
-    def finishAnalysis(self, output):
-        # Clean up thread and analysis
-        self.analysis_thread.quit()
-        self.analysis_thread.wait()
-        self.analysis_thread.deleteLater()
-        self.analysis.deleteLater()
-        # Render output
-        if output:
-            self.renderNetwork(output)
+        # start the cleaning in a new thread
+        thread = QThread()
+        cleaning.moveToThread(thread)
+        cleaning.finished.connect(self.cleaningFinished)
+        cleaning.error.connect(self.cleaningError)
+        cleaning.warning.connect(self.giveMessage)
+        cleaning.progress.connect(self.dockwidget.cleaningProgress.setValue)
+        thread.started.connect(cleaning.run)
+        thread.start()
+        self.thread = thread
+        self.cleaning = cleaning
+
+    def cleaningFinished(self, ret):
+        # clean up  the worker and thread
+        self.cleaning.deleteLater()
+        self.thread.quit()
+        self.thread.wait()
+        self.thread.deleteLater()
+        self.cleaning = None
+
+        if ret:
+            # report the result
+            a, b = ret
+            self.render(a)
+            self.render(b)
+            self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
+
         else:
-            self.dockwidget.giveWarningMessage('Something went wrong')
-        # Closing the dialog
-        self.dockwidget.closeDialog()
+            # notify the user that sth went wrong
+            self.giveMessage('Something went wrong! See the message log for more information', QgsMessageBar.CRITICAL)
 
-    def analysisError(self, e, exception_string):
-        QgsMessageLog.logMessage(
-            'Catchment Analyser raised an exception: %s' % exception_string,
-            level=QgsMessageLog.CRITICAL)
-        # Closing the dialog
-        self.dlg.closeDialog()
+    def cleaningError(self, e, exception_string):
+        QgsMessageLog.logMessage('Cleaning thread raised an exception: %s' % exception_string
+                                    , level=QgsMessageLog.CRITICAL)
 
-    def killAnalysis(self):
-        # Check if the analysis is running
-        if self.analysis:
+    def render(self,vector_layer):
+        QgsMapLayerRegistry.instance().addMapLayer(vector_layer)
+
+    def killCleaning(self):
+        if self.cleaning:
             # Disconnect signals
-            self.analysis.finished.disconnect(self.finishAnalysis)
-            self.analysis.error.disconnect(self.analysisError)
-            self.analysis.warning.disconnect(self.giveWarningMessage)
-            self.analysis.progress.disconnect(self.dlg.analysisProgress.setValue)
+            self.cleaning.finished.disconnect(self.cleaningFinished)
+            self.cleaning.error.disconnect(self.cleaningError)
+            self.cleaning.warning.disconnect(self.giveMessage)
+            self.cleaning.progress.disconnect(self.dockwidget.cleaningProgress.setValue)
             # Clean up thread and analysis
-            self.analysis.kill()
-            self.analysis.deleteLater()
-            self.analysis_thread.quit()
-            self.analysis_thread.wait()
-            self.analysis_thread.deleteLater()
-            self.analysis = None
-            # Closing the dialog
-            self.dlg.closeDialog()
-        else:
-            self.dlg.closeDialog()
-
+            self.cleaning.kill()
+            self.cleaning.deleteLater()
+            self.thread.quit()
+            self.thread.wait()
+            self.thread.deleteLater()
+            self.cleaning = None
 
     def run(self):
         """Run method that loads and starts the plugin"""
@@ -330,6 +336,6 @@ class RoadNetworkCleaner:
             # TODO: fix to allow choice of dock location
             self.iface.addDockWidget(Qt.RightDockWidgetArea, self.dockwidget)
             self.dockwidget.show()
-            self.dockwidget.popActiveLayers(self.getActiveLayers())
+            self.dockwidget.popActiveLayers(self.getActiveLayers(self.iface))
             self.dockwidget.popTolerance()
 
