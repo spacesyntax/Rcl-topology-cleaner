@@ -49,7 +49,7 @@ class dlGraph:
                 print "Error when creating shapefile: ", file_writer.errorMessage()
             del file_writer
             network = QgsVectorLayer(path, name, "ogr")
-        QgsMapLayerRegistry.instance().addMapLayer(network)
+        #QgsMapLayerRegistry.instance().addMapLayer(network)
         pr = network.dataProvider()
         network.startEditing()
         pr.addAttributes(self.qgs_fields)
@@ -62,25 +62,29 @@ class dlGraph:
 
     # Code source: ESS TOOLKIT https://github.com/SpaceGroupUCL/qgisSpaceSyntaxToolkit.git
 
-    def find_islands_orphans(self):
+    def find_islands_orphans(self, primal_graph):
+        geom_dict = primal_graph.get_geom_dict()
         # order based on length
         components = sorted(connected_components(self.obj), key=len, reverse=True)
         islands = []
         orphans = []
+        count = 0
         if len(components) > 1:
             islands = []
             # get vertex ids
             for cluster in components[1:len(components)]:  # excludes the first giant component
                 # identify orphans
                 if len(cluster) == 1:
-                    islands.append(cluster.pop())
+                    orphan = cluster.pop()
+                    orphans.append((orphan, geom_dict[orphan]))
                 # identify islands
                 elif len(cluster) > 1:
-                    orphan = list(cluster)
-                    orphans.append(orphan)
+                    island = list(cluster)
+                    for i in island:
+                        islands.append(('island_' + str(count), geom_dict[i]))
+                    count += 1
 
         return islands, orphans
-
 
     def find_cont_lines(self):
         # 2. merge lines from intersection to intersection
@@ -112,7 +116,7 @@ class dlGraph:
     def merge(self, primal_graph, tolerance, simplify):
         geom_dict = primal_graph.get_geom_dict()
         attr_dict = primal_graph.get_attr_dict()
-
+        merged = []
         primal_merged = nx.MultiGraph()
 
         count = 0
@@ -128,6 +132,8 @@ class dlGraph:
                     attr['Wkt'] = ogr_geom.ExportToWkt()
                     primal_merged.add_edge(e1, e2, attr_dict=attr)
             else:
+                for i in set_to_merge:
+                    merged.append((i, geom_dict[i]))
                 attrs = attr_dict[set_to_merge[0]]
                 attrs['merged_id'] = attrs['broken_id'] + '_mr_' + str(count)
                 new_geom = geom_dict[set_to_merge[0]]
@@ -156,7 +162,7 @@ class dlGraph:
                         attr['Wkt'] = ogr_geom.ExportToWkt()
                         primal_merged.add_edge(e1, e2, attr_dict=attr)
 
-        return prGraph(primal_merged, 'merged_id', make_feat=True)
+        return prGraph(primal_merged, 'merged_id', make_feat=True), merged
 
 
 

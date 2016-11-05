@@ -24,8 +24,6 @@ class prGraph:
         self.n_attributes = len(self.obj.edges(data=True)[0][2].keys())
         self.uid_index = (self.obj.edges(data=True)[0][2].keys()).index(self.uid)
         self.prflds = self.obj.edges(data=True)[0][2].keys()
-        # get features
-        # these features do not have fields and feature ids
         if make_feat:
             features = []
             count = 1
@@ -179,7 +177,7 @@ class prGraph:
                 print "Error when creating shapefile: ", file_writer.errorMessage()
             del file_writer
             network = QgsVectorLayer(path, name, "ogr")
-        QgsMapLayerRegistry.instance().addMapLayer(network)
+        #QgsMapLayerRegistry.instance().addMapLayer(network)
         pr = network.dataProvider()
         network.startEditing()
         if path is None:
@@ -230,16 +228,20 @@ class prGraph:
         count = 1
         geom_vertices = self.get_geom_vertices_dict()
         attr_dict = self.get_attr_dict()
-        edges = { edge[2][self.uid]: (edge[0], edge[1]) for edge in self.obj.edges(data=True)}
+        edges = {edge[2][self.uid]: (edge[0], edge[1]) for edge in self.obj.edges(data=True)}
         edges_to_remove = []
         edges_to_add = []
+        breakages = []
 
         for k, v in self.find_breakages():
             attrs = attr_dict[k]
+
             # add first and last vertex
             v = list(v) + [0] + [len(geom_vertices[k]) - 1]
             v = list(set(v))
             v.sort()
+            if len(v) != 2:
+                breakages.append((k, QgsGeometry.fromWkt(attrs['Wkt'])))
             count_2 = 1
             edges_to_remove.append(edges[k])
             # delete primal graph edge
@@ -267,7 +269,7 @@ class prGraph:
 
         self.obj.add_edges_from(edges_to_add)
 
-        return prGraph(self.obj, 'broken_id', make_feat=True)
+        return prGraph(self.obj, 'broken_id', make_feat=True), breakages
 
     def find_dupl_overlaps(self):
         geometries = self.get_geom_dict()
@@ -293,10 +295,8 @@ class prGraph:
                 if uid[line] < uid[feat]:
                     # duplicate geometry
                     if f_geom.isGeosEqual(g_geom):
-                        yield line, 'del duplicate'
-                    # geometry overlaps
-                    #if f_geom.overlaps(g_geom):
-                    #    yield feat, 'del overlap'
+                        yield line, geometries[line]
+
 
     # TODO: test speed
     def get_invalid_duplicate_geoms_ids(self):
@@ -315,15 +315,17 @@ class prGraph:
     def rmv_dupl_overlaps(self):
         edges = {edge[2][self.uid]: (edge[0], edge[1]) for edge in self.obj.edges(data=True)}
         edges_to_remove = []
+        dupl = []
 
         # TODO: remove edge with sepcific attributes
-        for edge, action in self.find_dupl_overlaps_ssx():
+        for edge, geometry in self.find_dupl_overlaps_ssx():
+            dupl.append((edge, geometry))
             edges_to_remove.append(edges[edge])
 
         # TODO: test reconstructing the graph for speed purposes
         self.obj.remove_edges_from(edges_to_remove)
 
-        return prGraph(self.obj, self.uid, make_feat=True)
+        return prGraph(self.obj, self.uid, make_feat=True), dupl
 
     def add_edges(self, edges_to_add):
         pass

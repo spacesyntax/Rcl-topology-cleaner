@@ -1,7 +1,8 @@
 # general import
 import networkx as nx
 import os
-from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsDataSourceURI, QgsField
+from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsDataSourceURI, QgsField, QgsFeature
+from PyQt4.QtCore import QVariant
 
 # plugin module imports
 from utilityFunctions import getLayerByName, getLayerPath4ogr, getAllFeatures
@@ -58,7 +59,7 @@ def del_shp(path):
 # shp to nx multiGraph
 
 
-def read_shp_to_multi_graph(layer_name, tolerance=None, simplify=True):
+def read_shp_to_multi_graph(layer_name, tolerance=None, uid=True, simplify=True):
     # 1. open shapefiles from directory/filename
     try:
         from osgeo import ogr
@@ -83,6 +84,7 @@ def read_shp_to_multi_graph(layer_name, tolerance=None, simplify=True):
     elif provider_type in ('ogr', 'memory'):
         layer = lyr[0]
         fields = [x.GetName() for x in layer.schema]
+    count = 0
     for f in layer:
         flddata = [f.GetField(f.GetFieldIndex(x)) for x in fields]
         g = f.geometry()
@@ -92,12 +94,16 @@ def read_shp_to_multi_graph(layer_name, tolerance=None, simplify=True):
         if g.GetGeometryType() == ogr.wkbLineString:
             for edge in edges_from_line(g, attributes, tolerance, simplify):
                 e1, e2, attr = edge
+                attr['id_in'] = 'in_'+ str(count)
+                count += 1
                 net.add_edge(e1, e2, attr_dict=attr)
         elif g.GetGeometryType() == ogr.wkbMultiLineString:
             for i in range(g.GetGeometryCount()):
                 geom_i = g.GetGeometryRef(i)
                 for edge in edges_from_line(geom_i, attributes, tolerance, simplify):
                     e1, e2, attr = edge
+                    attr['id_in'] = 'in_' + str(count)
+                    count += 1
                     net.add_edge(e1, e2, attr_dict=attr)
             # TODO: push message x features not included
 
@@ -157,11 +163,39 @@ def edges_from_line(geom, attrs, tolerance=None, simplify=True):
 # identify invalids multiparts of a layer
 
 
-def inv_mlParts(name, uid):
+def inv_mlParts(name):
     layer = getLayerByName(name)
-    invalids = [i[uid] for i in layer.getFeatures() if not i.geometry().isGeosValid()]
-    multiparts = [i[uid] for i in layer.getFeatures() if i.geometry().isMultipart()]
+    invalids = [(i.id(), i.geometry()) for i in layer.getFeatures() if not i.geometry().isGeosValid()]
+    multiparts = [(i.id(), i .geometry()) for i in layer.getFeatures() if i.geometry().isMultipart()]
     return invalids, multiparts
+
+
+def errors_to_shp(error_list, path, name, crs, encoding, geom_type):
+    if path is None:
+        network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), name, "memory")
+    else:
+        file_writer = QgsVectorFileWriter(path, encoding, [QgsField('id', QVariant.String), QgsField('error', QVariant.String)], geom_type,
+                                          crs, "ESRI Shapefile")
+        if file_writer.hasError() != QgsVectorFileWriter.NoError:
+            print "Error when creating shapefile: ", file_writer.errorMessage()
+        del file_writer
+        network = QgsVectorLayer(path, name, "ogr")
+    #QgsMapLayerRegistry.instance().addMapLayer(network)
+    pr = network.dataProvider()
+    network.startEditing()
+    if path is None:
+        pr.addAttributes([QgsField('id', QVariant.String), QgsField('error', QVariant.String)])
+    errors_feat = []
+    for errors in error_list:
+        for error in errors[1]:
+            new_feat = QgsFeature()
+            new_feat.initAttributes(2)
+            new_feat.setAttributes([error[0]] + [errors[0]])
+            new_feat.setGeometry(error[1])
+            errors_feat.append(new_feat)
+    pr.addFeatures(errors_feat)
+    network.commitChanges()
+    return network
 
 
 # ----- TRANSFORMATION OPERATIONS -----
@@ -180,7 +214,7 @@ class transformer:
 
         if self.transformation_type == 'shp_to_pgr':
             # TODO: check the parallel lines (1 of the parallel edges is not correct connected)
-            primal_graph = read_shp_to_multi_graph(parameters['layer_name'], parameters['tolerance'], parameters['simplify'])
+            primal_graph = read_shp_to_multi_graph(parameters['layer_name'], parameters['tolerance'], True, parameters['simplify'])
             self.result = primal_graph
 
 
