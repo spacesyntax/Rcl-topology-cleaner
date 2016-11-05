@@ -24,7 +24,7 @@
 import os
 
 from PyQt4 import QtGui, uic
-from PyQt4.QtCore import pyqtSignal
+from PyQt4.QtCore import pyqtSignal, Qt
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'road_network_cleaner_dockwidget_base.ui'))
@@ -45,6 +45,10 @@ class RoadNetworkCleanerDockWidget(QtGui.QDockWidget, FORM_CLASS):
         self.setupUi(self)
         self.outputText.setPlaceholderText("Save as temporary layer...")
         self.browseButton.clicked.connect(self.setOutput)
+
+        # Setup the progress bar
+        self.cleaningProgress.setMinimum(0)
+        self.cleaningProgress.setMaximum(100)
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
@@ -83,16 +87,11 @@ class RoadNetworkCleanerDockWidget(QtGui.QDockWidget, FORM_CLASS):
     def getTolerance(self):
         return self.toleranceCombo.currentText()
 
+    def get_errors(self):
+        return self.errorsCheckBox.isChecked()
+
     def get_settings(self):
         decimal_tolerance = {'m': 1,'dm': 2, 'cm': 3, 'mm': 4}
-        settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'tolerance': decimal_tolerance[self.getTolerance()]}
+        settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'tolerance': decimal_tolerance[self.getTolerance()], 'errors': self.get_errors() }
         return settings
-
-    def giveWarningMessage(self, message):
-        # Gives warning according to message
-        self.iface.messageBar().pushMessage(
-            "Rcl simplification: ",
-            "%s" % (message),
-            level=QgsMessageBar.WARNING,
-            duration=5)
 
