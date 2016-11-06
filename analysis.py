@@ -52,75 +52,96 @@ class clean(QObject):
                 primal_graph = transformer(parameters, transformation_type).result
                 any_primal_graph = prGraph(primal_graph, base_id, True)
 
-                if self.killed is True: return
+                if self.killed is True:
+                    print "killed"
+                    return
                 self.progress.emit(20)
 
                 # break at intersections and overlaping geometries
                 # error cat: to_break
                 broken_primal, to_break = any_primal_graph.break_graph(tolerance, simplify)
 
-                if self.killed is True: return
+                if self.killed is True:
+                    print "killed"
+                    return
                 self.progress.emit(30)
 
                 # error cat: duplicates
                 broken_clean_primal, duplicates_br = broken_primal.rmv_dupl_overlaps()
 
-                if self.killed is True: return
+                if self.killed is True:
+                    print "killed"
+                    return
                 self.progress.emit(40)
 
                 # transform primal graph to dual graph
                 centroids = broken_clean_primal.get_centroids_dict()
                 broken_dual = dlGraph(broken_clean_primal.to_dual(True, False, False), broken_clean_primal.uid, centroids, True)
 
-                if self.killed is True: return
+                if self.killed is True:
+                    print "killed"
+                    return
                 self.progress.emit(50)
 
                 # Merge between intersections
                 # error cat: to_merge
                 merged_primal, to_merge = broken_dual.merge(broken_clean_primal, tolerance, simplify)
 
-                if self.killed is True: return
+                if self.killed is True:
+                    print "killed"
+                    return
                 self.progress.emit(60)
 
                 # error cat: duplicates
                 merged_clean_primal, duplicates_m = merged_primal.rmv_dupl_overlaps()
 
-                if self.killed is True: return
+                if self.killed is True:
+                    print "killed"
+                    return
                 self.progress.emit(70)
 
                 name = layer_name + '_cleaned'
 
-            #if self.settings['errors']:
+                if self.settings['errors']:
 
-                centroids = merged_clean_primal.get_centroids_dict()
-                merged_dual = dlGraph(merged_clean_primal.to_dual(False, False, False), merged_clean_primal.uid, centroids,
-                                      True)
+                    centroids = merged_clean_primal.get_centroids_dict()
+                    merged_dual = dlGraph(merged_clean_primal.to_dual(False, False, False), merged_clean_primal.uid, centroids,
+                                          True)
 
-                if self.killed is True: return
-                self.progress.emit(80)
+                    if self.killed is True:
+                        print "killed"
+                        return
+                    self.progress.emit(80)
 
-                # error cat: islands, orphans
-                islands, orphans = merged_dual.find_islands_orphans(merged_clean_primal)
+                    # error cat: islands, orphans
+                    islands, orphans = merged_dual.find_islands_orphans(merged_clean_primal)
 
-                if self.killed is True: return
-                self.progress.emit(90)
+                    if self.killed is True:
+                        print "killed"
+                        return
+                    self.progress.emit(90)
 
-                # combine all errors
-                error_list = [['invalids', invalids], ['multiparts', multiparts], ['to_break', to_break],
-                              ['duplicates_br', duplicates_br], ['to_merge', to_merge], ['duplicates_m', duplicates_m],
-                              ['islands', islands], ['orphans', orphans]]
-                e_path = None
+                    # combine all errors
+                    error_list = [['invalids', invalids], ['multiparts', multiparts], ['to_break', to_break],
+                                  ['duplicates_br', duplicates_br], ['to_merge', to_merge], ['duplicates_m', duplicates_m],
+                                  ['islands', islands], ['orphans', orphans]]
+                    e_path = None
+                    errors = errors_to_shp(error_list, e_path, 'errors', crs, encoding, geom_type)
+                else:
+                    errors = None
 
                 if self.killed is False:
+                    print "survived!"
                     self.progress.emit(100)
                     # return cleaned shapefile and errors
-                    ret = (errors_to_shp(error_list, e_path, 'errors', crs, encoding, geom_type), merged_clean_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds),)
-                    self.finished.emit(ret)
+                    cleaned = merged_clean_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds)
+                    ret = (errors, cleaned,)
+
             except Exception, e:
                 # forward the exception upstream
                 self.error.emit(e, traceback.format_exc())
 
-
+            self.finished.emit(ret)
 
     def kill(self):
         self.killed = True
