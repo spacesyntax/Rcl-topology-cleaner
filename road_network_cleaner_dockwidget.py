@@ -50,6 +50,10 @@ class RoadNetworkCleanerDockWidget(QtGui.QDockWidget, FORM_CLASS):
         self.cleaningProgress.setMinimum(0)
         self.cleaningProgress.setMaximum(100)
 
+        self.decimalsSpin.setRange(1, 16)
+        self.decimalsSpin.setSingleStep(1)
+        self.decimalsSpin.setValue(3)
+
     def closeEvent(self, event):
         self.closingPlugin.emit()
         event.accept()
@@ -63,7 +67,9 @@ class RoadNetworkCleanerDockWidget(QtGui.QDockWidget, FORM_CLASS):
             self.outputText.setText(file_name)
 
     def getOutput(self):
-        if len(self.outputText.text())>0:
+        print len(self.outputText.text()) > 0
+        if len(self.outputText.text()) > 0:
+            print self.outputText.text()
             return self.outputText.text()
         else:
             return None
@@ -80,18 +86,13 @@ class RoadNetworkCleanerDockWidget(QtGui.QDockWidget, FORM_CLASS):
         self.inputCombo.clear()
         self.inputCombo.addItems(layers_list)
 
-    def popTolerance(self):
-        self.toleranceCombo.clear()
-        self.toleranceCombo.addItems(['mm', 'cm', 'dm', 'm'])
-
     def getTolerance(self):
-        return self.toleranceCombo.currentText()
+        return self.decimalsSpin.value()
 
     def get_errors(self):
         return self.errorsCheckBox.isChecked()
 
     def get_settings(self):
-        decimal_tolerance = {'m': 1,'dm': 2, 'cm': 3, 'mm': 4}
-        settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'tolerance': decimal_tolerance[self.getTolerance()], 'errors': self.get_errors() }
+        settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'tolerance': self.getTolerance(), 'errors': self.get_errors() }
         return settings
 
