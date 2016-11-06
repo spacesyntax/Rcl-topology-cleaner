@@ -1,7 +1,7 @@
 # general import
 import networkx as nx
 import os
-from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsDataSourceURI, QgsField, QgsFeature
+from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsDataSourceURI, QgsField, QgsFeature, QgsGeometry
 from PyQt4.QtCore import QVariant
 
 # plugin module imports
@@ -43,7 +43,7 @@ def get_fields(layer_name):
 
 def get_field_types(layer_name):
     layer = getLayerByName(layer_name)
-    return {i.name(): i.typeName() for i in layer.dataProvider().fields()}
+    return {i.name(): i.type() for i in layer.dataProvider().fields()}
 
 
 # delete saved copy of temporary layer
@@ -165,8 +165,8 @@ def edges_from_line(geom, attrs, tolerance=None, simplify=True):
 
 def inv_mlParts(name):
     layer = getLayerByName(name)
-    invalids = [(i.id(), i.geometry()) for i in layer.getFeatures() if not i.geometry().isGeosValid()]
-    multiparts = [(i.id(), i .geometry()) for i in layer.getFeatures() if i.geometry().isMultipart()]
+    invalids = [(i.id(), i.geometry().exportToWkt()) for i in layer.getFeatures() if not i.geometry().isGeosValid()]
+    multiparts = [(i.id(), i .geometry().exportToWkt()) for i in layer.getFeatures() if i.geometry().isMultipart()]
     return invalids, multiparts
 
 
@@ -191,7 +191,7 @@ def errors_to_shp(error_list, path, name, crs, encoding, geom_type):
             new_feat = QgsFeature()
             new_feat.initAttributes(2)
             new_feat.setAttributes([error[0]] + [errors[0]])
-            new_feat.setGeometry(error[1])
+            new_feat.setGeometry(QgsGeometry.fromWkt(error[1]))
             errors_feat.append(new_feat)
     pr.addFeatures(errors_feat)
     network.commitChanges()

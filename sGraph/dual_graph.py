@@ -63,7 +63,7 @@ class dlGraph:
     # Code source: ESS TOOLKIT https://github.com/SpaceGroupUCL/qgisSpaceSyntaxToolkit.git
 
     def find_islands_orphans(self, primal_graph):
-        geom_dict = primal_graph.get_geom_dict()
+        wkt_dict = primal_graph.get_wkt_dict()
         # order based on length
         components = sorted(connected_components(self.obj), key=len, reverse=True)
         islands = []
@@ -76,12 +76,12 @@ class dlGraph:
                 # identify orphans
                 if len(cluster) == 1:
                     orphan = cluster.pop()
-                    orphans.append((orphan, geom_dict[orphan]))
+                    orphans.append((orphan, wkt_dict[orphan]))
                 # identify islands
                 elif len(cluster) > 1:
                     island = list(cluster)
                     for i in island:
-                        islands.append(('island_' + str(count), geom_dict[i]))
+                        islands.append(('island_' + str(count), wkt_dict[i]))
                     count += 1
 
         return islands, orphans
@@ -115,6 +115,7 @@ class dlGraph:
 
     def merge(self, primal_graph, tolerance, simplify):
         geom_dict = primal_graph.get_geom_dict()
+        wkt_dict = primal_graph.get_wkt_dict()
         attr_dict = primal_graph.get_attr_dict()
         merged = []
         primal_merged = nx.MultiGraph()
@@ -133,7 +134,7 @@ class dlGraph:
                     primal_merged.add_edge(e1, e2, attr_dict=attr)
             else:
                 for i in set_to_merge:
-                    merged.append((i, geom_dict[i]))
+                    merged.append((i, wkt_dict[i]))
                 attrs = attr_dict[set_to_merge[0]]
                 attrs['merged_id'] = attrs['broken_id'] + '_mr_' + str(count)
                 new_geom = geom_dict[set_to_merge[0]]

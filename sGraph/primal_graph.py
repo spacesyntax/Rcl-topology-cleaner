@@ -3,7 +3,7 @@
 # general imports
 import itertools
 from PyQt4.QtCore import QVariant
-from qgis.core import QgsFeature, QgsGeometry, QgsField, QgsSpatialIndex, QgsVectorLayer, QgsVectorFileWriter, QgsPoint, QgsMapLayerRegistry
+from qgis.core import QgsFeature, QgsGeometry, QgsField, QgsSpatialIndex, QgsVectorLayer, QgsVectorFileWriter, QgsPoint, QgsMapLayerRegistry, QgsFields
 import networkx as nx
 import ogr
 
@@ -76,10 +76,10 @@ class prGraph:
 
         for i in prflds:
             if i in qgsflds.keys():
-                new_fields.append(QgsField(i, qgsflds_types[qgsflds[i]]))
+                new_fields.append(QgsField(i, qgsflds[i]))
             else:
                 # make field of string type
-                new_fields.append(QgsField(i, qgsflds_types[u'String']))
+                new_fields.append(QgsField(i, QVariant.String))
         return new_fields
 
     # ----- GEOMETRY ITERATORS -----
@@ -171,7 +171,10 @@ class prGraph:
         if path is None:
             network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), name, "memory")
         else:
-            file_writer = QgsVectorFileWriter(path, encoding, self.get_qgs_fields(qgsflds), geom_type,
+            fields = QgsFields()
+            for field in self.get_qgs_fields(qgsflds):
+                fields.append(field)
+            file_writer = QgsVectorFileWriter(path, encoding, fields, geom_type,
                                               crs, "ESRI Shapefile")
             if file_writer.hasError() != QgsVectorFileWriter.NoError:
                 print "Error when creating shapefile: ", file_writer.errorMessage()
@@ -241,7 +244,7 @@ class prGraph:
             v = list(set(v))
             v.sort()
             if len(v) != 2:
-                breakages.append((k, QgsGeometry.fromWkt(attrs['Wkt'])))
+                breakages.append((k, attrs['Wkt']))
             count_2 = 1
             edges_to_remove.append(edges[k])
             # delete primal graph edge
@@ -287,6 +290,7 @@ class prGraph:
     # SOURCE ess toolkit
     def find_dupl_overlaps_ssx(self):
         geometries = self.get_geom_dict()
+        wkt = self.get_wkt_dict()
         uid = self.uid_to_fid
         for feat, inter_lines in self.inter_lines_bb_iter():
             f_geom = geometries[feat]
@@ -295,7 +299,7 @@ class prGraph:
                 if uid[line] < uid[feat]:
                     # duplicate geometry
                     if f_geom.isGeosEqual(g_geom):
-                        yield line, geometries[line]
+                        yield line, wkt[line]
 
 
     # TODO: test speed
