@@ -283,9 +283,9 @@ class RoadNetworkCleaner:
 
         if ret:
             # report the result
-            a, b = ret
-            self.render(a)
-            self.render(b)
+            # a, b = ret
+            for i in ret:
+                self.render(i)
             self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
 
         else:
@@ -337,5 +337,4 @@ class RoadNetworkCleaner:
             self.iface.addDockWidget(Qt.RightDockWidgetArea, self.dockwidget)
             self.dockwidget.show()
             self.dockwidget.popActiveLayers(self.getActiveLayers(self.iface))
-            self.dockwidget.popTolerance()
 
