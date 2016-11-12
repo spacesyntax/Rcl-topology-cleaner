@@ -1,12 +1,12 @@
 #/***************************************************************************
 # RoadNetworkCleaner
 #
-# This plugin cleans the road centre line topology
+# This plugin clean a road centre line map.
 #							 -------------------
-#		begin				: 2016-10-10
+#		begin				: 2016-11-10
 #		git sha				: $Format:%H$
-#		copyright			: (C) 2016 by Spece Syntax Ltd
-#		email				: I.Kolovou@spacesyntax.com
+#		copyright			: (C) 2016 by Space SyntaxLtd
+#		email				: i.kolovou@spacesyntax.com
 # ***************************************************************************/
 #
 #/***************************************************************************
@@ -38,15 +38,15 @@ LOCALES =
 # translation
 SOURCES = \
 	__init__.py \
-	road_network_cleaner.py road_network_cleaner_dockwidget.py
+	road_networ_cleaner.py road_networ_cleaner_dialog.py
 
 PLUGINNAME = RoadNetworkCleaner
 
 PY_FILES = \
 	__init__.py \
-	road_network_cleaner.py road_network_cleaner_dockwidget.py
+	road_networ_cleaner.py road_networ_cleaner_dialog.py
 
-UI_FILES = road_network_cleaner_dockwidget_base.ui
+UI_FILES = road_networ_cleaner_dialog_base.ui
 
 EXTRAS = metadata.txt icon.png
 

@@ -3,12 +3,12 @@
 /***************************************************************************
  RoadNetworkCleaner
                                  A QGIS plugin
- This plugin cleans the road centre line topology
+ This plugin clean a road centre line map.
                               -------------------
-        begin                : 2016-10-10
+        begin                : 2016-11-10
         git sha              : $Format:%H$
-        copyright            : (C) 2016 by Spece Syntax Ltd
-        email                : I.Kolovou@spacesyntax.com
+        copyright            : (C) 2016 by Space SyntaxLtd
+        email                : i.kolovou@spacesyntax.com
  ***************************************************************************/
 
 /***************************************************************************
@@ -26,12 +26,10 @@ from qgis.core import QgsMapLayer, QgsMapLayerRegistry, QgsMessageLog
 from qgis.gui import QgsMessageBar
 
 from qgis.utils import *
-
 # Initialize Qt resources from file resources.py
 import resources
-
-# Import the code for the DockWidget
-from road_network_cleaner_dockwidget import RoadNetworkCleanerDockWidget
+# Import the code for the dialog
+from road_network_cleaner_dialog import RoadNetworkCleanerDialog
 import os.path
 
 import analysis
@@ -59,10 +57,8 @@ class RoadNetworkCleaner:
         """
         # Save reference to the QGIS interface
         self.iface = iface
-
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
-
         # initialize locale
         locale = QSettings().value('locale/userLocale')[0:2]
         locale_path = os.path.join(
@@ -77,6 +73,10 @@ class RoadNetworkCleaner:
             if qVersion() > '4.3.3':
                 QCoreApplication.installTranslator(self.translator)
 
+        # Create the dialog (after translation) and keep reference
+        self.dlg = RoadNetworkCleanerDialog()
+        self.cleaning = None
+
         # Declare instance attributes
         self.actions = []
         self.menu = self.tr(u'&RoadNetworkCleaner')
@@ -84,23 +84,14 @@ class RoadNetworkCleaner:
         self.toolbar = self.iface.addToolBar(u'RoadNetworkCleaner')
         self.toolbar.setObjectName(u'RoadNetworkCleaner')
 
-        #print "** INITIALIZING RoadNetworkCleaner"
-
-        self.pluginIsActive = False
-
-        # TODO: CHECK IF IT NEEDS TO GET BACK TO self.dockwidget == None
-        self.dockwidget = RoadNetworkCleanerDockWidget()
-        self.cleaning = None
-
         # Setup debugger
         if has_pydevd and is_debug:
             pydevd.settrace('localhost', port=53100, stdoutToServer=True, stderrToServer=True, suspend=True)
 
         # setup GUI signals
         # self.dockwidget.cleanButton.clicked.connect(self.runCleaning)
-        self.dockwidget.cleanButton.clicked.connect(self.startCleaning)
-        self.dockwidget.cancelButton.clicked.connect(self.killCleaning)
-
+        self.dlg.cleanButton.clicked.connect(self.startCleaning)
+        self.dlg.cancelButton.clicked.connect(self.killCleaning)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -191,41 +182,19 @@ class RoadNetworkCleaner:
 
         return action
 
-
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
         icon_path = ':/plugins/RoadNetworkCleaner/icon.png'
         self.add_action(
             icon_path,
-            text=self.tr(u'Clean road network'),
+            text=self.tr(u'Road network cleaner'),
             callback=self.run,
             parent=self.iface.mainWindow())
-
-    #--------------------------------------------------------------------------
-
-    def onClosePlugin(self):
-        """Cleanup necessary items here when plugin dockwidget is closed"""
-
-        #print "** CLOSING RoadNetworkCleaner"
-
-        # disconnects
-        self.dockwidget.closingPlugin.disconnect(self.onClosePlugin)
-
-        # remove this statement if dockwidget is to remain
-        # for reuse if plugin is reopened
-        # Commented next statement since it causes QGIS crashe
-        # when closing the docked window:
-        # self.dockwidget = None
-
-        self.pluginIsActive = False
 
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
-
-        #print "** UNLOAD RoadNetworkCleaner"
-
         for action in self.actions:
             self.iface.removePluginMenu(
                 self.tr(u'&RoadNetworkCleaner'),
@@ -233,8 +202,6 @@ class RoadNetworkCleaner:
             self.iface.removeToolBarIcon(action)
         # remove the toolbar
         del self.toolbar
-
-    #--------------------------------------------------------------------------
 
     def getActiveLayers(self, iface):
         layers_list = []
@@ -245,7 +212,7 @@ class RoadNetworkCleaner:
         return layers_list
 
     def runCleaning(self):
-        settings = self.dockwidget.get_settings()
+        settings = self.dlg.get_settings()
         return analysis.clean(settings).run()
 
     # SOURCE: Network Segmenter https://github.com/OpenDigitalWorks/NetworkSegmenter
@@ -257,8 +224,8 @@ class RoadNetworkCleaner:
             level,duration=5)
 
     def startCleaning(self, settings):
-        self.dockwidget.cleaningProgress.reset()
-        settings = self.dockwidget.get_settings()
+        self.dlg.cleaningProgress.reset()
+        settings = self.dlg.get_settings()
         cleaning = analysis.clean(settings, self.iface)
 
         # start the cleaning in a new thread
@@ -267,7 +234,7 @@ class RoadNetworkCleaner:
         cleaning.finished.connect(self.cleaningFinished)
         cleaning.error.connect(self.cleaningError)
         cleaning.warning.connect(self.giveMessage)
-        cleaning.progress.connect(self.dockwidget.cleaningProgress.setValue)
+        cleaning.progress.connect(self.dlg.cleaningProgress.setValue)
         thread.started.connect(cleaning.run)
         thread.start()
         self.thread = thread
@@ -305,7 +272,7 @@ class RoadNetworkCleaner:
             self.cleaning.finished.disconnect(self.cleaningFinished)
             self.cleaning.error.disconnect(self.cleaningError)
             self.cleaning.warning.disconnect(self.giveMessage)
-            self.cleaning.progress.disconnect(self.dockwidget.cleaningProgress.setValue)
+            self.cleaning.progress.disconnect(self.dlg.cleaningProgress.setValue)
             # Clean up thread and analysis
             self.cleaning.kill()
             self.cleaning.deleteLater()
@@ -315,26 +282,15 @@ class RoadNetworkCleaner:
             self.cleaning = None
 
     def run(self):
-        """Run method that loads and starts the plugin"""
+        """Run method that performs all the real work"""
+        # show the dialog
+        self.dlg.show()
+        # Run the dialog event loop
+        result = self.dlg.exec_()
+        # See if OK was pressed
+        if result:
+            # Do something useful here - delete the line containing pass and
+            # substitute with your code.
+            pass
 
-        if not self.pluginIsActive:
-            self.pluginIsActive = True
-
-            #print "** STARTING RoadNetworkCleaner"
-
-            # dockwidget may not exist if:
-            #    first run of plugin
-            #    removed on close (see self.onClosePlugin method)
-            if self.dockwidget == None:
-                # Create the dockwidget (after translation) and keep reference
-                self.dockwidget = RoadNetworkCleanerDockWidget()
-
-            # connect to provide cleanup on closing of dockwidget
-            self.dockwidget.closingPlugin.connect(self.onClosePlugin)
-
-            # show the dockwidget
-            # TODO: fix to allow choice of dock location
-            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.dockwidget)
-            self.dockwidget.show()
-            self.dockwidget.popActiveLayers(self.getActiveLayers(self.iface))
-
+        self.dlg.popActiveLayers(self.getActiveLayers(self.iface))
