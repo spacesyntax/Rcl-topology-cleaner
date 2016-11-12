@@ -8,9 +8,9 @@
 
 """
 
-__author__ = 'I.Kolovou@spacesyntax.com'
-__date__ = '2016-10-10'
-__copyright__ = 'Copyright 2016, Spece Syntax Ltd'
+__author__ = 'i.kolovou@spacesyntax.com'
+__date__ = '2016-11-10'
+__copyright__ = 'Copyright 2016, Space SyntaxLtd'
 
 import unittest
 

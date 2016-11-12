@@ -43,13 +43,10 @@ def getLayerPath4ogr(layer):
         uri = QgsDataSourceURI(provider.dataSourceUri())
         databaseName = uri.database().encode('utf-8')
         databaseServer = uri.host().encode('utf-8')
-        databasePort = uri.port().encode('utf-8')
         databaseUser = uri.username().encode('utf-8')
         databasePW = uri.password().encode('utf-8')
-        databaseSchema = uri.schema().encode('utf-8')
-        path = "PG: host=%s dbname=%s port=%s user=%s password=%s" % (
-            databaseServer, databaseName, databasePort, databaseUser, databasePW)
-        path = (path, databaseSchema)
+        path = "PG: host=%s dbname=%s user=%s password=%s" % (
+            databaseServer, databaseName, databaseUser, databasePW)
     elif provider_type == 'ogr':
         uri = provider.dataSourceUri()
         path = uri.split("|")[0]

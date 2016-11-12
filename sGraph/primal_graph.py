@@ -202,8 +202,6 @@ class prGraph:
 
     # ----- ALTERATION OPERATIONS -----
 
-    # return line, indeces to be broken where a line intersects with another line
-    # TODO: test construct a primal sub-graph non simplified
     def find_breakages(self):
         geometries = self.get_geom_dict()
         for feat, inter_lines in self.inter_lines_bb_iter():
@@ -228,33 +226,6 @@ class prGraph:
                     breakages += [QgsGeometry.fromPoint(QgsPoint(intersection.asGeometryCollection()[0].asPolyline()[0])), QgsGeometry.fromPoint(QgsPoint(intersection.asGeometryCollection()[-1].asPolyline()[-1]))]
             if len(breakages) > 0:
                 yield feat, set([vertex for vertex in find_vertex_index(breakages, feat, geometries)])
-
-    def find_top_nodes(self, tolerance, angle_sensitivity):
-        attr_dict = self.get_attr_dict()
-        geom_dict = self.get_geom_dict()
-        for i in self.obj.edges(data=True):
-            attrs = attr_dict[i[2][self.uid]]
-            primal_non_simpl = nx.MultiGraph()
-            top_points = []
-            # construct primal graph non simplified for every feature
-            ogr_geom = ogr.Geometry(ogr.wkbLineString)
-            for i in geom_dict[i[2][self.uid]].asPolyline():
-                ogr_geom.AddPoint_2D(i[0], i[1])
-            at_index = 0
-            for edge in edges_from_line(ogr_geom, attrs, tolerance, False):
-                e1, e2, attr = edge
-                attr['index'] = at_index
-                at_index += 1
-                primal_non_simpl.add_edge(e1, e2, attr_dict=attr)
-            pr_non_simpl = prGraph(primal_non_simpl, 'index', False)
-            # construct dual graph with angular cost
-            dl_non_simpl = pr_non_simpl.to_dual( False, angular_cost=True, polylines=False)
-
-            for edge in dl_non_simpl.edges(data=True):
-                if edge[2]['cost'] >= angle_sensitivity:
-                    top_points.append(edge[1]-1)
-
-            yield i[self.uid], top_points
 
     def break_graph(self, tolerance, simplify):
         count = 1
