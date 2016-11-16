@@ -285,6 +285,7 @@ class RoadNetworkCleaner:
         """Run method that performs all the real work"""
         # show the dialog
         self.dlg.show()
+        self.dlg.popActiveLayers(self.getActiveLayers(self.iface))
         # Run the dialog event loop
         result = self.dlg.exec_()
         # See if OK was pressed
@@ -293,4 +294,4 @@ class RoadNetworkCleaner:
             # substitute with your code.
             pass
 
-        self.dlg.popActiveLayers(self.getActiveLayers(self.iface))
+
