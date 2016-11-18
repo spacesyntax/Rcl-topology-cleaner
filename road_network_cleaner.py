@@ -211,17 +211,19 @@ class RoadNetworkCleaner:
                     layers_list.append(layer.name())
         return layers_list
 
-    def runCleaning(self):
-        settings = self.dlg.get_settings()
-        return analysis.clean(settings).run()
+    def render(self,vector_layer):
+        QgsMapLayerRegistry.instance().addMapLayer(vector_layer)
 
     # SOURCE: Network Segmenter https://github.com/OpenDigitalWorks/NetworkSegmenter
+    # SOURCE: https://snorfalorpagus.net/blog/2013/12/07/multithreading-in-qgis-python-plugins/
 
     def giveMessage(self, message, level):
         # Gives warning according to message
-        self.iface.messageBar().pushMessage(
-            "Road network cleaner: ", "%s" % (message),
-            level,duration=5)
+        self.iface.messageBar().pushMessage("Road network cleaner: ", "%s" % (message), level, duration=5)
+
+    def cleaningError(self, e, exception_string):
+        # Gives error according to message
+        QgsMessageLog.logMessage('Cleaning thread raised an exception: %s' % exception_string, level=QgsMessageLog.CRITICAL)
 
     def startCleaning(self, settings):
         self.dlg.cleaningProgress.reset()
@@ -259,12 +261,7 @@ class RoadNetworkCleaner:
             # notify the user that sth went wrong
             self.giveMessage('Something went wrong! See the message log for more information', QgsMessageBar.CRITICAL)
 
-    def cleaningError(self, e, exception_string):
-        QgsMessageLog.logMessage('Cleaning thread raised an exception: %s' % exception_string
-                                    , level=QgsMessageLog.CRITICAL)
-
-    def render(self,vector_layer):
-        QgsMapLayerRegistry.instance().addMapLayer(vector_layer)
+        self.dlg.cleaningProgress.reset()
 
     def killCleaning(self):
         if self.cleaning:
@@ -280,11 +277,13 @@ class RoadNetworkCleaner:
             self.thread.wait()
             self.thread.deleteLater()
             self.cleaning = None
+            self.dlg.cleaningProgress.reset()
 
     def run(self):
         """Run method that performs all the real work"""
         # show the dialog
         self.dlg.show()
+
         self.dlg.popActiveLayers(self.getActiveLayers(self.iface))
         # Run the dialog event loop
         result = self.dlg.exec_()
