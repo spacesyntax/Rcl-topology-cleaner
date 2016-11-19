@@ -68,7 +68,8 @@ class dlGraph:
         components = sorted(connected_components(self.obj), key=len, reverse=True)
         islands = []
         orphans = []
-        count = 0
+        count = 1
+        orph_count = 1
         if len(components) > 1:
             islands = []
             # get vertex ids
@@ -76,12 +77,16 @@ class dlGraph:
                 # identify orphans
                 if len(cluster) == 1:
                     orphan = cluster.pop()
-                    orphans.append((orphan, wkt_dict[orphan]))
+                    orphans.append(('orph_' + str(orph_count), wkt_dict[orphan]))
+                    orph_count += 1
                 # identify islands
                 elif len(cluster) > 1:
                     island = list(cluster)
+                    geom_col = QgsGeometry.fromWkt('GEOMETRYCOLLECTION EMPTY')
                     for i in island:
-                        islands.append(('island_' + str(count), wkt_dict[i]))
+                        geom_col = geom_col.combine(QgsGeometry.fromWkt(wkt_dict[i]))
+                    geom_wkt = geom_col.exportToWkt()
+                    islands.append(('isl_' + str(count), geom_wkt))
                     count += 1
 
         return islands, orphans

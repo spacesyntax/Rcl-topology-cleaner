@@ -31,6 +31,7 @@ import resources
 # Import the code for the dialog
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
 import os.path
+import math
 
 import analysis
 
@@ -207,7 +208,7 @@ class RoadNetworkCleaner:
         layers_list = []
         for layer in iface.legendInterface().layers():
             if layer.isValid() and layer.type() == QgsMapLayer.VectorLayer:
-                if layer.hasGeometryType() and (layer.wkbType() == 2 or layer.wkbType() == 5):
+                if layer.hasGeometryType() and (layer.geometryType() == 1):
                     layers_list.append(layer.name())
         return layers_list
 
@@ -279,6 +280,50 @@ class RoadNetworkCleaner:
             self.cleaning = None
             self.dlg.cleaningProgress.reset()
 
+    def startWorker(self,any_worker):
+        thread = QThread()
+        any_worker.moveToThread(thread)
+        any_worker.finished.connect(self.finishWorker)
+        any_worker.error.connect(self.cleaningError)
+        any_worker.warning.connect(self.giveMessage)
+        any_worker.progress.connect(self.changePB)
+        thread.started.connect(any_worker.run)
+        thread.start()
+        self.thread = thread
+        self.any_worker = any_worker
+
+    def finishWorker(self, ret):
+        # clean up  the worker and thread
+        self.any_worker.deleteLater()
+        self.thread.quit()
+        self.thread.wait()
+        self.thread.deleteLater()
+        self.any_worker = None
+
+        if ret:
+            # report the result
+            # a, b = ret
+            for i in ret:
+                self.render(i)
+            self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
+
+        else:
+            # notify the user that sth went wrong
+            self.giveMessage('Something went wrong! See the message log for more information', QgsMessageBar.CRITICAL)
+
+        self.dlg.cleaningProgress.reset()
+
+    #@pyqtSlot(int, int)
+    def changePB(self, progress_steps, progress_range):
+        self.proportionFinished = int(math.floor(100 * (float(progress_steps) / progress_range)))
+        self.dlg.cleaningProgress.setValue(self.proportionFinished + progress_steps)
+
+    def clean(self):
+        settings = self.dlg.get_settings()
+        if settings:
+            pass
+
+
     def run(self):
         """Run method that performs all the real work"""
         # show the dialog
@@ -292,5 +337,3 @@ class RoadNetworkCleaner:
             # Do something useful here - delete the line containing pass and
             # substitute with your code.
             pass
-
-

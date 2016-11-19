@@ -2,13 +2,11 @@
 import networkx as nx
 import os
 from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsDataSourceURI, QgsField, QgsFeature, QgsGeometry
-from PyQt4.QtCore import QVariant
+from PyQt4.QtCore import QVariant, QObject, pyqtSignal
 
 # plugin module imports
 from utilityFunctions import getLayerByName, getLayerPath4ogr, getAllFeatures
 from plFunctions import make_snapped_wkt, snap_coord
-
-
 
 # ----- SHAPEFILE OPERATIONS -----
 
@@ -56,70 +54,8 @@ def del_shp(path):
         os.remove(path[0:-3] + ext)
 
 
-# shp to nx multiGraph
-
-
-def read_shp_to_multi_graph(layer_name, tolerance=None, uid=True, simplify=True):
-    # 1. open shapefiles from directory/filename
-    try:
-        from osgeo import ogr
-    except ImportError:
-        raise ImportError("read_shp requires OGR: http://www.gdal.org/")
-
-    # find if the table with the give table_name is a shapefile or a postgis file
-    layer = getLayerByName(layer_name)
-    path, provider_type = getLayerPath4ogr(layer)
-
-    # TODO: push error message when path is empty/does not exist/connection with db does not exist
-    if path == '':  # or not os.path.exists(path)
-        return
-
-    # construct a multi-graph
-    net = nx.MultiGraph()
-    lyr = ogr.Open(path)
-
-    if provider_type == 'postgres':
-        layer = [table for table in lyr if table.GetName() == layer_name][0]
-        fields = [x.GetName() for x in layer.schema]
-    elif provider_type in ('ogr', 'memory'):
-        layer = lyr[0]
-        fields = [x.GetName() for x in layer.schema]
-    count = 0
-    for f in layer:
-        flddata = [f.GetField(f.GetFieldIndex(x)) for x in fields]
-        g = f.geometry()
-        attributes = dict(zip(fields, flddata))
-        attributes["LayerName"] = lyr.GetName()
-        # Note:  Using layer level geometry type
-        if g.GetGeometryType() == ogr.wkbLineString:
-            for edge in edges_from_line(g, attributes, tolerance, simplify):
-                e1, e2, attr = edge
-                attr['id_in'] = 'in_'+ str(count)
-                count += 1
-                net.add_edge(e1, e2, attr_dict=attr)
-        elif g.GetGeometryType() == ogr.wkbMultiLineString:
-            for i in range(g.GetGeometryCount()):
-                geom_i = g.GetGeometryRef(i)
-                for edge in edges_from_line(geom_i, attributes, tolerance, simplify):
-                    e1, e2, attr = edge
-                    attr['id_in'] = 'in_' + str(count)
-                    count += 1
-                    net.add_edge(e1, e2, attr_dict=attr)
-            # TODO: push message x features not included
-
-    if provider_type == 'postgres':
-        # destroy connection with db
-        lyr.Destroy()
-    elif provider_type == 'memory':
-        # delete shapefile
-        del_shp(path)
-
-    return net
-
-
 # TODO check if any of the edge created is a point
 # source : networkx
-# TODO: add unique id column
 
 def edges_from_line(geom, attrs, tolerance=None, simplify=True):
 
@@ -159,14 +95,19 @@ def edges_from_line(geom, attrs, tolerance=None, simplify=True):
             del segment
             yield (pt1, pt2, edge_attrs)
 
-
-# identify invalids multiparts of a layer
+# identify invalids multi-parts of a layer
 
 
 def inv_mlParts(name):
     layer = getLayerByName(name)
-    invalids = [(i.id(), i.geometry().exportToWkt()) for i in layer.getFeatures() if not i.geometry().isGeosValid()]
-    multiparts = [(i.id(), i .geometry().exportToWkt()) for i in layer.getFeatures() if i.geometry().isMultipart()]
+    invalids = []
+    multiparts = []
+    for i in layer.getFeatures():
+        if not i.geometry().isGeosValid():
+            invalids.append((i.id(), i.geometry().exportToWkt()))
+        elif i.geometry().isMultipart():
+            multiparts.append((i.id(), i.geometry().exportToWkt()))
+
     return invalids, multiparts
 
 
@@ -174,7 +115,7 @@ def errors_to_shp(error_list, path, name, crs, encoding, geom_type):
     if path is None:
         network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), name, "memory")
     else:
-        file_writer = QgsVectorFileWriter(path, encoding, [QgsField('id', QVariant.String), QgsField('error', QVariant.String)], geom_type,
+        file_writer = QgsVectorFileWriter(path, encoding,[QgsField('error_id', QVariant.Int), QgsField('ref_id', QVariant.String), QgsField('ref_stage', QVariant.Int), QgsField('error', QVariant.String), QgsField('action', QVariant.String)], geom_type,
                                           crs, "ESRI Shapefile")
         if file_writer.hasError() != QgsVectorFileWriter.NoError:
             print "Error when creating shapefile: ", file_writer.errorMessage()
@@ -184,15 +125,38 @@ def errors_to_shp(error_list, path, name, crs, encoding, geom_type):
     pr = network.dataProvider()
     network.startEditing()
     if path is None:
-        pr.addAttributes([QgsField('id', QVariant.String), QgsField('error', QVariant.String)])
+        pr.addAttributes([QgsField('error_id', QVariant.Int), QgsField('ref_id', QVariant.String), QgsField('ref_stage', QVariant.Int), QgsField('error', QVariant.String), QgsField('action', QVariant.String)])
     errors_feat = []
+    error_count = 1
     for errors in error_list:
         for error in errors[1]:
             new_feat = QgsFeature()
-            new_feat.initAttributes(2)
-            new_feat.setAttributes([error[0]] + [errors[0]])
+            new_feat.initAttributes(5)
+            if errors[0] == 'invalids':
+                ref_stage = 0
+                action = 'removed'
+            elif errors[0] == 'multiparts':
+                ref_stage = 0
+                action = 'broken'
+            elif errors[0] == 'intersections/overlaps':
+                ref_stage = 1
+                action = 'broken'
+            elif errors[0] == 'duplicates':
+                ref_stage = 2
+                action = 'removed'
+            elif errors[0] == 'chains':
+                ref_stage = 2
+                action = 'merged'
+            elif errors[0] == 'islands':
+                ref_stage = 3
+                action = 'no action'
+            elif errors[0] == 'orphans':
+                ref_stage = 3
+                action = 'no action'
+            new_feat.setAttributes([error_count, error[0], ref_stage] + [errors[0], action])
             new_feat.setGeometry(QgsGeometry.fromWkt(error[1]))
             errors_feat.append(new_feat)
+            error_count += 1
     pr.addFeatures(errors_feat)
     network.commitChanges()
     return network
@@ -203,19 +167,96 @@ def errors_to_shp(error_list, path, name, crs, encoding, geom_type):
 # layer to primal graph
 
 
-class transformer:
+class transformer(QObject):
 
-    def __init__(self, parameters, transformation_type):
+    # Setup signals
+    finished = pyqtSignal(object)
+    error = pyqtSignal(Exception, basestring)
+    progress = pyqtSignal(float)
+    warning = pyqtSignal(str)
+
+    def __init__(self, parameters):
+        QObject.__init__(self)
         self.parameters = parameters
-        self.transformation_type = transformation_type
-        self.id_column = parameters['id_column']
-
+        # self.id_column = parameters['id_column']
         # ----- SHP TO prGRAPH
 
-        if self.transformation_type == 'shp_to_pgr':
-            # TODO: check the parallel lines (1 of the parallel edges is not correct connected)
-            primal_graph = read_shp_to_multi_graph(parameters['layer_name'], parameters['tolerance'], True, parameters['simplify'])
-            self.result = primal_graph
+    def run(self):
+        # TODO: check the parallel lines (1 of the parallel edges is not correct connected)
+        primal_graph, invalids, multiparts = self.read_shp_to_multi_graph(self.parameters['layer_name'], self.parameters['tolerance'], True, self.parameters['simplify'])
+        return primal_graph, invalids, multiparts
+
+    def read_shp_to_multi_graph(self, layer_name, tolerance=None, uid=True, simplify=True):
+        # 1. open shapefiles from directory/filename
+        try:
+            from osgeo import ogr
+        except ImportError:
+            raise ImportError("read_shp requires OGR: http://www.gdal.org/")
+
+        invalids = []
+        multiparts = []
+        # find if the table with the give table_name is a shapefile or a postgis file
+        layer = getLayerByName(layer_name)
+        path, provider_type = getLayerPath4ogr(layer)
+
+        # TODO: push error message when path is empty/does not exist/connection with db does not exist
+        if path == '':  # or not os.path.exists(path)
+            return
+
+        # construct a multi-graph
+        net = nx.MultiGraph()
+        lyr = ogr.Open(path)
+
+        if provider_type == 'postgres':
+            layer = [table for table in lyr if table.GetName() == layer_name][0]
+            fields = [x.GetName() for x in layer.schema]
+        elif provider_type in ('ogr', 'memory'):
+            layer = lyr[0]
+            fields = [x.GetName() for x in layer.schema]
+        count = 0
+        f_count = 1
+        feat_count = layer.GetFeatureCount()
+        inv_count = 1
+
+        for f in layer:
+
+            self.progress.emit(f_count/feat_count)
+            f_count += 1
+
+            flddata = [f.GetField(f.GetFieldIndex(x)) for x in fields]
+            g = f.geometry()
+            attributes = dict(zip(fields, flddata))
+            attributes["LayerName"] = lyr.GetName()
+            # Note:  Using layer level geometry type
+            if g.GetGeometryType() == ogr.wkbLineString:
+                for edge in edges_from_line(g, attributes, tolerance, simplify):
+                    e1, e2, attr = edge
+                    attr['id_in'] = 'in_' + str(count)
+                    count += 1
+                    net.add_edge(e1, e2, attr_dict=attr)
+            elif g.GetGeometryType() == ogr.wkbMultiLineString:
+                multiparts.append(('mlp_' + str(inv_count), g.ExportToWkt()))
+                inv_count += 1
+                for i in range(g.GetGeometryCount()):
+                    geom_i = g.GetGeometryRef(i)
+                    for edge in edges_from_line(geom_i, attributes, tolerance, simplify):
+                        e1, e2, attr = edge
+                        attr['id_in'] = 'in_' + str(count)
+                        count += 1
+                        net.add_edge(e1, e2, attr_dict=attr)
+                        # TODO: push message x features not included
+            else:
+                invalids.append(('inv_' + str(inv_count), g.ExportToWkt()))
+
+
+        if provider_type == 'postgres':
+            # destroy connection with db
+            lyr.Destroy()
+        elif provider_type == 'memory':
+            # delete shapefile
+            del_shp(path)
+
+        return net, invalids, multiparts
 
 
 

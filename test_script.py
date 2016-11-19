@@ -1,15 +1,11 @@
 
 # imports
-execfile(u'/Users/joe/Rcl-topology-validation/geometryFunctions/wktFunctions.py'.encode('utf-8'))
-execfile(u'/Users/joe/Rcl-topology-validation/otherFunctions/utilityFunctions.py'.encode('utf-8'))
-execfile(u'/Users/joe/Rcl-topology-validation/otherFunctions/shpFunctions.py'.encode('utf-8'))
-execfile(u'/Users/joe/Rcl-topology-validation/sGrpah/sGraph.py'.encode('utf-8'))
-execfile(u'/Users/joe/Rcl-topology-validation/sGrpah/prGraph.py'.encode('utf-8'))
-execfile(u'/Users/joe/Rcl-topology-validation/geometryFunctions/plFunctions.py'.encode('utf-8'))
-execfile(u'/Users/joe/Rcl-topology-validation/otherFunctions/generalFunctions.py'.encode('utf-8'))
-execfile(u'/Users/joe/Rcl-topology-validation/sGrpah/dlGraph.py'.encode('utf-8'))
-execfile(u'/Users/joe/Rcl-topology-validation/otherFunctions/transformer.py'.encode('utf-8'))
-execfile(u'/Users/joe/Rcl-topology-validation/clean.py'.encode('utf-8'))
+execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/utilityFunctions.py'.encode('utf-8'))
+execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/shpFunctions.py'.encode('utf-8'))
+execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/primal_graph.py'.encode('utf-8'))
+execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/plFunctions.py'.encode('utf-8'))
+execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/generalFunctions.py'.encode('utf-8'))
+execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/dual_graph.py'.encode('utf-8'))
 
 
 # _________________________ TRANSFORMATIONS ______________________________
@@ -19,14 +15,13 @@ execfile(u'/Users/joe/Rcl-topology-validation/clean.py'.encode('utf-8'))
 from PyQt4.QtCore import QVariant
 qgsflds_types = {u'Real': QVariant.Double, u'String': QVariant.String}
 
-layer_name = 'nyc_streets_shp'
+layer_name = 'Netwrok_small'
 
-transformation_type = 'shp_to_pgr'
-base_id = 'id_in'
 tolerance = 3
 simplify = True
-parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify, 'id_column': base_id}
-primal_graph = transformer(parameters, transformation_type).result
+parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify}
+primal_graph = transformer(parameters).run()
+base_id = 'id_in'
 
 any_primal_graph = prGraph(primal_graph, base_id, True)
 print any_primal_graph.obj.size()
@@ -34,24 +29,26 @@ print any_primal_graph.obj.__len__()
 
 # identify multiparts invalids from shpefile
 
-invalids, multiparts = inv_mlParts(layer_name, base_id)
+# invalids, multiparts = inv_mlParts(layer_name, base_id)
 
 # TODO: setup constants of project
 n = getLayerByName(layer_name)
 crs = n.dataProvider().crs()
 encoding = n.dataProvider().encoding()
 geom_type = n.dataProvider().geometryType()
-name = 'network'
-path = None
 qgsflds = get_field_types(layer_name)
-
-clean_shp = any_primal_graph.to_shp(path, name, crs, encoding, geom_type, qgsflds)
-
-# TODO Add change coordinate reference system
 
 # Break at intersections
 
-broken_primal = any_primal_graph.break_graph(tolerance, simplify)
+broken_primal, to_break = any_primal_graph.break_graph(tolerance, simplify)
+path=None
+name = 'network'
+any_primal_graph.to_shp(path, name, crs, encoding, geom_type, any_primal_graph.get_qgs_fields(qgsflds))
+br = any_primal_graph.find_breakages()
+x=0
+for i in br:
+	x+=1
+
 broken_clean_primal = broken_primal.rmv_dupl_overlaps()
 
 name = 'broken_network'
