@@ -2,7 +2,7 @@
 
 # general imports
 import itertools
-from PyQt4.QtCore import QVariant
+from PyQt4.QtCore import QVariant, pyqtSignal, QObject
 from qgis.core import QgsFeature, QgsGeometry, QgsField, QgsSpatialIndex, QgsVectorLayer, QgsVectorFileWriter, QgsPoint, QgsMapLayerRegistry, QgsFields
 import networkx as nx
 import ogr
@@ -16,9 +16,15 @@ from shpFunctions import edges_from_line
 
 qgsflds_types = {u'Real': QVariant.Double , u'String': QVariant.String}
 
-class prGraph:
+class prGraph(QObject):
+    # Setup signals
+    finished = pyqtSignal(object)
+    error = pyqtSignal(Exception, basestring)
+    progress = pyqtSignal(float)
+    warning = pyqtSignal(str)
 
     def __init__(self, any_primal_graph, id_column, make_feat = True):
+        QObject.__init__(self)
         self.obj = any_primal_graph
         self.uid = id_column
         self.n_attributes = len(self.obj.edges(data=True)[0][2].keys())

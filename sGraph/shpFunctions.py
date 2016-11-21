@@ -178,16 +178,21 @@ class transformer(QObject):
     def __init__(self, parameters):
         QObject.__init__(self)
         self.parameters = parameters
-        # self.id_column = parameters['id_column']
-        # ----- SHP TO prGRAPH
+        print "a", parameters
 
-    def run(self):
+    # ----- SHP TO prGRAPH
+
+    def transform(self):
+        print "transform function"
+        print 'test', nx.MultiGraph()
         # TODO: check the parallel lines (1 of the parallel edges is not correct connected)
         primal_graph, invalids, multiparts = self.read_shp_to_multi_graph(self.parameters['layer_name'], self.parameters['tolerance'], True, self.parameters['simplify'])
         return primal_graph, invalids, multiparts
 
     def read_shp_to_multi_graph(self, layer_name, tolerance=None, uid=True, simplify=True):
+
         # 1. open shapefiles from directory/filename
+        print "trying to..."
         try:
             from osgeo import ogr
         except ImportError:
@@ -204,7 +209,10 @@ class transformer(QObject):
             return
 
         # construct a multi-graph
+        print nx
+        print nx.MultiGraph()
         net = nx.MultiGraph()
+
         lyr = ogr.Open(path)
 
         if provider_type == 'postgres':
@@ -217,6 +225,8 @@ class transformer(QObject):
         f_count = 1
         feat_count = layer.GetFeatureCount()
         inv_count = 1
+
+        print "layer", layer
 
         for f in layer:
 
@@ -256,7 +266,12 @@ class transformer(QObject):
             # delete shapefile
             del_shp(path)
 
-        return net, invalids, multiparts
+        print "before emitting result"
+        self.finished.emit((net, invalids, multiparts))
+        print "net", net
+        print "inv,ml", invalids, multiparts
+        print "result emmitted"
+        #return net, invalids, multiparts
 
 
 

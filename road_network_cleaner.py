@@ -23,7 +23,12 @@
 from PyQt4.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, Qt, QThread
 from PyQt4.QtGui import QAction, QIcon
 from qgis.core import QgsMapLayer, QgsMapLayerRegistry, QgsMessageLog
+from PyQt4.QtCore import pyqtSlot
 from qgis.gui import QgsMessageBar
+
+from sGraph.dual_graph import *
+from sGraph.shpFunctions import *
+
 
 from qgis.utils import *
 # Initialize Qt resources from file resources.py
@@ -33,7 +38,7 @@ from road_network_cleaner_dialog import RoadNetworkCleanerDialog
 import os.path
 import math
 
-import analysis
+from periodic_worker import GenericWorker, ClassFactory
 
 # Import the debug library
 # set is_debug to False in release version
@@ -45,8 +50,16 @@ except ImportError, e:
     has_pydevd = False
     is_debug = False
 
+gl_res = None
+progress_steps = 10
+progress_point = 0
+
 class RoadNetworkCleaner:
     """QGIS Plugin Implementation."""
+
+    global gl_res
+    global progress_steps
+    global progress_point
 
     def __init__(self, iface):
         """Constructor.
@@ -91,8 +104,8 @@ class RoadNetworkCleaner:
 
         # setup GUI signals
         # self.dockwidget.cleanButton.clicked.connect(self.runCleaning)
-        self.dlg.cleanButton.clicked.connect(self.startCleaning)
-        self.dlg.cancelButton.clicked.connect(self.killCleaning)
+        self.dlg.cleanButton.clicked.connect(self.clean)
+        self.dlg.cancelButton.clicked.connect(self.killWorker)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -225,73 +238,26 @@ class RoadNetworkCleaner:
         # Gives error according to message
         QgsMessageLog.logMessage('Cleaning thread raised an exception: %s' % exception_string, level=QgsMessageLog.CRITICAL)
 
-    def startCleaning(self, settings):
-        self.dlg.cleaningProgress.reset()
-        settings = self.dlg.get_settings()
-        cleaning = analysis.clean(settings, self.iface)
 
-        # start the cleaning in a new thread
-        thread = QThread()
-        cleaning.moveToThread(thread)
-        cleaning.finished.connect(self.cleaningFinished)
-        cleaning.error.connect(self.cleaningError)
-        cleaning.warning.connect(self.giveMessage)
-        cleaning.progress.connect(self.dlg.cleaningProgress.setValue)
-        thread.started.connect(cleaning.run)
-        thread.start()
-        self.thread = thread
-        self.cleaning = cleaning
-
-    def cleaningFinished(self, ret):
-        # clean up  the worker and thread
-        self.cleaning.deleteLater()
-        self.thread.quit()
-        self.thread.wait()
-        self.thread.deleteLater()
-        self.cleaning = None
-
-        if ret:
-            # report the result
-            # a, b = ret
-            for i in ret:
-                self.render(i)
-            self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
-
-        else:
-            # notify the user that sth went wrong
-            self.giveMessage('Something went wrong! See the message log for more information', QgsMessageBar.CRITICAL)
-
-        self.dlg.cleaningProgress.reset()
-
-    def killCleaning(self):
+    def killWorker(self):
         if self.cleaning:
             # Disconnect signals
-            self.cleaning.finished.disconnect(self.cleaningFinished)
-            self.cleaning.error.disconnect(self.cleaningError)
-            self.cleaning.warning.disconnect(self.giveMessage)
-            self.cleaning.progress.disconnect(self.dlg.cleaningProgress.setValue)
+            self.any_worker.finished.disconnect(self.finishWorker)
+            self.any_worker.error.disconnect(self.cleaningError)
+            self.any_worker.warning.disconnect(self.giveMessage)
+            self.any_worker.progress.disconnect(self.changePB)
             # Clean up thread and analysis
-            self.cleaning.kill()
-            self.cleaning.deleteLater()
+            self.any_worker.kill()
+            self.any_worker.deleteLater()
             self.thread.quit()
             self.thread.wait()
             self.thread.deleteLater()
-            self.cleaning = None
+            self.any_worker = None
             self.dlg.cleaningProgress.reset()
 
-    def startWorker(self,any_worker):
-        thread = QThread()
-        any_worker.moveToThread(thread)
-        any_worker.finished.connect(self.finishWorker)
-        any_worker.error.connect(self.cleaningError)
-        any_worker.warning.connect(self.giveMessage)
-        any_worker.progress.connect(self.changePB)
-        thread.started.connect(any_worker.run)
-        thread.start()
-        self.thread = thread
-        self.any_worker = any_worker
-
     def finishWorker(self, ret):
+
+        print "job finished!"
         # clean up  the worker and thread
         self.any_worker.deleteLater()
         self.thread.quit()
@@ -301,9 +267,8 @@ class RoadNetworkCleaner:
 
         if ret:
             # report the result
-            # a, b = ret
-            for i in ret:
-                self.render(i)
+            print ret
+            gl_res = ret
             self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
 
         else:
@@ -312,16 +277,58 @@ class RoadNetworkCleaner:
 
         self.dlg.cleaningProgress.reset()
 
-    #@pyqtSlot(int, int)
-    def changePB(self, progress_steps, progress_range):
-        self.proportionFinished = int(math.floor(100 * (float(progress_steps) / progress_range)))
-        self.dlg.cleaningProgress.setValue(self.proportionFinished + progress_steps)
+    def startWorker(self,any_worker):
+        print "new worker started"
+        thread = QThread()
+        thread.start()
+
+        any_worker.moveToThread(thread)
+        any_worker.start.connect(any_worker.any_run({}))
+
+        any_worker.finished.connect(self.finishWorker)
+        any_worker.error.connect(self.cleaningError)
+        any_worker.warning.connect(self.giveMessage)
+        any_worker.progress.connect(self.changePB)
+
+        #thread.started.connect(any_worker.any_run)
+
+        self.thread = thread
+        self.any_worker = any_worker
+
+    @pyqtSlot(int, int)
+    def changePB(self,progress, progress_steps=progress_steps, progress_point=progress_point):
+        self.dlg.cleaningProgress.setValue((progress/ progress_steps) + progress_point)
 
     def clean(self):
         settings = self.dlg.get_settings()
         if settings:
-            pass
+            # cleaning settings
+            layer_name = settings['input']
+            path = settings['output']
+            tolerance = settings['tolerance']
+            base_id = 'id_in'
 
+            # project settings
+            n = getLayerByName(layer_name)
+            crs = n.dataProvider().crs()
+            encoding = n.dataProvider().encoding()
+            geom_type = n.dataProvider().geometryType()
+            qgsflds = get_field_types(layer_name)
+
+            simplify = True
+            parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify, 'id_column': base_id}
+            # BaseClass = transformer
+            my_worker = GenericWorker(parameters,transformer(parameters).transform)
+            #my_worker.any_run({})
+            progress_steps = 10
+            progress_point = 0
+            self.startWorker(my_worker)
+
+            print gl_res
+
+            # error cat: invalids, multiparts
+            #primal_graph, invalids, multiparts = transformer(parameters).run()
+            #any_primal_graph = prGraph(primal_graph, base_id, True)
 
     def run(self):
         """Run method that performs all the real work"""
@@ -336,3 +343,7 @@ class RoadNetworkCleaner:
             # Do something useful here - delete the line containing pass and
             # substitute with your code.
             pass
+
+
+
+

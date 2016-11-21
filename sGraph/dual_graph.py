@@ -3,16 +3,23 @@ import networkx as nx
 from networkx import connected_components, all_simple_paths
 import ogr
 
-from PyQt4.QtCore import QVariant
+from PyQt4.QtCore import QVariant, pyqtSignal, QObject
 from qgis.core import QgsField, QgsFeature, QgsGeometry, QgsPoint, QgsVectorLayer, QgsVectorFileWriter, QgsMapLayerRegistry
 
 # plugin module imports
 from primal_graph import prGraph
 from shpFunctions import edges_from_line
 
-class dlGraph:
+class dlGraph(QObject):
+
+    # Setup signals
+    finished = pyqtSignal(object)
+    error = pyqtSignal(Exception, basestring)
+    progress = pyqtSignal(float)
+    warning = pyqtSignal(str)
 
     def __init__(self, dlGraph, id_column, centroids, make_feat=True):
+        QObject.__init__(self)
         self.obj = dlGraph
         self.uid = id_column
         self.attributes = ['line1', 'line2', 'cost']
