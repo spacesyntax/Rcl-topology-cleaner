@@ -65,7 +65,6 @@ class dlGraph:
     def find_islands_orphans(self, primal_graph):
         wkt_dict = primal_graph.get_wkt_dict()
         # order based on length
-        print "process started"
         components = sorted(connected_components(self.obj), key=len, reverse=True)
         print "len_comp", len(components)
         islands = []
@@ -84,10 +83,11 @@ class dlGraph:
                 # identify islands
                 elif len(cluster) > 1:
                     island = list(cluster)
-                    geom_col = QgsGeometry.fromWkt('GEOMETRYCOLLECTION EMPTY')
+                    geom_col = ogr.Geometry(ogr.wkbGeometryCollection)
                     for i in island:
-                        geom_col = geom_col.combine(QgsGeometry.fromWkt(wkt_dict[i]))
-                    geom_wkt = geom_col.exportToWkt()
+                        g = ogr.CreateGeometryFromWkt(wkt_dict[i])
+                        geom_col.AddGeometry(g)
+                    geom_wkt = geom_col.ExportToWkt()
                     islands.append(('isl_' + str(count), geom_wkt))
                     count += 1
 
