@@ -1,5 +1,4 @@
 
-
 # general imports
 import itertools
 from PyQt4.QtCore import QVariant
@@ -180,7 +179,7 @@ class prGraph:
                 print "Error when creating shapefile: ", file_writer.errorMessage()
             del file_writer
             network = QgsVectorLayer(path, name, "ogr")
-        #QgsMapLayerRegistry.instance().addMapLayer(network)
+        # QgsMapLayerRegistry.instance().addMapLayer(network)
         pr = network.dataProvider()
         network.startEditing()
         if path is None:
@@ -214,16 +213,26 @@ class prGraph:
                 if intersection.wkbType() == 1 and point_is_vertex(intersection, f_geom):
                     breakages.append(intersection)
                 # TODO: test multipoints
-                #intersecting geometries at multiple points
+                # intersecting geometries at multiple points
                 elif intersection.wkbType() == 4:
                     for point in intersection.asGeometryCollection():
                         if point_is_vertex(intersection, f_geom):
                             breakages.append(point)
                 # overalpping geometries
                 elif intersection.wkbType() == 2:
-                    breakages += [QgsGeometry.fromPoint(QgsPoint(intersection.asPolyline()[0])), QgsGeometry.fromPoint(QgsPoint(intersection.asPolyline()[-1]))]
+                    point1 = QgsGeometry.fromPoint(QgsPoint(intersection.asPolyline()[0]))
+                    point2 = QgsGeometry.fromPoint(QgsPoint(intersection.asPolyline()[-1]))
+                    if point_is_vertex(point1, f_geom):
+                        breakages.append(point1)
+                    if point_is_vertex(point2, f_geom):
+                        breakages.append(point2)
                 elif intersection.wkbType() == 5:
-                    breakages += [QgsGeometry.fromPoint(QgsPoint(intersection.asGeometryCollection()[0].asPolyline()[0])), QgsGeometry.fromPoint(QgsPoint(intersection.asGeometryCollection()[-1].asPolyline()[-1]))]
+                    point1 = QgsGeometry.fromPoint(QgsPoint(intersection.asGeometryCollection()[0].asPolyline()[0]))
+                    point2 = QgsGeometry.fromPoint(QgsPoint(intersection.asGeometryCollection()[-1].asPolyline()[-1]))
+                    if point_is_vertex(point1, f_geom):
+                        breakages.append(point1)
+                    if point_is_vertex(point2, f_geom):
+                        breakages.append(point2)
             if len(breakages) > 0:
                 yield feat, set([vertex for vertex in find_vertex_index(breakages, feat, geometries)])
 
@@ -256,9 +265,11 @@ class prGraph:
                     for i in points:
                         ogr_geom.AddPoint_2D(i[0], i[1])
                     for edge in edges_from_line(ogr_geom, attrs, tolerance, simplify):
-                       e1, e2, attr = edge
-                       attr['Wkt'] = ogr_geom.ExportToWkt()
-                       edges_to_add.append((e1, e2, attr))
+                        e1, e2, attr = edge
+                        attr['Wkt'] = ogr_geom.ExportToWkt()
+                        # TODO: check why breaking a graph results in nodes
+                        if e1 != e2:
+                            edges_to_add.append((e1, e2, attr))
                     del ogr_geom
                     count_2 += 1
             count += 1
@@ -301,7 +312,6 @@ class prGraph:
                     if f_geom.isGeosEqual(g_geom):
                         yield line, wkt[line]
 
-
     # TODO: test speed
     def get_invalid_duplicate_geoms_ids(self):
         geometries = self.get_geom_dict()
@@ -310,7 +320,7 @@ class prGraph:
         dupl_lengths = list(set([k for k, v in Counter(list_lengths).items() if v > 1]))
         for item in dupl_lengths:
             dupl_geoms_ids.append([i[0] for i in zip(count(), list_lengths) if i[1] == item])
-        #for i in dupl_geoms_ids:
+        # for i in dupl_geoms_ids:
         #    i.remove(i[0])
         dupl_geoms_ids_to_rem = [x for x in dupl_geoms_ids[1:]]
 

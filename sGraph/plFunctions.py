@@ -35,11 +35,15 @@ def pl_midpoint(pl_geom):
         start_vertex = vertices[ind]
         end_vertex = vertices[(ind + 1) % len(vertices)]
         length += math.hypot(abs(start_vertex[0] - end_vertex[0]), abs(start_vertex[1] - end_vertex[1]))
+        ind_mid_before = ind
+        ind_mid_after = ind + 1
         if length > mid_length:
-            ind_mid_before = ind
-            ind_mid_after = ind + 1
             midpoint = mid(vertices[ind_mid_before], vertices[ind_mid_after])
             break
+        #elif length == mid_length:
+        #    print vertices
+        #    midpoint = vertices[ind_mid_after]
+        #    break
     return midpoint
 
 

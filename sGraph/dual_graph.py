@@ -65,7 +65,9 @@ class dlGraph:
     def find_islands_orphans(self, primal_graph):
         wkt_dict = primal_graph.get_wkt_dict()
         # order based on length
+        print "process started"
         components = sorted(connected_components(self.obj), key=len, reverse=True)
+        print "len_comp", len(components)
         islands = []
         orphans = []
         count = 1
@@ -88,6 +90,8 @@ class dlGraph:
                     geom_wkt = geom_col.exportToWkt()
                     islands.append(('isl_' + str(count), geom_wkt))
                     count += 1
+
+        print "found all isl, orph"
 
         return islands, orphans
 

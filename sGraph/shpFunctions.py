@@ -79,7 +79,8 @@ def edges_from_line(geom, attrs, tolerance=None, simplify=True):
             last = 1
             del line
         edge_attrs["Wkt"] = wkt
-        yield (geom.GetPoint_2D(0), geom.GetPoint_2D(last), edge_attrs)
+        if geom.Length() > 0:
+            yield (geom.GetPoint_2D(0), geom.GetPoint_2D(last), edge_attrs)
     else:
         for i in range(0, geom.GetPointCount() - 1):
             pt1 = geom.GetPoint_2D(i)
@@ -90,10 +91,13 @@ def edges_from_line(geom, attrs, tolerance=None, simplify=True):
             segment = ogr.Geometry(ogr.wkbLineString)
             segment.AddPoint_2D(pt1[0], pt1[1])
             segment.AddPoint_2D(pt2[0], pt2[1])
-            edge_attrs = attrs.copy()
-            edge_attrs["Wkt"] = segment.ExportToWkt()
-            del segment
-            yield (pt1, pt2, edge_attrs)
+            if segment.Length() > 0:
+                edge_attrs = attrs.copy()
+                edge_attrs["Wkt"] = segment.ExportToWkt()
+                del segment
+                yield (pt1, pt2, edge_attrs)
+            else:
+                del segment
 
 # identify invalids multi-parts of a layer
 
@@ -153,6 +157,9 @@ def errors_to_shp(error_list, path, name, crs, encoding, geom_type):
             elif errors[0] == 'orphans':
                 ref_stage = 3
                 action = 'no action'
+            else:
+                ref_stage = 'unknown'
+                action = 'unknown'
             new_feat.setAttributes([error_count, error[0], ref_stage] + [errors[0], action])
             new_feat.setGeometry(QgsGeometry.fromWkt(error[1]))
             errors_feat.append(new_feat)
@@ -225,6 +232,7 @@ class transformer(QObject):
 
             flddata = [f.GetField(f.GetFieldIndex(x)) for x in fields]
             g = f.geometry()
+            g.FlattenTo2D()
             attributes = dict(zip(fields, flddata))
             attributes["LayerName"] = lyr.GetName()
             # Note:  Using layer level geometry type
@@ -244,7 +252,6 @@ class transformer(QObject):
                         attr['id_in'] = 'in_' + str(count)
                         count += 1
                         net.add_edge(e1, e2, attr_dict=attr)
-                        # TODO: push message x features not included
             else:
                 invalids.append(('inv_' + str(inv_count), g.ExportToWkt()))
 
