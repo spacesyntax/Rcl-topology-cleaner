@@ -12,7 +12,6 @@ from generalFunctions import angle_3_points, keep_decimals
 from plFunctions import pl_midpoint, point_is_vertex, find_vertex_index
 from shpFunctions import edges_from_line
 
-
 qgsflds_types = {u'Real': QVariant.Double , u'String': QVariant.String}
 
 class prGraph:
@@ -71,8 +70,6 @@ class prGraph:
         prflds = self.prflds
         new_fields = []
 
-        # TODO: work with field type not name (for example you may have Integer64)
-
         for i in prflds:
             if i in qgsflds.keys():
                 new_fields.append(QgsField(i, qgsflds[i]))
@@ -114,12 +111,12 @@ class prGraph:
 
     # iterator of dual graph edges from prGraph edges
 
-    def dl_edges_from_pr_graph(self, break_at_intersections, angular_cost = True, polylines=False):
+    def dl_edges_from_pr_graph(self, break_at_intersections, angular_cost = False, polylines=False):
         geometries = self.get_geom_dict()
         for point, edges in self.topology_iter(break_at_intersections):
             for x in itertools.combinations(edges, 2):
-                inter_point = geometries[x[0]].intersection(geometries[x[1]])
                 if angular_cost:
+                    inter_point = geometries[x[0]].intersection(geometries[x[1]])
                     if polylines:
                         vertex1 = geometries[x[0]].asPolyline()[-2]
                         if inter_point.asPoint() == geometries[x[0]].asPolyline()[0]:
@@ -137,7 +134,7 @@ class prGraph:
                     angle = angle_3_points(inter_point, vertex1, vertex2)
                     yield (x[0], x[1], {'cost': angle})
                 else:
-                    yield x
+                    yield (x[0], x[1], {})
 
     # iterator of dual graph nodes from prGraph edges
 
@@ -191,12 +188,12 @@ class prGraph:
     def to_dual(self, break_at_intersections, angular_cost=True, polylines=False):
         dual_graph = nx.MultiGraph()
         # TODO: check if add_edge is quicker
-        dual_graph.add_edges_from(
-            [edge for edge in self.dl_edges_from_pr_graph(break_at_intersections, angular_cost, polylines)])
+        for edge in self.dl_edges_from_pr_graph(break_at_intersections, angular_cost, polylines):
+            e1, e2, attr = edge
+            dual_graph.add_edge(e1, e2, attr_dict=attr)
         # add nodes (some lines are not connected to others because they are pl)
-        # TODO: add node if node not in graph
-        dual_graph.add_nodes_from(
-            [node for node in self.dl_nodes_from_pr_graph(dual_graph)])
+        for node in self.dl_nodes_from_pr_graph(dual_graph):
+            dual_graph.add_node(node)
         return dual_graph
 
     # ----- ALTERATION OPERATIONS -----
@@ -312,7 +309,6 @@ class prGraph:
                     if f_geom.isGeosEqual(g_geom):
                         yield line, wkt[line]
 
-    # TODO: test speed
     def get_invalid_duplicate_geoms_ids(self):
         geometries = self.get_geom_dict()
         dupl_geoms_ids = []

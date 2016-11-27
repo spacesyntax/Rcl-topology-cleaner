@@ -415,28 +415,17 @@ class clean(QObject):
 
                 if self.settings['errors']:
 
-                    print "preparing dual"
-
                     centroids = merged_clean_primal.get_centroids_dict()
                     merged_dual = dlGraph(merged_clean_primal.to_dual(False, False, False), merged_clean_primal.uid, centroids,
                                           True)
 
-                    print "dual ok"
-                    if self.killed is True:
-                        print "killed"
-                        return
+                    if self.killed is True: return
                     self.progress.emit(80)
-
-                    print "before islands, orphans"
 
                     # error cat: islands, orphans
                     islands, orphans = merged_dual.find_islands_orphans(merged_clean_primal)
 
-                    print "identified islands, orphans"
-
-                    if self.killed is True:
-                        print "killed"
-                        return
+                    if self.killed is True: return
                     self.progress.emit(90)
 
                     # combine all errors
@@ -444,9 +433,7 @@ class clean(QObject):
                                   ['duplicates', duplicates_br], ['chains', to_merge],
                                   ['islands', islands], ['orphans', orphans]]
                     e_path = None
-                    print "before shp"
                     errors = errors_to_shp(error_list, e_path, 'errors', crs, encoding, geom_type)
-                    print "after shp"
                 else:
                     errors = None
 
