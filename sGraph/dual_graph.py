@@ -66,7 +66,6 @@ class dlGraph:
         wkt_dict = primal_graph.get_wkt_dict()
         # order based on length
         components = sorted(connected_components(self.obj), key=len, reverse=True)
-        print "len_comp", len(components)
         islands = []
         orphans = []
         count = 1
@@ -76,22 +75,21 @@ class dlGraph:
             # get vertex ids
             for cluster in components[1:len(components)]:  # excludes the first giant component
                 # identify orphans
-                if len(cluster) == 1:
-                    orphan = cluster.pop()
-                    orphans.append(('orph_' + str(orph_count), wkt_dict[orphan]))
-                    orph_count += 1
+                #if len(cluster) == 1:
+                    #orphan = cluster.pop()
+                    #orphans.append(('orph_' + str(orph_count), wkt_dict[orphan]))
+                    #orph_count += 1
                 # identify islands
-                elif len(cluster) > 1:
-                    island = list(cluster)
-                    geom_col = ogr.Geometry(ogr.wkbGeometryCollection)
-                    for i in island:
-                        g = ogr.CreateGeometryFromWkt(wkt_dict[i])
-                        geom_col.AddGeometry(g)
-                    geom_wkt = geom_col.ExportToWkt()
-                    islands.append(('isl_' + str(count), geom_wkt))
-                    count += 1
-
-        print "found all isl, orph"
+                #elif len(cluster) > 1:
+                    #island = list(cluster)
+                    #geom_col = ogr.Geometry(ogr.wkbGeometryCollection)
+                    #for i in island:
+                    #    g = ogr.CreateGeometryFromWkt(wkt_dict[i])
+                    #    geom_col.AddGeometry(g)
+                    #geom_wkt = geom_col.ExportToWkt()
+                    #islands.append(('isl_' + str(count), geom_wkt))
+                    #count += 1
+                    pass
 
         return islands, orphans
 
