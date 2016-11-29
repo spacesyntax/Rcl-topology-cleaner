@@ -55,7 +55,8 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.decimalsSpin.setSingleStep(1)
         self.decimalsSpin.setValue(3)
 
-        #self.idCombo.setDisabled(True)
+        self.idCombo.setDisabled(True)
+        self.decimalsSpin.setDisabled(True)
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
@@ -92,17 +93,26 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         return self.decimalsSpin.value()
 
     def get_errors(self):
-        if self.errorsCheckBox.isChecked():
-            self.idCombo.setDisabled(False)
         return self.errorsCheckBox.isChecked()
 
     def get_user_id(self):
         return self.idCombo.currentText()
 
-    def popIdColumn(self, cols):
+    def popIdColumn(self, iface):
         self.idCombo.clear()
-        self.idCombo.addItems(cols)
+        cols_list = []
+        if self.getInput(iface):
+            for col in self.getInput(iface).dataProvider().fields():
+                cols_list.append(col.name())
+        self.idCombo.addItems(cols_list)
 
+    def set_enabled_tolerance(self):
+        if self.snapCheckBox.isChecked():
+            self.decimalsSpin.setDisabled(False)
+
+    def set_enabled_id(self):
+        if self.errorsCheckBox.isChecked():
+            self.idCombo.setDisabled(False)
 
     def get_settings(self):
         settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'tolerance': self.getTolerance(),

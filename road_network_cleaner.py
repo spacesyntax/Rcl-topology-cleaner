@@ -96,6 +96,9 @@ class RoadNetworkCleaner:
         # self.dockwidget.cleanButton.clicked.connect(self.runCleaning)
         self.dlg.cleanButton.clicked.connect(self.startCleaning)
         self.dlg.cancelButton.clicked.connect(self.killCleaning)
+        self.dlg.snapCheckBox.stateChanged.connect(self.dlg.set_enabled_tolerance)
+        self.dlg.errorsCheckBox.stateChanged.connect(self.dlg.set_enabled_id)
+        self.dlg.inputCombo.currentIndexChanged.connect(self.dlg.popIdColumn)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -325,13 +328,6 @@ class RoadNetworkCleaner:
         # show the dialog
         self.dlg.show()
         self.dlg.popActiveLayers(self.getActiveLayers(self.iface))
-        cols_list = []
-        if self.dlg.getInput(self.iface):
-            for col in self.dlg.getInput(self.iface).dataProvider().fields():
-                cols_list.append(col.name())
-        else:
-            pass
-        self.dlg.popIdColumn(cols_list)
         # Run the dialog event loop
         result = self.dlg.exec_()
         # See if OK was pressed
