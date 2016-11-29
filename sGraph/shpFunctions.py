@@ -119,7 +119,7 @@ def errors_to_shp(error_list, path, name, crs, encoding, geom_type):
     if path is None:
         network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), name, "memory")
     else:
-        file_writer = QgsVectorFileWriter(path, encoding,[QgsField('error_id', QVariant.Int), QgsField('ref_id', QVariant.String), QgsField('ref_stage', QVariant.Int), QgsField('error', QVariant.String), QgsField('action', QVariant.String)], geom_type,
+        file_writer = QgsVectorFileWriter(path, encoding,[QgsField('error_id', QVariant.Int), QgsField('errors', QVariant.String), QgsField('input_id', QVariant.String)], geom_type,
                                           crs, "ESRI Shapefile")
         if file_writer.hasError() != QgsVectorFileWriter.NoError:
             print "Error when creating shapefile: ", file_writer.errorMessage()
@@ -129,39 +129,15 @@ def errors_to_shp(error_list, path, name, crs, encoding, geom_type):
     pr = network.dataProvider()
     network.startEditing()
     if path is None:
-        pr.addAttributes([QgsField('error_id', QVariant.Int), QgsField('ref_id', QVariant.String), QgsField('ref_stage', QVariant.Int), QgsField('error', QVariant.String), QgsField('action', QVariant.String)])
+        pr.addAttributes([QgsField('error_id', QVariant.Int), QgsField('errors', QVariant.String), QgsField('input_id', QVariant.String)])
     errors_feat = []
     error_count = 1
     for errors in error_list:
         for error in errors[1]:
             new_feat = QgsFeature()
-            new_feat.initAttributes(5)
-            if errors[0] == 'invalids':
-                ref_stage = 0
-                action = 'removed'
-            elif errors[0] == 'multiparts':
-                ref_stage = 0
-                action = 'broken'
-            elif errors[0] == 'intersections/overlaps':
-                ref_stage = 1
-                action = 'broken'
-            elif errors[0] == 'duplicates':
-                ref_stage = 2
-                action = 'removed'
-            elif errors[0] == 'chains':
-                ref_stage = 2
-                action = 'merged'
-            elif errors[0] == 'islands':
-                ref_stage = 3
-                action = 'no action'
-            elif errors[0] == 'orphans':
-                ref_stage = 3
-                action = 'no action'
-            else:
-                ref_stage = 'unknown'
-                action = 'unknown'
-            new_feat.setAttributes([error_count, error[0], ref_stage] + [errors[0], action])
-            new_feat.setGeometry(QgsGeometry.fromWkt(error[1]))
+            new_feat.initAttributes(3)
+            new_feat.setAttributes([error_count, errors[0], error])
+            new_feat.setGeometry(NULL)
             errors_feat.append(new_feat)
             error_count += 1
     pr.addFeatures(errors_feat)
@@ -190,10 +166,10 @@ class transformer(QObject):
 
     def run(self):
         # TODO: check the parallel lines (1 of the parallel edges is not correct connected)
-        primal_graph, invalids, multiparts = self.read_shp_to_multi_graph(self.parameters['layer_name'], self.parameters['tolerance'], True, self.parameters['simplify'])
+        primal_graph, invalids, multiparts = self.read_shp_to_multi_graph(self.parameters['layer_name'], self.parameters['tolerance'], self.parameters['user_id'], self.parameters['simplify'], self.parameters['get_invalids'], self.parameters['get_multiparts'])
         return primal_graph, invalids, multiparts
 
-    def read_shp_to_multi_graph(self, layer_name, tolerance=None, uid=True, simplify=True):
+    def read_shp_to_multi_graph(self, layer_name, tolerance=None, col_id=True, simplify=True, get_invalids=True, get_multiparts = True ):
         # 1. open shapefiles from directory/filename
         try:
             from osgeo import ogr
@@ -243,7 +219,8 @@ class transformer(QObject):
                     count += 1
                     net.add_edge(e1, e2, attr_dict=attr)
             elif g.GetGeometryType() == ogr.wkbMultiLineString:
-                multiparts.append(('mlp_' + str(inv_count), g.ExportToWkt()))
+                if get_multiparts and col_id:
+                    multiparts.append(attributes[col_id])
                 inv_count += 1
                 for i in range(g.GetGeometryCount()):
                     geom_i = g.GetGeometryRef(i)
@@ -253,8 +230,8 @@ class transformer(QObject):
                         count += 1
                         net.add_edge(e1, e2, attr_dict=attr)
             else:
-                invalids.append(('inv_' + str(inv_count), g.ExportToWkt()))
-
+                if get_invalids and col_id:
+                    invalids.append(attributes[col_id])
 
         if provider_type == 'postgres':
             # destroy connection with db

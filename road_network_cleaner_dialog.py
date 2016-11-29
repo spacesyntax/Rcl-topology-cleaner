@@ -55,6 +55,8 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.decimalsSpin.setSingleStep(1)
         self.decimalsSpin.setValue(3)
 
+        #self.idCombo.setDisabled(True)
+
     def closeEvent(self, event):
         self.closingPlugin.emit()
         event.accept()
@@ -74,10 +76,10 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         else:
             return None
 
-    def getInput(self):
+    def getInput(self,iface):
         name = self.getNetwork()
         layer = None
-        for i in self.iface.legendInterface().layers():
+        for i in iface.legendInterface().layers():
             if i.name() == name:
                 layer = i
         return layer
@@ -90,10 +92,20 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         return self.decimalsSpin.value()
 
     def get_errors(self):
+        if self.errorsCheckBox.isChecked():
+            self.idCombo.setDisabled(False)
         return self.errorsCheckBox.isChecked()
+
+    def get_user_id(self):
+        return self.idCombo.currentText()
+
+    def popIdColumn(self, cols):
+        self.idCombo.clear()
+        self.idCombo.addItems(cols)
+
 
     def get_settings(self):
         settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'tolerance': self.getTolerance(),
-                    'errors': self.get_errors()}
+                    'errors': self.get_errors(), 'user_id': self.get_user_id()}
         return settings
 

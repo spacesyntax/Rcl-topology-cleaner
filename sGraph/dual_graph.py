@@ -89,7 +89,7 @@ class dlGraph:
                     #geom_wkt = geom_col.ExportToWkt()
                     #islands.append(('isl_' + str(count), geom_wkt))
                     #count += 1
-                    pass
+                pass
 
         return islands, orphans
 

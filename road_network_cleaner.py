@@ -215,6 +215,9 @@ class RoadNetworkCleaner:
                     layers_list.append(layer.name())
         return layers_list
 
+    def getColumns(self,iface):
+        pass
+
     def render(self,vector_layer):
         QgsMapLayerRegistry.instance().addMapLayer(vector_layer)
 
@@ -321,8 +324,14 @@ class RoadNetworkCleaner:
         """Run method that performs all the real work"""
         # show the dialog
         self.dlg.show()
-
         self.dlg.popActiveLayers(self.getActiveLayers(self.iface))
+        cols_list = []
+        if self.dlg.getInput(self.iface):
+            for col in self.dlg.getInput(self.iface).dataProvider().fields():
+                cols_list.append(col.name())
+        else:
+            pass
+        self.dlg.popIdColumn(cols_list)
         # Run the dialog event loop
         result = self.dlg.exec_()
         # See if OK was pressed
@@ -356,6 +365,7 @@ class clean(QObject):
                 layer_name = self.settings['input']
                 path = self.settings['output']
                 tolerance = self.settings['tolerance']
+                user_id = self.settings['user_id']
                 base_id = 'id_in'
 
                 # project settings
@@ -370,7 +380,12 @@ class clean(QObject):
                 # shp/postgis to prGraph instance
                 transformation_type = 'shp_to_pgr'
                 simplify = True
-                parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify, 'id_column': base_id}
+                #get_invalids = False
+                #get_multiparts = False
+                #if self.settings['errors']:
+                get_invalids = True
+                get_multiparts = True
+                parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify, 'id_column': base_id, 'user_id':user_id, 'get_invalids':get_invalids, 'get_multiparts':get_multiparts}
                 # error cat: invalids, multiparts
                 primal_graph, invalids, multiparts = transformer(parameters).run()
                 any_primal_graph = prGraph(primal_graph, base_id, True)
