@@ -15,7 +15,7 @@ execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/dual_graph.py'.encode('utf-8')
 from PyQt4.QtCore import QVariant
 qgsflds_types = {u'Real': QVariant.Double, u'String': QVariant.String}
 
-layer_name = 'nyc_streets'
+layer_name = 'nyc_streets_small'
 
 # cleaning settings
 
@@ -33,7 +33,9 @@ qgsflds = get_field_types(layer_name)
 
 # shp/postgis to prGraph instance
 simplify = True
-parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify, 'id_column': base_id}
+user_id = 'gid'
+parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify, 'id_column': base_id, 'user_id':user_id, 'get_invalids':False, 'get_multiparts':False}
+
 # error cat: invalids, multiparts
 primal_graph, invalids, multiparts = transformer(parameters).run()
 any_primal_graph = prGraph(primal_graph, base_id, True)
