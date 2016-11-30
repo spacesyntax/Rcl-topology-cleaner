@@ -98,21 +98,17 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
     def get_user_id(self):
         return self.idCombo.currentText()
 
-    def popIdColumn(self, iface):
-        self.idCombo.clear()
-        cols_list = []
-        if self.getInput(iface):
-            for col in self.getInput(iface).dataProvider().fields():
-                cols_list.append(col.name())
-        self.idCombo.addItems(cols_list)
-
     def set_enabled_tolerance(self):
         if self.snapCheckBox.isChecked():
             self.decimalsSpin.setDisabled(False)
+        else:
+            self.decimalsSpin.setDisabled(True)
 
     def set_enabled_id(self):
         if self.errorsCheckBox.isChecked():
             self.idCombo.setDisabled(False)
+        else:
+            self.idCombo.setDisabled(True)
 
     def get_settings(self):
         settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'tolerance': self.getTolerance(),
