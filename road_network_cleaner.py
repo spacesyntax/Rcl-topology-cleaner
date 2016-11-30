@@ -98,7 +98,7 @@ class RoadNetworkCleaner:
         self.dlg.cancelButton.clicked.connect(self.killCleaning)
         self.dlg.snapCheckBox.stateChanged.connect(self.dlg.set_enabled_tolerance)
         self.dlg.errorsCheckBox.stateChanged.connect(self.dlg.set_enabled_id)
-        self.dlg.inputCombo.currentIndexChanged.connect(self.dlg.popIdColumn)
+        self.dlg.inputCombo.currentIndexChanged.connect(self.popIdColumn)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -217,6 +217,14 @@ class RoadNetworkCleaner:
                 if layer.hasGeometryType() and (layer.geometryType() == 1):
                     layers_list.append(layer.name())
         return layers_list
+
+    def popIdColumn(self):
+        self.dlg.idCombo.clear()
+        cols_list = []
+        if self.dlg.getInput(self.iface):
+            for col in self.dlg.getInput(self.iface).dataProvider().fields():
+                cols_list.append(col.name())
+        self.dlg.idCombo.addItems(cols_list)
 
     def getColumns(self,iface):
         pass
@@ -440,9 +448,10 @@ class clean(QObject):
                     self.progress.emit(90)
 
                     # combine all errors
-                    error_list = [['invalids', invalids], ['multiparts', multiparts], ['intersections/overlaps', to_break],
-                                  ['duplicates', duplicates_br], ['chains', to_merge],
-                                  ['islands', islands], ['orphans', orphans]]
+                    error_list = [['invalid', invalids], ['multipart', multiparts], ['intersections/overlaps', to_break],
+                                  ['duplicate', duplicates_br], ['continuous line', to_merge],
+                                  # ['islands', islands], ['orphans', orphans]
+                                  ]
                     e_path = None
                     errors = errors_to_shp(error_list, e_path, 'errors', crs, encoding, geom_type)
                 else:
