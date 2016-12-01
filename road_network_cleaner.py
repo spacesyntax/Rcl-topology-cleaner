@@ -226,9 +226,6 @@ class RoadNetworkCleaner:
                 cols_list.append(col.name())
         self.dlg.idCombo.addItems(cols_list)
 
-    def getColumns(self,iface):
-        pass
-
     def render(self,vector_layer):
         QgsMapLayerRegistry.instance().addMapLayer(vector_layer)
 
@@ -394,18 +391,20 @@ class clean(QObject):
                 primal_graph, invalids, multiparts = transformer(parameters).run()
                 any_primal_graph = prGraph(primal_graph, base_id, True)
 
+                primal_cleaned, duplicates = any_primal_graph.rmv_dupl_overlaps()
+
                 if self.killed is True: return
                 self.progress.emit(20)
 
                 # break at intersections and overlaping geometries
                 # error cat: to_break
-                broken_primal, to_break = any_primal_graph.break_graph(tolerance, simplify)
+                broken_primal, to_break, overlaps = primal_cleaned.break_graph(tolerance, simplify, user_id)
 
                 if self.killed is True: return
                 self.progress.emit(30)
 
                 # error cat: duplicates
-                broken_clean_primal, duplicates_br = broken_primal.rmv_dupl_overlaps()
+                broken_clean_primal, duplicates_br = broken_primal.rmv_dupl_overlaps(user_id)
 
                 if self.killed is True: return
                 self.progress.emit(40)
@@ -419,7 +418,7 @@ class clean(QObject):
 
                 # Merge between intersections
                 # error cat: to_merge
-                merged_primal, to_merge = broken_dual.merge(broken_clean_primal, tolerance, simplify)
+                merged_primal, to_merge = broken_dual.merge(broken_clean_primal, tolerance, simplify, user_id)
 
                 if self.killed is True: return
                 self.progress.emit(60)
@@ -448,8 +447,9 @@ class clean(QObject):
                     self.progress.emit(90)
 
                     # combine all errors
-                    error_list = [['invalid', invalids], ['multipart', multiparts], ['intersections/overlaps', to_break],
-                                  ['duplicate', duplicates_br], ['continuous line', to_merge],
+                    error_list = [['invalid', invalids], ['multipart', multiparts], ['intersecting at vertex', to_break],
+                                  ['overlaping', overlaps],
+                                  ['duplicate', duplicates], ['continuous line', to_merge],
                                   # ['islands', islands], ['orphans', orphans]
                                   ]
                     e_path = None

@@ -198,23 +198,28 @@ class prGraph:
 
     # ----- ALTERATION OPERATIONS -----
 
-    def find_breakages(self):
+    def find_breakages(self, col_id):
         geometries = self.get_geom_dict()
+        geom_vertices = self.get_geom_vertices_dict()
         for feat, inter_lines in self.inter_lines_bb_iter():
             f_geom = geometries[feat]
             breakages = []
+            type=[]
             for line in inter_lines:
+                type = []
                 g_geom = geometries[line]
                 intersection = f_geom.intersection(g_geom)
                 # intersecting geometries at point
                 if intersection.wkbType() == 1 and point_is_vertex(intersection, f_geom):
                     breakages.append(intersection)
+                    type.append('inter')
                 # TODO: test multipoints
                 # intersecting geometries at multiple points
                 elif intersection.wkbType() == 4:
                     for point in intersection.asGeometryCollection():
                         if point_is_vertex(intersection, f_geom):
                             breakages.append(point)
+                    type.append('inter')
                 # overalpping geometries
                 elif intersection.wkbType() == 2:
                     point1 = QgsGeometry.fromPoint(QgsPoint(intersection.asPolyline()[0]))
@@ -223,6 +228,7 @@ class prGraph:
                         breakages.append(point1)
                     if point_is_vertex(point2, f_geom):
                         breakages.append(point2)
+                    type.append('overlap')
                 elif intersection.wkbType() == 5:
                     point1 = QgsGeometry.fromPoint(QgsPoint(intersection.asGeometryCollection()[0].asPolyline()[0]))
                     point2 = QgsGeometry.fromPoint(QgsPoint(intersection.asGeometryCollection()[-1].asPolyline()[-1]))
@@ -230,10 +236,25 @@ class prGraph:
                         breakages.append(point1)
                     if point_is_vertex(point2, f_geom):
                         breakages.append(point2)
+                    type.append('overlap')
+            type = list(set(type))
             if len(breakages) > 0:
-                yield feat, set([vertex for vertex in find_vertex_index(breakages, feat, geometries)])
+                # add first and last vertex
+                vertices = set([vertex for vertex in find_vertex_index(breakages, feat, geometries)])
+                vertices = list(vertices) + [0] + [len(geom_vertices[feat]) - 1]
+                vertices = list(set(vertices))
+                vertices.sort()
+                if len(vertices) != 2 and col_id:
+                    if len(type)==2:
+                        yield feat, vertices, ['br', 'ovrlp']
+                    elif type == ['inter']:
+                        yield feat, vertices, ['br']
+                    elif type == ['overlap']:
+                        yield feat, vertices, ['ovrlp']
+                else:
+                    yield feat, vertices,[]
 
-    def break_graph(self, tolerance, simplify):
+    def break_graph(self, tolerance, simplify, col_id=None):
         count = 1
         geom_vertices = self.get_geom_vertices_dict()
         attr_dict = self.get_attr_dict()
@@ -241,16 +262,17 @@ class prGraph:
         edges_to_remove = []
         edges_to_add = []
         breakages = []
+        overlaps = []
 
-        for k, v in self.find_breakages():
+        for k, v, error in self.find_breakages(col_id):
             attrs = attr_dict[k]
-
-            # add first and last vertex
-            v = list(v) + [0] + [len(geom_vertices[k]) - 1]
-            v = list(set(v))
-            v.sort()
-            if len(v) != 2:
-                breakages.append((k, attrs['Wkt']))
+            if col_id and error == ['br', 'ovrlp']:
+                breakages.append(attrs[col_id])
+                overlaps.append(attrs[col_id])
+            elif col_id and error == ['br']:
+                breakages.append(attrs[col_id])
+            elif col_id and error == ['ovrlp']:
+                overlaps.append(attrs[col_id])
             count_2 = 1
             edges_to_remove.append(edges[k])
             # delete primal graph edge
@@ -280,7 +302,7 @@ class prGraph:
 
         self.obj.add_edges_from(edges_to_add)
 
-        return prGraph(self.obj, 'broken_id', make_feat=True), breakages
+        return prGraph(self.obj, 'broken_id', make_feat=True), breakages, overlaps
 
     def find_dupl_overlaps(self):
         geometries = self.get_geom_dict()
@@ -322,14 +344,15 @@ class prGraph:
 
         return dupl_geoms_ids_to_rem
 
-    def rmv_dupl_overlaps(self):
+    def rmv_dupl_overlaps(self, col_id=None):
         edges = {edge[2][self.uid]: (edge[0], edge[1]) for edge in self.obj.edges(data=True)}
         edges_to_remove = []
         dupl = []
+        attr_dict = self.get_attr_dict()
 
         # TODO: remove edge with sepcific attributes
         for edge, geometry in self.find_dupl_overlaps_ssx():
-            dupl.append((edge, geometry))
+            dupl.append(attr_dict[edge][col_id])
             edges_to_remove.append(edges[edge])
 
         # TODO: test reconstructing the graph for speed purposes

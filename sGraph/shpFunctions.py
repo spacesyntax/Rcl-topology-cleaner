@@ -135,7 +135,10 @@ def errors_to_shp(error_list, path, name, crs, encoding, geom_type):
     attr_dict = {error : '' for errors in error_list for error in errors[1]}
     for errors in error_list:
         for error in errors[1]:
-            attr_dict [error] += errors[0]
+            if len(attr_dict [error])==0:
+                attr_dict[error] += str(errors[0])
+            else:
+                attr_dict [error] += ', ' + str(errors[0])
     for k,v in attr_dict.items():
         new_feat = QgsFeature()
         new_feat.initAttributes(3)

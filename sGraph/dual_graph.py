@@ -120,9 +120,8 @@ class dlGraph:
 
         return sets_in_order
 
-    def merge(self, primal_graph, tolerance, simplify):
+    def merge(self, primal_graph, tolerance, simplify, col_id=None):
         geom_dict = primal_graph.get_geom_dict()
-        wkt_dict = primal_graph.get_wkt_dict()
         attr_dict = primal_graph.get_attr_dict()
         merged = []
         primal_merged = nx.MultiGraph()
@@ -140,9 +139,13 @@ class dlGraph:
                     attr['Wkt'] = ogr_geom.ExportToWkt()
                     primal_merged.add_edge(e1, e2, attr_dict=attr)
             else:
-                for i in set_to_merge:
-                    merged.append((i, wkt_dict[i]))
+                if col_id:
+                    for i in set_to_merge:
+                        id = attr_dict[i][col_id]
+                        if id not in merged:
+                            merged.append(attr_dict[i][col_id])
                 attrs = attr_dict[set_to_merge[0]]
+                # TODO: let the user choose how to aggregate attributes
                 attrs['merged_id'] = attrs['broken_id'] + '_mr_' + str(count)
                 new_geom = geom_dict[set_to_merge[0]]
                 geom_to_merge = [geom_dict[i] for i in set_to_merge]
