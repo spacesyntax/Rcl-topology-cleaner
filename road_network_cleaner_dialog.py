@@ -96,7 +96,10 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         return self.errorsCheckBox.isChecked()
 
     def get_user_id(self):
-        return self.idCombo.currentText()
+        if self.errorsCheckBox.isChecked():
+            return self.idCombo.currentText()
+        else:
+            return None
 
     def set_enabled_tolerance(self):
         if self.snapCheckBox.isChecked():
