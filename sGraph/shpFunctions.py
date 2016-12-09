@@ -186,7 +186,7 @@ class transformer(QObject):
         multiparts = []
         # find if the table with the give table_name is a shapefile or a postgis file
         layer = getLayerByName(layer_name)
-        path, provider_type = getLayerPath4ogr(layer)
+        path, provider_type, provider = getLayerPath4ogr(layer)
 
         # TODO: push error message when path is empty/does not exist/connection with db does not exist
         if path == '':  # or not os.path.exists(path)
@@ -197,7 +197,9 @@ class transformer(QObject):
         lyr = ogr.Open(path)
 
         if provider_type == 'postgres':
-            layer = [table for table in lyr if table.GetName() == layer_name][0]
+            uri = QgsDataSourceURI(provider.dataSourceUri())
+            databaseSchema = uri.schema().encode('utf-8')
+            layer = [table for table in lyr if table.GetName() == databaseSchema + '.' + layer_name][0]
             fields = [x.GetName() for x in layer.schema]
         elif provider_type in ('ogr', 'memory'):
             layer = lyr[0]
