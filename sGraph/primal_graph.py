@@ -113,28 +113,30 @@ class prGraph:
 
     def dl_edges_from_pr_graph(self, break_at_intersections, angular_cost = False, polylines=False):
         geometries = self.get_geom_dict()
-        for point, edges in self.topology_iter(break_at_intersections):
-            for x in itertools.combinations(edges, 2):
-                if angular_cost:
-                    inter_point = geometries[x[0]].intersection(geometries[x[1]])
-                    if polylines:
-                        vertex1 = geometries[x[0]].asPolyline()[-2]
-                        if inter_point.asPoint() == geometries[x[0]].asPolyline()[0]:
-                            vertex1 = geometries[x[0]].asPolyline()[1]
-                        vertex2 = geometries[x[1]].asPolyline()[-2]
-                        if inter_point.asPoint() == geometries[x[1]].asPolyline()[0]:
-                            vertex2 = geometries[x[1]].asPolyline()[1]
-                    else:
-                        vertex1 = geometries[x[0]].asPolyline()[0]
-                        if inter_point.asPoint() == geometries[x[0]].asPolyline()[0]:
-                            vertex1 = geometries[x[0]].asPolyline()[-1]
-                        vertex2 = geometries[x[1]].asPolyline()[0]
-                        if inter_point.asPoint() == geometries[x[1]].asPolyline()[0]:
-                            vertex2 = geometries[x[1]].asPolyline()[-1]
-                    angle = angle_3_points(inter_point, vertex1, vertex2)
-                    yield (x[0], x[1], {'cost': angle})
+        all_comb = [c for point, edges in self.topology_iter(break_at_intersections) for c in itertools.combinations(edges, 2) ]
+        for x in all_comb:
+                #point, edges in self.topology_iter(break_at_intersections):
+            #for x in itertools.combinations(edges, 2):
+            if angular_cost:
+                inter_point = geometries[x[0]].intersection(geometries[x[1]])
+                if polylines:
+                    vertex1 = geometries[x[0]].asPolyline()[-2]
+                    if inter_point.asPoint() == geometries[x[0]].asPolyline()[0]:
+                        vertex1 = geometries[x[0]].asPolyline()[1]
+                    vertex2 = geometries[x[1]].asPolyline()[-2]
+                    if inter_point.asPoint() == geometries[x[1]].asPolyline()[0]:
+                        vertex2 = geometries[x[1]].asPolyline()[1]
                 else:
-                    yield (x[0], x[1], {})
+                    vertex1 = geometries[x[0]].asPolyline()[0]
+                    if inter_point.asPoint() == geometries[x[0]].asPolyline()[0]:
+                        vertex1 = geometries[x[0]].asPolyline()[-1]
+                    vertex2 = geometries[x[1]].asPolyline()[0]
+                    if inter_point.asPoint() == geometries[x[1]].asPolyline()[0]:
+                        vertex2 = geometries[x[1]].asPolyline()[-1]
+                angle = angle_3_points(inter_point, vertex1, vertex2)
+                yield (x[0], x[1], {'cost': angle})
+            else:
+                yield (x[0], x[1], {})
 
     # iterator of dual graph nodes from prGraph edges
 
@@ -352,7 +354,8 @@ class prGraph:
 
         # TODO: remove edge with sepcific attributes
         for edge, geometry in self.find_dupl_overlaps_ssx():
-            dupl.append(attr_dict[edge][col_id])
+            if col_id:
+                dupl.append(attr_dict[edge][col_id])
             edges_to_remove.append(edges[edge])
 
         # TODO: test reconstructing the graph for speed purposes

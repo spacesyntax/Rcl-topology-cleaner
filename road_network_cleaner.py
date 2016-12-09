@@ -381,11 +381,11 @@ class clean(QObject):
                 # shp/postgis to prGraph instance
                 transformation_type = 'shp_to_pgr'
                 simplify = True
-                #get_invalids = False
-                #get_multiparts = False
-                #if self.settings['errors']:
-                get_invalids = True
-                get_multiparts = True
+                get_invalids = False
+                get_multiparts = False
+                if self.settings['errors']:
+                    get_invalids = True
+                    get_multiparts = True
                 parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify, 'id_column': base_id, 'user_id':user_id, 'get_invalids':get_invalids, 'get_multiparts':get_multiparts}
                 # error cat: invalids, multiparts
                 primal_graph, invalids, multiparts = transformer(parameters).run()
