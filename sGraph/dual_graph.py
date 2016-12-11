@@ -3,16 +3,23 @@ import networkx as nx
 from networkx import connected_components, all_simple_paths
 import ogr
 
-from PyQt4.QtCore import QVariant
+from PyQt4.QtCore import QVariant, QObject, pyqtSignal
+
 from qgis.core import QgsField, QgsFeature, QgsGeometry, QgsPoint, QgsVectorLayer, QgsVectorFileWriter, QgsMapLayerRegistry
 
 # plugin module imports
 from primal_graph import prGraph
 from shpFunctions import edges_from_line
 
-class dlGraph:
+class dlGraph(QObject):
+
+    finished = pyqtSignal(object)
+    error = pyqtSignal(Exception, basestring)
+    progress = pyqtSignal(float)
+    warning = pyqtSignal(str)
 
     def __init__(self, dlGraph, id_column, centroids, make_feat=True):
+        QObject.__init__(self)
         self.obj = dlGraph
         self.uid = id_column
         self.attributes = ['line1', 'line2', 'cost']
@@ -127,7 +134,15 @@ class dlGraph:
         primal_merged = nx.MultiGraph()
 
         count = 0
-        for set_to_merge in self.find_cont_lines():
+        f_count = 1
+        cont_lines = self.find_cont_lines()
+        feat_count = len(cont_lines)
+
+        for set_to_merge in cont_lines:
+
+            self.progress.emit(10 * f_count / feat_count)
+            f_count += 1
+
             if len(set_to_merge) == 1:
                 attrs = attr_dict[set_to_merge[0]]
                 attrs['merged_id'] = attrs['broken_id']

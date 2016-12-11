@@ -170,12 +170,15 @@ class transformer(QObject):
         # self.id_column = parameters['id_column']
         # ----- SHP TO prGRAPH
 
-    def run(self):
+    def read_shp_to_multi_graph(self):
         # TODO: check the parallel lines (1 of the parallel edges is not correct connected)
-        primal_graph, invalids, multiparts = self.read_shp_to_multi_graph(self.parameters['layer_name'], self.parameters['user_id'], self.parameters['tolerance'], self.parameters['simplify'], self.parameters['get_invalids'], self.parameters['get_multiparts'])
-        return primal_graph, invalids, multiparts
+        layer_name = self.parameters['layer_name']
+        col_id = self.parameters['user_id']
+        tolerance = self.parameters['tolerance']
+        simplify = self.parameters['simplify']
+        get_invalids = self.parameters['get_invalids']
+        get_multiparts = self.parameters['get_multiparts']
 
-    def read_shp_to_multi_graph(self, layer_name, col_id, tolerance=None, simplify=True, get_invalids=True, get_multiparts = True ):
         # 1. open shapefiles from directory/filename
         try:
             from osgeo import ogr
@@ -211,7 +214,7 @@ class transformer(QObject):
 
         for f in layer:
 
-            self.progress.emit(f_count/feat_count)
+            self.progress.emit(10*f_count/feat_count)
             f_count += 1
 
             flddata = [f.GetField(f.GetFieldIndex(x)) for x in fields]
