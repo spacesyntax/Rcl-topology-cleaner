@@ -5,6 +5,7 @@ from PyQt4.QtCore import QVariant
 from qgis.core import QgsFeature, QgsGeometry, QgsField, QgsSpatialIndex, QgsVectorLayer, QgsVectorFileWriter, QgsPoint, QgsMapLayerRegistry, QgsFields
 import networkx as nx
 import ogr
+from PyQt4.QtCore import QVariant, QObject, pyqtSignal
 
 # plugin module imports
 
@@ -14,9 +15,15 @@ from shpFunctions import edges_from_line
 
 qgsflds_types = {u'Real': QVariant.Double , u'String': QVariant.String}
 
-class prGraph:
+class prGraph(QObject):
 
-    def __init__(self, any_primal_graph, id_column, make_feat = True):
+    finished = pyqtSignal(object)
+    error = pyqtSignal(Exception, basestring)
+    progress = pyqtSignal(float)
+    warning = pyqtSignal(str)
+
+    def __init__(self, any_primal_graph, id_column, make_feat=True):
+        QObject.__init__(self)
         self.obj = any_primal_graph
         self.uid = id_column
         self.n_attributes = len(self.obj.edges(data=True)[0][2].keys())
@@ -113,7 +120,15 @@ class prGraph:
 
     def dl_edges_from_pr_graph(self, break_at_intersections, angular_cost = False, polylines=False):
         geometries = self.get_geom_dict()
+
+        f_count = 1
+        feat_count = self.obj.__len__()
+
         for point, edges in self.topology_iter(break_at_intersections):
+
+            self.progress.emit(10 * f_count / feat_count)
+            f_count += 1
+
             for x in itertools.combinations(edges, 2):
                 if angular_cost:
                     inter_point = geometries[x[0]].intersection(geometries[x[1]])
@@ -201,7 +216,15 @@ class prGraph:
     def find_breakages(self, col_id):
         geometries = self.get_geom_dict()
         geom_vertices = self.get_geom_vertices_dict()
+
+        f_count = 1
+        feat_count = self.obj.size()
+
         for feat, inter_lines in self.inter_lines_bb_iter():
+
+            self.progress.emit(10 * f_count / feat_count)
+            f_count += 1
+
             f_geom = geometries[feat]
             breakages = []
             type=[]
@@ -244,13 +267,22 @@ class prGraph:
                 vertices = list(vertices) + [0] + [len(geom_vertices[feat]) - 1]
                 vertices = list(set(vertices))
                 vertices.sort()
-                if len(vertices) != 2 and col_id:
+                if col_id:
                     if len(type)==2:
-                        yield feat, vertices, ['br', 'ovrlp']
+                        if len(vertices) != 2:
+                            yield feat, vertices, ['br', 'ovrlp']
+                        else:
+                            yield feat, vertices, []
                     elif type == ['inter']:
-                        yield feat, vertices, ['br']
+                        if len(vertices) != 2:
+                            yield feat, vertices, ['br']
+                        else:
+                            yield feat, vertices, []
                     elif type == ['overlap']:
-                        yield feat, vertices, ['ovrlp']
+                        if len(vertices) != 2:
+                            yield feat, vertices, ['ovrlp']
+                        else:
+                            yield feat, vertices, []
                 else:
                     yield feat, vertices,[]
 
@@ -322,7 +354,13 @@ class prGraph:
         geometries = self.get_geom_dict()
         wkt = self.get_wkt_dict()
         uid = self.uid_to_fid
+        f_count = 1
+        feat_count = self.obj.size()
         for feat, inter_lines in self.inter_lines_bb_iter():
+
+            self.progress.emit(10 * f_count / feat_count)
+            f_count += 1
+
             f_geom = geometries[feat]
             for line in inter_lines:
                 g_geom = geometries[line]
@@ -330,19 +368,6 @@ class prGraph:
                     # duplicate geometry
                     if f_geom.isGeosEqual(g_geom):
                         yield line, wkt[line]
-
-    def get_invalid_duplicate_geoms_ids(self):
-        geometries = self.get_geom_dict()
-        dupl_geoms_ids = []
-        list_lengths = [keep_decimals(i.geometry().length(), 6) for i in shp.getFeatures()]
-        dupl_lengths = list(set([k for k, v in Counter(list_lengths).items() if v > 1]))
-        for item in dupl_lengths:
-            dupl_geoms_ids.append([i[0] for i in zip(count(), list_lengths) if i[1] == item])
-        # for i in dupl_geoms_ids:
-        #    i.remove(i[0])
-        dupl_geoms_ids_to_rem = [x for x in dupl_geoms_ids[1:]]
-
-        return dupl_geoms_ids_to_rem
 
     def rmv_dupl_overlaps(self, col_id=None):
         edges = {edge[2][self.uid]: (edge[0], edge[1]) for edge in self.obj.edges(data=True)}

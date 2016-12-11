@@ -243,7 +243,7 @@ class RoadNetworkCleaner:
     def startCleaning(self, settings):
         self.dlg.cleaningProgress.reset()
         settings = self.dlg.get_settings()
-        cleaning = clean(settings, self.iface)
+        cleaning = self.clean(settings, self.iface)
 
         # start the cleaning in a new thread
         thread = QThread()
@@ -251,7 +251,7 @@ class RoadNetworkCleaner:
         cleaning.finished.connect(self.cleaningFinished)
         cleaning.error.connect(self.cleaningError)
         cleaning.warning.connect(self.giveMessage)
-        cleaning.progress.connect(self.dlg.cleaningProgress.setValue)
+        cleaning.cl_progress.connect(self.dlg.cleaningProgress.setValue)
         thread.started.connect(cleaning.run)
         thread.start()
         self.thread = thread
@@ -284,7 +284,7 @@ class RoadNetworkCleaner:
             self.cleaning.finished.disconnect(self.cleaningFinished)
             self.cleaning.error.disconnect(self.cleaningError)
             self.cleaning.warning.disconnect(self.giveMessage)
-            self.cleaning.progress.disconnect(self.dlg.cleaningProgress.setValue)
+            self.cleaning.cl_progress.disconnect(self.dlg.cleaningProgress.setValue)
             # Clean up thread and analysis
             self.cleaning.kill()
             self.cleaning.deleteLater()
@@ -294,38 +294,160 @@ class RoadNetworkCleaner:
             self.cleaning = None
             self.dlg.cleaningProgress.reset()
 
-    def startWorker(self,any_worker):
-        thread = QThread()
-        any_worker.moveToThread(thread)
-        any_worker.finished.connect(self.finishWorker)
-        any_worker.error.connect(self.cleaningError)
-        any_worker.warning.connect(self.giveMessage)
-        any_worker.progress.connect(self.changePB)
-        thread.started.connect(any_worker.run)
-        thread.start()
-        self.thread = thread
-        self.any_worker = any_worker
+    # SOURCE: https://snorfalorpagus.net/blog/2013/12/07/multithreading-in-qgis-python-plugins/
+    class clean(QObject):
 
-    def finishWorker(self, ret):
-        # clean up  the worker and thread
-        self.any_worker.deleteLater()
-        self.thread.quit()
-        self.thread.wait()
-        self.thread.deleteLater()
-        self.any_worker = None
+        # Setup signals
+        finished = pyqtSignal(object)
+        error = pyqtSignal(Exception, basestring)
+        cl_progress = pyqtSignal(float)
+        warning = pyqtSignal(str)
 
-        if ret:
-            # report the result
-            # a, b = ret
-            for i in ret:
-                self.render(i)
-            self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
+        def __init__(self, settings, iface):
+            QObject.__init__(self)
+            self.settings = settings
+            self.killed = False
+            self.iface = iface
+            self.total =0
 
-        else:
-            # notify the user that sth went wrong
-            self.giveMessage('Something went wrong! See the message log for more information', QgsMessageBar.CRITICAL)
+        def add_step(self,step):
+            self.total += step
+            return self.total
 
-        self.dlg.cleaningProgress.reset()
+        def run(self):
+            ret = None
+            if self.settings:
+                try:
+                    # cleaning settings
+                    layer_name = self.settings['input']
+                    path = self.settings['output']
+                    tolerance = self.settings['tolerance']
+                    user_id = self.settings['user_id']
+                    base_id = 'id_in'
+
+                    # project settings
+                    n = getLayerByName(layer_name)
+                    crs = n.dataProvider().crs()
+                    encoding = n.dataProvider().encoding()
+                    geom_type = n.dataProvider().geometryType()
+                    qgsflds = get_field_types(layer_name)
+
+                    # shp/postgis to prGraph instance
+                    transformation_type = 'shp_to_pgr'
+                    simplify = True
+                    get_invalids = False
+                    get_multiparts = False
+                    if self.settings['errors']:
+                        get_invalids = True
+                        get_multiparts = True
+                    parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify,
+                                  'id_column': base_id, 'user_id': user_id, 'get_invalids': get_invalids,
+                                  'get_multiparts': get_multiparts}
+                    # error cat: invalids, multiparts
+                    trans = transformer(parameters)
+                    step = 1 / n.featureCount()
+                    trans.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
+                    # when to disoconnect?
+                    # when finished or killed?
+                    # trans.progress.disconnect
+                    primal_graph, invalids, multiparts = trans.read_shp_to_multi_graph()
+                    any_primal_graph = prGraph(primal_graph, base_id, True)
+
+                    step = 1 / any_primal_graph.obj.size()
+                    any_primal_graph.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr+10))
+                    primal_cleaned, duplicates = any_primal_graph.rmv_dupl_overlaps()
+
+                    if self.killed is True: return
+
+                    step = 1 / any_primal_graph.obj.size()
+                    primal_cleaned.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr+20))
+
+                    # break at intersections and overlaping geometries
+                    # error cat: to_break
+                    broken_primal, to_break, overlaps = primal_cleaned.break_graph(tolerance, simplify, user_id)
+
+                    if self.killed is True: return
+
+                    step = 1 / broken_primal.obj.size()
+                    broken_primal.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 30))
+
+                    # error cat: duplicates
+                    broken_clean_primal, duplicates_br = broken_primal.rmv_dupl_overlaps(user_id)
+
+                    if self.killed is True: return
+
+                    step = 1 / broken_primal.obj.size()
+                    broken_clean_primal.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 40))
+
+                    # transform primal graph to dual graph
+                    centroids = broken_clean_primal.get_centroids_dict()
+                    broken_dual = dlGraph(broken_clean_primal.to_dual(True, False, False), broken_clean_primal.uid,
+                                          centroids, True)
+
+                    if self.killed is True: return
+                    step = 1 / len(broken_dual.find_cont_lines())
+                    broken_dual.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 50))
+
+                    # Merge between intersections
+                    # error cat: to_merge
+                    merged_primal, to_merge = broken_dual.merge(broken_clean_primal, tolerance, simplify, user_id)
+
+                    if self.killed is True: return
+
+                    step = 1 / merged_primal.obj.size()
+                    merged_primal.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 60))
+
+                    # error cat: duplicates
+                    merged_clean_primal, duplicates_m = merged_primal.rmv_dupl_overlaps()
+
+                    if self.killed is True: return
+                    self.cl_progress.emit(70)
+
+                    name = layer_name + '_cleaned'
+
+                    if self.settings['errors']:
+
+                        #centroids = merged_clean_primal.get_centroids_dict()
+                        #merged_dual = dlGraph(merged_clean_primal.to_dual(False, False, False), merged_clean_primal.uid,
+                                              #centroids,
+                                              #True)
+
+                        if self.killed is True: return
+                        self.cl_progress.emit(80)
+
+                        # error cat: islands, orphans
+                        #islands, orphans = merged_dual.find_islands_orphans(merged_clean_primal)
+
+                        if self.killed is True: return
+                        self.cl_progress.emit(90)
+
+                        # combine all errors
+                        error_list = [['invalid', invalids], ['multipart', multiparts],
+                                      ['intersecting at vertex', to_break],
+                                      ['overlaping', overlaps],
+                                      ['duplicate', duplicates], ['continuous line', to_merge],
+                                      # ['islands', islands], ['orphans', orphans]
+                                      ]
+                        e_path = None
+                        errors = errors_to_shp(error_list, e_path, 'errors', crs, encoding, geom_type)
+                    else:
+                        errors = None
+
+                    if self.killed is False:
+                        print "survived!"
+                        self.cl_progress.emit(100)
+                        # return cleaned shapefile and errors
+                        cleaned = merged_clean_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds)
+                        ret = (errors, cleaned,)
+
+                except Exception, e:
+                    # forward the exception upstream
+                    self.error.emit(e, traceback.format_exc())
+
+                self.finished.emit(ret)
+
+        def kill(self):
+            self.killed = True
 
 
     def run(self):
@@ -342,134 +464,5 @@ class RoadNetworkCleaner:
             pass
 
 
-# SOURCE: https://snorfalorpagus.net/blog/2013/12/07/multithreading-in-qgis-python-plugins/
 
-class clean(QObject):
-
-    # Setup signals
-    finished = pyqtSignal(object)
-    error = pyqtSignal(Exception, basestring)
-    progress = pyqtSignal(float)
-    warning = pyqtSignal(str)
-
-    def __init__(self, settings, iface):
-        QObject.__init__(self)
-        self.settings = settings
-        self.killed = False
-        self.iface = iface
-
-    def run(self):
-        ret = None
-        if self.settings:
-            try:
-                # cleaning settings
-                layer_name = self.settings['input']
-                path = self.settings['output']
-                tolerance = self.settings['tolerance']
-                user_id = self.settings['user_id']
-                base_id = 'id_in'
-
-                # project settings
-                n = getLayerByName(layer_name)
-                crs = n.dataProvider().crs()
-                encoding = n.dataProvider().encoding()
-                geom_type = n.dataProvider().geometryType()
-                qgsflds = get_field_types(layer_name)
-
-                self.progress.emit(10)
-
-                # shp/postgis to prGraph instance
-                transformation_type = 'shp_to_pgr'
-                simplify = True
-                get_invalids = False
-                get_multiparts = False
-                if self.settings['errors']:
-                    get_invalids = True
-                    get_multiparts = True
-                parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify, 'id_column': base_id, 'user_id':user_id, 'get_invalids':get_invalids, 'get_multiparts':get_multiparts}
-                # error cat: invalids, multiparts
-                primal_graph, invalids, multiparts = transformer(parameters).run()
-                any_primal_graph = prGraph(primal_graph, base_id, True)
-
-                primal_cleaned, duplicates = any_primal_graph.rmv_dupl_overlaps()
-
-                if self.killed is True: return
-                self.progress.emit(20)
-
-                # break at intersections and overlaping geometries
-                # error cat: to_break
-                broken_primal, to_break, overlaps = primal_cleaned.break_graph(tolerance, simplify, user_id)
-
-                if self.killed is True: return
-                self.progress.emit(30)
-
-                # error cat: duplicates
-                broken_clean_primal, duplicates_br = broken_primal.rmv_dupl_overlaps(user_id)
-
-                if self.killed is True: return
-                self.progress.emit(40)
-
-                # transform primal graph to dual graph
-                centroids = broken_clean_primal.get_centroids_dict()
-                broken_dual = dlGraph(broken_clean_primal.to_dual(True, False, False), broken_clean_primal.uid, centroids, True)
-
-                if self.killed is True: return
-                self.progress.emit(50)
-
-                # Merge between intersections
-                # error cat: to_merge
-                merged_primal, to_merge = broken_dual.merge(broken_clean_primal, tolerance, simplify, user_id)
-
-                if self.killed is True: return
-                self.progress.emit(60)
-
-                # error cat: duplicates
-                merged_clean_primal, duplicates_m = merged_primal.rmv_dupl_overlaps()
-
-                if self.killed is True: return
-                self.progress.emit(70)
-
-                name = layer_name + '_cleaned'
-
-                if self.settings['errors']:
-
-                    centroids = merged_clean_primal.get_centroids_dict()
-                    merged_dual = dlGraph(merged_clean_primal.to_dual(False, False, False), merged_clean_primal.uid, centroids,
-                                          True)
-
-                    if self.killed is True: return
-                    self.progress.emit(80)
-
-                    # error cat: islands, orphans
-                    islands, orphans = merged_dual.find_islands_orphans(merged_clean_primal)
-
-                    if self.killed is True: return
-                    self.progress.emit(90)
-
-                    # combine all errors
-                    error_list = [['invalid', invalids], ['multipart', multiparts], ['intersecting at vertex', to_break],
-                                  ['overlaping', overlaps],
-                                  ['duplicate', duplicates], ['continuous line', to_merge],
-                                  # ['islands', islands], ['orphans', orphans]
-                                  ]
-                    e_path = None
-                    errors = errors_to_shp(error_list, e_path, 'errors', crs, encoding, geom_type)
-                else:
-                    errors = None
-
-                if self.killed is False:
-                    print "survived!"
-                    self.progress.emit(100)
-                    # return cleaned shapefile and errors
-                    cleaned = merged_clean_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds)
-                    ret = (errors, cleaned,)
-
-            except Exception, e:
-                # forward the exception upstream
-                self.error.emit(e, traceback.format_exc())
-
-            self.finished.emit(ret)
-
-    def kill(self):
-        self.killed = True
 
