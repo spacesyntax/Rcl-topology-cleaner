@@ -429,7 +429,8 @@ class RoadNetworkCleaner:
                                       # ['islands', islands], ['orphans', orphans]
                                       ]
                         e_path = None
-                        errors = errors_to_shp(error_list, e_path, 'errors', crs, encoding, geom_type)
+                        input_layer = getLayerByName(parameters['layer_name'])
+                        errors = errors_to_shp(input_layer, parameters['user_id'], error_list, e_path, 'errors', crs, encoding, geom_type)
                     else:
                         errors = None
 

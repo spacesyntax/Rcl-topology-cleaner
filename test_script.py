@@ -15,7 +15,7 @@ execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/dual_graph.py'.encode('utf-8')
 from PyQt4.QtCore import QVariant
 qgsflds_types = {u'Real': QVariant.Double, u'String': QVariant.String}
 
-layer_name = 'nyc_streets_small'
+layer_name = 'Network'
 
 # cleaning settings
 
@@ -37,7 +37,7 @@ user_id = 'gid'
 parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify, 'id_column': base_id, 'user_id':user_id, 'get_invalids':False, 'get_multiparts':False}
 
 # error cat: invalids, multiparts
-primal_graph, invalids, multiparts = transformer(parameters).run()
+primal_graph, invalids, multiparts = transformer(parameters).read_shp_to_multi_graph()
 any_primal_graph = prGraph(primal_graph, base_id, True)
 
 # break at intersections and overlaping geometries

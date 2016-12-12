@@ -115,7 +115,8 @@ def inv_mlParts(name):
     return invalids, multiparts
 
 
-def errors_to_shp(error_list, path, name, crs, encoding, geom_type):
+def errors_to_shp(input_layer, user_id, error_list, path, name, crs, encoding, geom_type):
+    geom_input = {feat[user_id]: feat.geometryAndOwnership() for feat in input_layer.getFeatures()}
     if path is None:
         network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), name, "memory")
     else:
@@ -143,7 +144,7 @@ def errors_to_shp(error_list, path, name, crs, encoding, geom_type):
         new_feat = QgsFeature()
         new_feat.initAttributes(3)
         new_feat.setAttributes([error_count, k, v])
-        new_feat.setGeometry(QgsGeometry())
+        new_feat.setGeometry(geom_input[k])
         errors_feat.append(new_feat)
         error_count += 1
     pr.addFeatures(errors_feat)
@@ -202,7 +203,10 @@ class transformer(QObject):
         if provider_type == 'postgres':
             uri = QgsDataSourceURI(provider.dataSourceUri())
             databaseSchema = uri.schema().encode('utf-8')
-            layer = [table for table in lyr if table.GetName() == databaseSchema + '.' + layer_name][0]
+            if databaseSchema == 'public':
+                layer = [table for table in lyr if table.GetName() == layer_name][0]
+            else:
+                layer = [table for table in lyr if table.GetName() == databaseSchema + '.' + layer_name][0]
             fields = [x.GetName() for x in layer.schema]
         elif provider_type in ('ogr', 'memory'):
             layer = lyr[0]

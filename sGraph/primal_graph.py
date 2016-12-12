@@ -124,7 +124,12 @@ class prGraph(QObject):
         f_count = 1
         feat_count = self.obj.__len__()
 
-        for point, edges in self.topology_iter(break_at_intersections):
+        for i, j in self.obj.adjacency_iter():
+
+            if break_at_intersections:
+                edges = [v.values()[0][self.uid] for k, v in j.items() if len(j) == 2]
+            else:
+                edges = [v.values()[0][self.uid] for k, v in j.items()]
 
             self.progress.emit(10 * f_count / feat_count)
             f_count += 1
