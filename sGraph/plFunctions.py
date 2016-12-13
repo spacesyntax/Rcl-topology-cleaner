@@ -40,7 +40,9 @@ def pl_midpoint(pl_geom):
         if length > mid_length:
             midpoint = mid(vertices[ind_mid_before], vertices[ind_mid_after])
             break
-        #elif length == mid_length:
+        elif length == mid_length:
+            midpoint = vertices[ind_mid_after]
+            break
         #    print vertices
         #    midpoint = vertices[ind_mid_after]
         #    break

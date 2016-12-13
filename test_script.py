@@ -15,12 +15,12 @@ execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/dual_graph.py'.encode('utf-8')
 from PyQt4.QtCore import QVariant
 qgsflds_types = {u'Real': QVariant.Double, u'String': QVariant.String}
 
-layer_name = 'Network'
+layer_name = 't'
 
 # cleaning settings
 
 path = None
-tolerance = 3
+tolerance = 6
 base_id = 'id_in'
 
 # project settings
@@ -33,19 +33,22 @@ qgsflds = get_field_types(layer_name)
 
 # shp/postgis to prGraph instance
 simplify = True
-user_id = 'gid'
-parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify, 'id_column': base_id, 'user_id':user_id, 'get_invalids':False, 'get_multiparts':False}
+user_id = 'osm_id'
+parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify, 'id_column': base_id, 'user_id':user_id, 'get_invalids':True, 'get_multiparts':True}
 
 # error cat: invalids, multiparts
 primal_graph, invalids, multiparts = transformer(parameters).read_shp_to_multi_graph()
 any_primal_graph = prGraph(primal_graph, base_id, True)
+primal_cleaned, duplicates, orphans = any_primal_graph.rmv_dupl_overlaps(user_id,True)
+
 
 # break at intersections and overlaping geometries
 # error cat: to_break
-broken_primal, to_break = any_primal_graph.break_graph(tolerance, simplify)
+broken_primal, to_break, overlaps = primal_cleaned.break_graph(tolerance, simplify, user_id)
 
 # error cat: duplicates
 broken_clean_primal, duplicates_br = broken_primal.rmv_dupl_overlaps()
+
 
 # transform primal graph to dual graph
 centroids = broken_clean_primal.get_centroids_dict()

@@ -355,7 +355,7 @@ class prGraph(QObject):
                     yield feat, 'del duplicate'
 
     # SOURCE ess toolkit
-    def find_dupl_overlaps_ssx(self):
+    def find_dupl_overlaps_ssx(self, orphans):
         geometries = self.get_geom_dict()
         wkt = self.get_wkt_dict()
         uid = self.uid_to_fid
@@ -366,30 +366,39 @@ class prGraph(QObject):
             self.progress.emit(10 * f_count / feat_count)
             f_count += 1
 
+            if orphans:
+                if len(inter_lines) == 0:
+                    yield line, wkt[line], 'orphans'
+
             f_geom = geometries[feat]
             for line in inter_lines:
                 g_geom = geometries[line]
                 if uid[line] < uid[feat]:
                     # duplicate geometry
                     if f_geom.isGeosEqual(g_geom):
-                        yield line, wkt[line]
+                        yield line, wkt[line], 'duplicates'
 
-    def rmv_dupl_overlaps(self, col_id=None):
+
+    def rmv_dupl_overlaps(self, col_id, orphans):
         edges = {edge[2][self.uid]: (edge[0], edge[1]) for edge in self.obj.edges(data=True)}
         edges_to_remove = []
         dupl = []
+        orph = []
         attr_dict = self.get_attr_dict()
 
         # TODO: remove edge with sepcific attributes
-        for edge, geometry in self.find_dupl_overlaps_ssx():
+        for edge, geometry, error in self.find_dupl_overlaps_ssx(orphans):
             if col_id:
-                dupl.append(attr_dict[edge][col_id])
+                if error == 'duplicates':
+                    dupl.append(attr_dict[edge][col_id])
+                elif error == 'orphans':
+                    orph.append(attr_dict[edge][col_id])
             edges_to_remove.append(edges[edge])
 
         # TODO: test reconstructing the graph for speed purposes
         self.obj.remove_edges_from(edges_to_remove)
 
-        return prGraph(self.obj, self.uid, make_feat=True), dupl
+        return prGraph(self.obj, self.uid, make_feat=True), dupl, orph
 
     def add_edges(self, edges_to_add):
         pass
