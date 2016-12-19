@@ -15,7 +15,7 @@ execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/dual_graph.py'.encode('utf-8')
 from PyQt4.QtCore import QVariant
 qgsflds_types = {u'Real': QVariant.Double, u'String': QVariant.String}
 
-layer_name = 't'
+layer_name = 'ttt'
 
 # cleaning settings
 
@@ -38,26 +38,27 @@ parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simp
 
 # error cat: invalids, multiparts
 primal_graph, invalids, multiparts = transformer(parameters).read_shp_to_multi_graph()
-any_primal_graph = prGraph(primal_graph, base_id, True)
-primal_cleaned, duplicates, orphans = any_primal_graph.rmv_dupl_overlaps(user_id,True)
+any_primal_graph = prGraph(primal_graph, True)
+primal_cleaned, duplicates, parallel_con, parallel_nodes = any_primal_graph.rmv_dupl_overlaps(user_id, False)
+
+# QgsMapLayerRegistry.instance().addMapLayer(primal_cleaned.to_shp(None, 't', crs, encoding, geom_type, qgsflds))
 
 
 # break at intersections and overlaping geometries
 # error cat: to_break
-broken_primal, to_break, overlaps = primal_cleaned.break_graph(tolerance, simplify, user_id)
+broken_primal, to_break, overlaps, orphans, closed_polylines = primal_cleaned.break_graph(tolerance, simplify, user_id)
 
 # error cat: duplicates
-broken_clean_primal, duplicates_br = broken_primal.rmv_dupl_overlaps()
+broken_clean_primal, duplicates_br, parallel_con2, parallel_nodes2 = broken_primal.rmv_dupl_overlaps(user_id, True)
 
 
 # transform primal graph to dual graph
 centroids = broken_clean_primal.get_centroids_dict()
-broken_dual = dlGraph(broken_clean_primal.to_dual(True, False, False), broken_clean_primal.uid, centroids, True)
+broken_dual = dlGraph(broken_clean_primal.to_dual(True, parallel_nodes2, False, False), centroids, True)
 
 # Merge between intersections
 # error cat: to_merge
 merged_primal, to_merge = broken_dual.merge(broken_clean_primal, tolerance, simplify)
-
 
 # error cat: duplicates
 merged_clean_primal, duplicates_m = merged_primal.rmv_dupl_overlaps()
@@ -68,10 +69,6 @@ name = layer_name + '_cleaned'
 centroids = merged_clean_primal.get_centroids_dict()
 merged_dual = dlGraph(merged_clean_primal.to_dual(False, False, False), merged_clean_primal.uid, centroids,
 		  True)
-
-# error cat: islands, orphans
-islands, orphans = merged_dual.find_islands_orphans(merged_clean_primal)
-
 
 # combine all errors
 error_list = [['invalids', invalids], ['multiparts', multiparts], ['intersections/overlaps', to_break],

@@ -351,11 +351,11 @@ class RoadNetworkCleaner:
                     # when finished or killed?
                     # trans.progress.disconnect
                     primal_graph, invalids, multiparts = trans.read_shp_to_multi_graph()
-                    any_primal_graph = prGraph(primal_graph, base_id, True)
+                    any_primal_graph = prGraph(primal_graph, True)
 
                     step = 1 / any_primal_graph.obj.size()
                     any_primal_graph.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr+10))
-                    primal_cleaned, duplicates, orphans = any_primal_graph.rmv_dupl_overlaps(user_id, True)
+                    primal_cleaned, duplicates = any_primal_graph.rmv_dupl_overlaps(user_id)
 
                     if self.killed is True: return
 
@@ -364,7 +364,7 @@ class RoadNetworkCleaner:
 
                     # break at intersections and overlaping geometries
                     # error cat: to_break
-                    broken_primal, to_break, overlaps = primal_cleaned.break_graph(tolerance, simplify, user_id)
+                    broken_primal, to_break, overlaps, orphans, closed_polylines = primal_cleaned.break_graph(tolerance,simplify,user_id)
 
                     if self.killed is True: return
 
@@ -372,7 +372,7 @@ class RoadNetworkCleaner:
                     broken_primal.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 30))
 
                     # error cat: duplicates
-                    broken_clean_primal, duplicates_br, orph_1 = broken_primal.rmv_dupl_overlaps(user_id, False)
+                    broken_clean_primal, duplicates_br = broken_primal.rmv_dupl_overlaps(user_id)
 
                     if self.killed is True: return
 
@@ -381,7 +381,7 @@ class RoadNetworkCleaner:
 
                     # transform primal graph to dual graph
                     centroids = broken_clean_primal.get_centroids_dict()
-                    broken_dual = dlGraph(broken_clean_primal.to_dual(True, False, False), broken_clean_primal.uid,
+                    broken_dual = dlGraph(broken_clean_primal.to_dual(True, False, False),
                                           centroids, True)
 
                     if self.killed is True: return
@@ -398,7 +398,7 @@ class RoadNetworkCleaner:
                     merged_primal.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 60))
 
                     # error cat: duplicates
-                    merged_clean_primal, duplicates_m, orph_2 = merged_primal.rmv_dupl_overlaps(user_id,False)
+                    merged_clean_primal, duplicates_m = merged_primal.rmv_dupl_overlaps(user_id)
 
                     if self.killed is True: return
                     self.cl_progress.emit(70)
@@ -407,16 +407,8 @@ class RoadNetworkCleaner:
 
                     if self.settings['errors']:
 
-                        #centroids = merged_clean_primal.get_centroids_dict()
-                        #merged_dual = dlGraph(merged_clean_primal.to_dual(False, False, False), merged_clean_primal.uid,
-                                              #centroids,
-                                              #True)
-
                         if self.killed is True: return
                         self.cl_progress.emit(80)
-
-                        # error cat: islands, orphans
-                        #islands, orphans = merged_dual.find_islands_orphans(merged_clean_primal)
 
                         if self.killed is True: return
                         self.cl_progress.emit(90)
@@ -425,9 +417,10 @@ class RoadNetworkCleaner:
                         error_list = [['invalid', invalids], ['multipart', multiparts],
                                       ['intersecting at vertex', to_break],
                                       ['overlaping', overlaps],
-                                      ['duplicate', duplicates], ['continuous line', to_merge],
+                                      ['duplicate', duplicates],
+                                      ['continuous line', to_merge],
                                       # ['islands', islands],
-                                      ['orphans', orphans]
+                                      ['orphans', orphans], ['closed_polyline', closed_polylines]
                                       ]
                         e_path = None
                         input_layer = getLayerByName(parameters['layer_name'])

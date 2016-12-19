@@ -18,10 +18,9 @@ class dlGraph(QObject):
     progress = pyqtSignal(float)
     warning = pyqtSignal(str)
 
-    def __init__(self, dlGraph, id_column, centroids, make_feat=True):
+    def __init__(self, dlGraph, centroids, make_feat=True):
         QObject.__init__(self)
         self.obj = dlGraph
-        self.uid = id_column
         self.attributes = ['line1', 'line2', 'cost']
         self.n_attributes = 3
         self.qgs_fields = [QgsField('line1',QVariant.String), QgsField('line2',QVariant.String), QgsField('cost',QVariant.Int)]
@@ -145,14 +144,15 @@ class dlGraph(QObject):
 
             if len(set_to_merge) == 1:
                 attrs = attr_dict[set_to_merge[0]]
-                attrs['merged_id'] = attrs['broken_id']
+                new_key= set_to_merge[0]
                 ogr_geom = ogr.Geometry(ogr.wkbLineString)
                 for i in geom_dict[set_to_merge[0]].asPolyline():
                     ogr_geom.AddPoint_2D(i[0], i[1])
                 for edge in edges_from_line(ogr_geom, attrs, tolerance, simplify):
                     e1, e2, attr = edge
                     attr['Wkt'] = ogr_geom.ExportToWkt()
-                    primal_merged.add_edge(e1, e2, attr_dict=attr)
+                    primal_merged.add_edge(e1, e2, key=new_key, attr_dict=attr)
+                count += 1
             else:
                 if col_id:
                     for i in set_to_merge:
@@ -161,7 +161,7 @@ class dlGraph(QObject):
                             merged.append(attr_dict[i][col_id])
                 attrs = attr_dict[set_to_merge[0]]
                 # TODO: let the user choose how to aggregate attributes
-                attrs['merged_id'] = attrs['broken_id'] + '_mr_' + str(count)
+
                 new_geom = geom_dict[set_to_merge[0]]
                 geom_to_merge = [geom_dict[i] for i in set_to_merge]
                 # TODO: check when combining with multipolyline
@@ -173,22 +173,26 @@ class dlGraph(QObject):
                 if new_geom.wkbType() == 5:
                     for linestring in new_geom.asGeometryCollection():
                         ogr_geom = ogr.Geometry(ogr.wkbLineString)
+                        new_key = set_to_merge[0] + '_mr_' + str(count)
                         for i in linestring.asPolyline():
                             ogr_geom.AddPoint_2D(i[0], i[1])
                         for edge in edges_from_line(ogr_geom, attrs, tolerance, simplify):
                             e1, e2, attr = edge
                             attr['Wkt'] = ogr_geom.ExportToWkt()
-                            primal_merged.add_edge(e1, e2, attr_dict=attr)
+                            primal_merged.add_edge(e1, e2,key=new_key, attr_dict=attr)
+                            count += 1
                 elif new_geom.wkbType() == 2:
                     ogr_geom = ogr.Geometry(ogr.wkbLineString)
                     for i in new_geom.asPolyline():
                         ogr_geom.AddPoint_2D(i[0], i[1])
+                    new_key = set_to_merge[0] + '_mr_' + str(count)
                     for edge in edges_from_line(ogr_geom, attrs, tolerance, simplify):
                         e1, e2, attr = edge
                         attr['Wkt'] = ogr_geom.ExportToWkt()
-                        primal_merged.add_edge(e1, e2, attr_dict=attr)
+                        primal_merged.add_edge(e1, e2,key=new_key, attr_dict=attr)
+                    count += 1
 
-        return prGraph(primal_merged, 'merged_id', make_feat=True), merged
+        return prGraph(primal_merged, make_feat=True), merged
 
 
 

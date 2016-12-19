@@ -6,6 +6,7 @@ from qgis.core import QgsFeature, QgsGeometry, QgsField, QgsSpatialIndex, QgsVec
 import networkx as nx
 import ogr
 from PyQt4.QtCore import QVariant, QObject, pyqtSignal
+from collections import Counter
 
 # plugin module imports
 
@@ -22,21 +23,23 @@ class prGraph(QObject):
     progress = pyqtSignal(float)
     warning = pyqtSignal(str)
 
-    def __init__(self, any_primal_graph, id_column, make_feat=True):
+    def __init__(self, any_primal_graph, make_feat=True):
         QObject.__init__(self)
         self.obj = any_primal_graph
-        self.uid = id_column
-        self.n_attributes = len(self.obj.edges(data=True)[0][2].keys())
-        self.uid_index = (self.obj.edges(data=True)[0][2].keys()).index(self.uid)
-        self.prflds = self.obj.edges(data=True)[0][2].keys()
+        keys = True
+        self.n_attributes = len(self.obj.edges(data=True)[0][2].keys()) + 1
+        self.uid_index = len(self.obj.edges(data=True)[0][2].keys())
+        self.prflds = self.obj.edges(data=True, keys=True)[0][3].keys() + ['key']
         if make_feat:
             features = []
             count = 1
-            for edge in self.obj.edges(data=True):
+            for edge in self.obj.edges(data=True, keys= True):
                 feat = QgsFeature()
-                feat.setGeometry(QgsGeometry.fromWkt(edge[2]['Wkt']))
+                feat.setGeometry(QgsGeometry.fromWkt(edge[3]['Wkt']))
                 feat.initAttributes(self.n_attributes)
-                feat.setAttributes([edge[2][attr] for attr in self.prflds])
+                f_attr = edge[3]
+                f_attr['key']= edge[2]
+                feat.setAttributes([edge[3][attr] for attr in self.prflds])
                 feat.setFeatureId(count)
                 features.append(feat)
                 count += 1
@@ -50,7 +53,7 @@ class prGraph(QObject):
 
     # dictionary uid: wkt representation
     def get_wkt_dict(self):
-        return {edge[2][self.uid]: edge[2]['Wkt'] for edge in self.obj.edges(data=True)}
+        return { edge[2]: edge[3]['Wkt'] for edge in self.obj.edges(data=True, keys=True)}
 
     # dictionary uid: qgs geometry
     def get_geom_dict(self):
@@ -69,7 +72,7 @@ class prGraph(QObject):
 
     # dictionary uid: attributes
     def get_attr_dict(self):
-        return {edge[2][self.uid]: edge[2] for edge in self.obj.edges(data=True)}
+        return {edge[2]: edge[3] for edge in self.obj.edges(data=True, keys=True)}
 
     # ------ fields
 
@@ -104,21 +107,9 @@ class prGraph(QObject):
 
     # ----- TOPOLOGY OPERATIONS -----
 
-    # topology iterator ( point_coord : [lines] )
-
-    def topology_iter(self, break_at_intersections):
-        if break_at_intersections:
-            for i, j in self.obj.adjacency_iter():
-                edges = [v.values()[0][self.uid] for k, v in j.items() if len(j) == 2]
-                yield i, edges
-        else:
-            for i, j in self.obj.adjacency_iter():
-                edges = [v.values()[0][self.uid] for k, v in j.items()]
-                yield i, edges
-
     # iterator of dual graph edges from prGraph edges
 
-    def dl_edges_from_pr_graph(self, break_at_intersections, angular_cost = False, polylines=False):
+    def dl_edges_from_pr_graph(self, break_at_intersections, parallel_nodes, angular_cost = False, polylines=False):
         geometries = self.get_geom_dict()
 
         f_count = 1
@@ -126,10 +117,17 @@ class prGraph(QObject):
 
         for i, j in self.obj.adjacency_iter():
 
-            if break_at_intersections:
-                edges = [v.values()[0][self.uid] for k, v in j.items() if len(j) == 2]
-            else:
-                edges = [v.values()[0][self.uid] for k, v in j.items()]
+            is_parallel = False
+            for n in parallel_nodes:
+                if i[0] == n[0] and i[1] == n[1]:
+                    is_parallel = True
+
+            if not is_parallel:
+                if break_at_intersections:
+                    edges = [z for k, v in j.items() if len(v.keys()) == 2 for z in v.keys()]
+                else:
+                    # TODO restore connections
+                    edges = [v.keys().pop() for k, v in j.items()]
 
             self.progress.emit(10 * f_count / feat_count)
             f_count += 1
@@ -159,7 +157,7 @@ class prGraph(QObject):
     # iterator of dual graph nodes from prGraph edges
 
     def dl_nodes_from_pr_graph(self, dlGrpah):
-        for e in self.obj.edges_iter(data=self.uid):
+        for e in self.obj.edges_iter(keys=True):
             if e[2] not in dlGrpah.nodes():
                 yield e[2]
 
@@ -205,15 +203,15 @@ class prGraph(QObject):
         network.commitChanges()
         return network
 
-    def to_dual(self, break_at_intersections, angular_cost=True, polylines=False):
+    def to_dual(self, break_at_intersections, parallel_nodes, angular_cost=True, polylines=False):
         dual_graph = nx.MultiGraph()
-        # TODO: check if add_edge is quicker
-        for edge in self.dl_edges_from_pr_graph(break_at_intersections, angular_cost, polylines):
+        for edge in self.dl_edges_from_pr_graph(break_at_intersections, parallel_nodes, angular_cost, polylines):
             e1, e2, attr = edge
             dual_graph.add_edge(e1, e2, attr_dict=attr)
         # add nodes (some lines are not connected to others because they are pl)
         for node in self.dl_nodes_from_pr_graph(dual_graph):
             dual_graph.add_node(node)
+
         return dual_graph
 
     # ----- ALTERATION OPERATIONS -----
@@ -231,92 +229,135 @@ class prGraph(QObject):
             f_count += 1
 
             f_geom = geometries[feat]
+
             breakages = []
-            type=[]
+            type_error = []
+
+            for i in f_geom.asPolyline():
+                if f_geom.asPolyline().count(i) > 1:
+                    point = QgsGeometry().fromPoint(QgsPoint(i[0],i[1]))
+                    if point_is_vertex(point, f_geom):
+                        breakages.append(point)
+
+            is_closed = False
+            if f_geom.asPolyline()[0] == f_geom.asPolyline()[-1]:
+                is_closed = True
+
+            is_orphan = True
+
             for line in inter_lines:
-                type = []
                 g_geom = geometries[line]
                 intersection = f_geom.intersection(g_geom)
+
                 # intersecting geometries at point
                 if intersection.wkbType() == 1 and point_is_vertex(intersection, f_geom):
                     breakages.append(intersection)
-                    type.append('inter')
+                    type_error.append('br')
+                    is_orphan = False
+
                 # TODO: test multipoints
                 # intersecting geometries at multiple points
                 elif intersection.wkbType() == 4:
                     for point in intersection.asGeometryCollection():
-                        if point_is_vertex(intersection, f_geom):
+                        if point_is_vertex(point, f_geom):
                             breakages.append(point)
-                    type.append('inter')
+                            is_orphan = False
+                            type_error.append('br')
+
                 # overalpping geometries
-                elif intersection.wkbType() == 2:
+                elif intersection.wkbType() == 2 and intersection.length() != f_geom.length():
                     point1 = QgsGeometry.fromPoint(QgsPoint(intersection.asPolyline()[0]))
                     point2 = QgsGeometry.fromPoint(QgsPoint(intersection.asPolyline()[-1]))
                     if point_is_vertex(point1, f_geom):
                         breakages.append(point1)
+                        is_orphan = False
+                        type_error.append('ovrlp')
                     if point_is_vertex(point2, f_geom):
                         breakages.append(point2)
-                    type.append('overlap')
-                elif intersection.wkbType() == 5:
+                        is_orphan = False
+                        type_error.append('ovrlp')
+
+                # overalpping multi-geometries
+                # every feature overlaps with itself as a multilinestring
+                elif intersection.wkbType() == 5 and intersection.length() != f_geom.length():
                     point1 = QgsGeometry.fromPoint(QgsPoint(intersection.asGeometryCollection()[0].asPolyline()[0]))
                     point2 = QgsGeometry.fromPoint(QgsPoint(intersection.asGeometryCollection()[-1].asPolyline()[-1]))
                     if point_is_vertex(point1, f_geom):
+                        is_orphan = False
                         breakages.append(point1)
+                        type_error.append('ovrlp')
                     if point_is_vertex(point2, f_geom):
+                        is_orphan = False
                         breakages.append(point2)
-                    type.append('overlap')
-            type = list(set(type))
-            if len(breakages) > 0:
-                # add first and last vertex
-                vertices = set([vertex for vertex in find_vertex_index(breakages, feat, geometries)])
-                vertices = list(vertices) + [0] + [len(geom_vertices[feat]) - 1]
-                vertices = list(set(vertices))
-                vertices.sort()
-                if col_id:
-                    if len(type)==2:
-                        if len(vertices) != 2:
-                            yield feat, vertices, ['br', 'ovrlp']
-                        else:
-                            yield feat, vertices, []
-                    elif type == ['inter']:
-                        if len(vertices) != 2:
-                            yield feat, vertices, ['br']
-                        else:
-                            yield feat, vertices, []
-                    elif type == ['overlap']:
-                        if len(vertices) != 2:
-                            yield feat, vertices, ['ovrlp']
-                        else:
-                            yield feat, vertices, []
+                        type_error.append('ovrlp')
+
+            type_error = list(set(type_error))
+            # add first and last vertex
+            vertices = set([vertex for vertex in find_vertex_index(breakages, feat, geometries)])
+            vertices = list(vertices) + [0] + [len(geom_vertices[feat]) - 1]
+            vertices = list(set(vertices))
+            vertices.sort()
+            if len(vertices) > 2:
+                if not col_id:
+                    error = []
                 else:
-                    yield feat, vertices,[]
+                    if len(type_error)==2:
+                        error = ['br', 'ovrlp']
+                    else:
+                        error = type_error
+                yield feat, vertices, error
+            if is_orphan:
+                vertices = []
+                if is_closed:
+                    if not col_id:
+                        error = []
+                    else:
+                        error = ['closed polyline']
+                    yield feat, vertices, error
+                else:
+                    if not col_id:
+                        error = []
+                    else:
+                        error = ['orphan']
+                    yield feat, vertices, error
+
 
     def break_graph(self, tolerance, simplify, col_id=None):
         count = 1
         geom_vertices = self.get_geom_vertices_dict()
         attr_dict = self.get_attr_dict()
-        edges = {edge[2][self.uid]: (edge[0], edge[1]) for edge in self.obj.edges(data=True)}
+
         edges_to_remove = []
         edges_to_add = []
+
         breakages = []
         overlaps = []
+        orphans = []
+        closed_polylines = []
 
         for k, v, error in self.find_breakages(col_id):
             attrs = attr_dict[k]
-            if col_id and error == ['br', 'ovrlp']:
-                breakages.append(attrs[col_id])
-                overlaps.append(attrs[col_id])
-            elif col_id and error == ['br']:
-                breakages.append(attrs[col_id])
-            elif col_id and error == ['ovrlp']:
-                overlaps.append(attrs[col_id])
+            if col_id:
+                if error == ['br', 'ovrlp']:
+                    breakages.append(attrs[col_id])
+                    overlaps.append(attrs[col_id])
+                elif error == ['br']:
+                    breakages.append(attrs[col_id])
+                elif error == ['ovrlp']:
+                    overlaps.append(attrs[col_id])
+                elif error == ['orphan']:
+                    orphans.append(attrs[col_id])
+                elif error == ['closed polyline']:
+                    closed_polylines.append(attrs[col_id])
+
             count_2 = 1
-            edges_to_remove.append(edges[k])
+            edges_to_remove.append(k)
+
             # delete primal graph edge
             for ind, index in enumerate(v):
                 if ind != len(v) - 1:
                     points = [geom_vertices[k][i] for i in range(index, v[ind + 1] + 1)]
-                    attrs['broken_id'] = attrs[self.uid] + '_br_' + str(count) + '_' + str(count_2)
+                    new_key = k + '_br_' + str(count) + '_' + str(count_2)
                     ogr_geom = ogr.Geometry(ogr.wkbLineString)
                     for i in points:
                         ogr_geom.AddPoint_2D(i[0], i[1])
@@ -324,81 +365,76 @@ class prGraph(QObject):
                         e1, e2, attr = edge
                         attr['Wkt'] = ogr_geom.ExportToWkt()
                         # TODO: check why breaking a graph results in nodes
-                        if e1 != e2:
-                            edges_to_add.append((e1, e2, attr))
+                        edges_to_add.append((e1, e2, new_key, attr))
                     del ogr_geom
                     count_2 += 1
             count += 1
 
-        self.obj.remove_edges_from(edges_to_remove)
+        pairs_to_rmv = [(i[0],i[1], i[2], i[3]) for i in self.obj.edges(data = True, keys=True) if i[2] in edges_to_remove]
 
-        # update new key attribute
-
-        for edge in self.obj.edges(data=True):
-            edge[2]['broken_id'] = edge[2][self.uid]
+        self.obj.remove_edges_from(pairs_to_rmv)
 
         self.obj.add_edges_from(edges_to_add)
 
-        return prGraph(self.obj, 'broken_id', make_feat=True), breakages, overlaps
-
-    def find_dupl_overlaps(self):
-        geometries = self.get_geom_dict()
-        uid = self.uid_to_fid
-        for feat, inter_lines in self.inter_lines_bb_iter():
-            f_geom = geometries[feat]
-            for line in inter_lines:
-                g_geom = geometries[line]
-                intersection = f_geom.intersection(g_geom)
-                if intersection.wkbType() == 2 and g_geom.length() < f_geom.length():
-                    yield line, 'del overlap'
-                elif g_geom.length() == f_geom.length() and uid[line] < uid[feat]:
-                    yield feat, 'del duplicate'
+        return prGraph(self.obj, make_feat=True), breakages, overlaps, orphans, closed_polylines
 
     # SOURCE ess toolkit
-    def find_dupl_overlaps_ssx(self, orphans):
+    def find_dupl_overlaps_ssx(self, parallel=True):
         geometries = self.get_geom_dict()
-        wkt = self.get_wkt_dict()
         uid = self.uid_to_fid
+
         f_count = 1
         feat_count = self.obj.size()
+
         for feat, inter_lines in self.inter_lines_bb_iter():
 
             self.progress.emit(10 * f_count / feat_count)
             f_count += 1
 
-            if orphans:
-                if len(inter_lines) == 0:
-                    yield line, wkt[line], 'orphans'
-
+            parallels = []
             f_geom = geometries[feat]
             for line in inter_lines:
                 g_geom = geometries[line]
                 if uid[line] < uid[feat]:
                     # duplicate geometry
                     if f_geom.isGeosEqual(g_geom):
-                        yield line, wkt[line], 'duplicates'
+                        yield line, 'dupl'
+                if line != feat:
+                    endpoints = [g_geom.asPolyline()[0]] + [g_geom.asPolyline()[-1]] + [f_geom.asPolyline()[0]] + [f_geom.asPolyline()[-1]]
+                    endpoints = list(set(endpoints))
+                    if len(endpoints) == 2:
+                        parallels.append(line)
+                        matching_points = endpoints
+            if len(parallels) > 0 and parallel:
+                yield [matching_points, parallels + [feat]],  'parallel'
 
-
-    def rmv_dupl_overlaps(self, col_id, orphans):
-        edges = {edge[2][self.uid]: (edge[0], edge[1]) for edge in self.obj.edges(data=True)}
+    def rmv_dupl_overlaps(self, col_id, parallel):
         edges_to_remove = []
         dupl = []
-        orph = []
         attr_dict = self.get_attr_dict()
+        parallel_con = {}
+        parallel_nodes = []
 
-        # TODO: remove edge with sepcific attributes
-        for edge, geometry, error in self.find_dupl_overlaps_ssx(orphans):
-            if col_id:
-                if error == 'duplicates':
+        for edge, error in self.find_dupl_overlaps_ssx(parallel):
+            if error == 'dupl':
+                if col_id:
                     dupl.append(attr_dict[edge][col_id])
-                elif error == 'orphans':
-                    orph.append(attr_dict[edge][col_id])
-            edges_to_remove.append(edges[edge])
+                edges_to_remove.append(edge)
+            elif error == 'parallel' and parallel:
+                endpoints = edge[0]
+                for i in endpoints:
+                    if i not in parallel_nodes:
+                        parallel_nodes.append(i)
+                parallels = edge[1]
+                # TODO: add which connections to restore
+
 
         # TODO: test reconstructing the graph for speed purposes
-        self.obj.remove_edges_from(edges_to_remove)
+        pairs_to_rmv = [(i[0], i[1], i[2], i[3]) for i in self.obj.edges(data=True, keys=True) if
+                        i[2] in edges_to_remove]
+        self.obj.remove_edges_from(pairs_to_rmv)
 
-        return prGraph(self.obj, self.uid, make_feat=True), dupl, orph
+        return prGraph(self.obj, make_feat=True), dupl, parallel_con, parallel_nodes
 
     def add_edges(self, edges_to_add):
         pass

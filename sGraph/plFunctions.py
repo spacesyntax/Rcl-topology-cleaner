@@ -20,7 +20,7 @@ def find_vertex_index(points,feat,geometries):
 
 
 def point_is_vertex(point,line):
-    if point.asPoint() in line.asPolyline()[1:-1]:
+    if point.asPoint() in line.asPolyline():
         return True
 
 

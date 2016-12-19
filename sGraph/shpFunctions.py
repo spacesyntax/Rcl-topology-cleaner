@@ -58,12 +58,10 @@ def del_shp(path):
 # source : networkx
 
 def edges_from_line(geom, attrs, tolerance=None, simplify=True):
-
     try:
         from osgeo import ogr
     except ImportError:
         raise ImportError("edges_from_line requires OGR: http://www.gdal.org/")
-
     if simplify:
         edge_attrs = attrs.copy()
         last = geom.GetPointCount() - 1
@@ -79,8 +77,7 @@ def edges_from_line(geom, attrs, tolerance=None, simplify=True):
             last = 1
             del line
         edge_attrs["Wkt"] = wkt
-        if geom.Length() > 0:
-            yield (geom.GetPoint_2D(0), geom.GetPoint_2D(last), edge_attrs)
+        yield (geom.GetPoint_2D(0), geom.GetPoint_2D(last), edge_attrs)
     else:
         for i in range(0, geom.GetPointCount() - 1):
             pt1 = geom.GetPoint_2D(i)
@@ -116,7 +113,7 @@ def inv_mlParts(name):
 
 
 def errors_to_shp(input_layer, user_id, error_list, path, name, crs, encoding, geom_type):
-    geom_input = {feat[user_id]: feat.geometryAndOwnership() for feat in input_layer.getFeatures()}
+    geom_input = {feat[user_id]: feat.geometry().exportToWkt() for feat in input_layer.getFeatures()}
     if path is None:
         network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), name, "memory")
     else:
@@ -136,15 +133,15 @@ def errors_to_shp(input_layer, user_id, error_list, path, name, crs, encoding, g
     attr_dict = {error : '' for errors in error_list for error in errors[1]}
     for errors in error_list:
         for error in errors[1]:
-            if len(attr_dict [error])==0:
+            if len(attr_dict[error]) == 0:
                 attr_dict[error] += str(errors[0])
             else:
-                attr_dict [error] += ', ' + str(errors[0])
-    for k,v in attr_dict.items():
+                attr_dict[error] += ', ' + str(errors[0])
+    for k, v in attr_dict.items():
         new_feat = QgsFeature()
         new_feat.initAttributes(3)
         new_feat.setAttributes([error_count, k, v])
-        new_feat.setGeometry(geom_input[k])
+        new_feat.setGeometry(QgsGeometry.fromWkt(geom_input[k]))
         errors_feat.append(new_feat)
         error_count += 1
     pr.addFeatures(errors_feat)
@@ -230,9 +227,9 @@ class transformer(QObject):
             if g.GetGeometryType() == ogr.wkbLineString:
                 for edge in edges_from_line(g, attributes, tolerance, simplify):
                     e1, e2, attr = edge
-                    attr['id_in'] = 'in_' + str(count)
+                    new_key = 'in_' + str(count)
                     count += 1
-                    net.add_edge(e1, e2, attr_dict=attr)
+                    net.add_edge(e1, e2, key=new_key, attr_dict=attr)
             elif g.GetGeometryType() == ogr.wkbMultiLineString:
                 if get_multiparts and col_id:
                     multiparts.append(attributes[col_id])
@@ -241,9 +238,9 @@ class transformer(QObject):
                     geom_i = g.GetGeometryRef(i)
                     for edge in edges_from_line(geom_i, attributes, tolerance, simplify):
                         e1, e2, attr = edge
-                        attr['id_in'] = 'in_' + str(count)
+                        new_key = 'in_' + str(count)
                         count += 1
-                        net.add_edge(e1, e2, attr_dict=attr)
+                        net.add_edge(e1, e2, key=new_key, attr_dict=attr)
             else:
                 if get_invalids and col_id:
                     invalids.append(attributes[col_id])
