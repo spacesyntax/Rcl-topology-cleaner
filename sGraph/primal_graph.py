@@ -1,12 +1,10 @@
 
 # general imports
 import itertools
-from PyQt4.QtCore import QVariant
 from qgis.core import QgsFeature, QgsGeometry, QgsField, QgsSpatialIndex, QgsVectorLayer, QgsVectorFileWriter, QgsPoint, QgsMapLayerRegistry, QgsFields
 import networkx as nx
 import ogr
 from PyQt4.QtCore import QVariant, QObject, pyqtSignal
-from collections import Counter
 
 # plugin module imports
 
@@ -109,7 +107,7 @@ class prGraph(QObject):
 
     # iterator of dual graph edges from prGraph edges
 
-    def dl_edges_from_pr_graph(self, break_at_intersections, parallel_nodes, angular_cost = False, polylines=False):
+    def dl_edges_from_pr_graph(self, break_at_intersections, parallel_nodes, tolerance, angular_cost = False, polylines=False):
         geometries = self.get_geom_dict()
 
         f_count = 1
@@ -119,15 +117,19 @@ class prGraph(QObject):
 
             is_parallel = False
             for n in parallel_nodes:
-                if i[0] == n[0] and i[1] == n[1]:
+                if abs(i[0] - n[0]) < 10 ** (-(tolerance - 1)) and abs(i[1] - n[1]) < 10 ** (-(tolerance - 1)):
                     is_parallel = True
 
-            if not is_parallel:
-                if break_at_intersections:
-                    edges = [z for k, v in j.items() if len(v.keys()) == 2 for z in v.keys()]
+            if break_at_intersections and not is_parallel:
+                if len(j.keys()) == 2:
+                    edges = [g.keys().pop() for g in j.values()]
                 else:
-                    # TODO restore connections
-                    edges = [v.keys().pop() for k, v in j.items()]
+                    edges = []
+            elif not break_at_intersections:
+                # TODO restore connections
+                edges = [v.keys().pop() for k, v in j.items()]
+            else:
+                edges = []
 
             self.progress.emit(10 * f_count / feat_count)
             f_count += 1
@@ -203,9 +205,9 @@ class prGraph(QObject):
         network.commitChanges()
         return network
 
-    def to_dual(self, break_at_intersections, parallel_nodes, angular_cost=True, polylines=False):
+    def to_dual(self, break_at_intersections, parallel_nodes, tolerance, angular_cost=False, polylines=False):
         dual_graph = nx.MultiGraph()
-        for edge in self.dl_edges_from_pr_graph(break_at_intersections, parallel_nodes, angular_cost, polylines):
+        for edge in self.dl_edges_from_pr_graph(break_at_intersections, parallel_nodes, tolerance, angular_cost, polylines):
             e1, e2, attr = edge
             dual_graph.add_edge(e1, e2, attr_dict=attr)
         # add nodes (some lines are not connected to others because they are pl)

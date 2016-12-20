@@ -355,7 +355,7 @@ class RoadNetworkCleaner:
 
                     step = 1 / any_primal_graph.obj.size()
                     any_primal_graph.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr+10))
-                    primal_cleaned, duplicates = any_primal_graph.rmv_dupl_overlaps(user_id)
+                    primal_cleaned, duplicates, parallel_con, parallel_nodes = any_primal_graph.rmv_dupl_overlaps(user_id, True)
 
                     if self.killed is True: return
 
@@ -372,7 +372,7 @@ class RoadNetworkCleaner:
                     broken_primal.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 30))
 
                     # error cat: duplicates
-                    broken_clean_primal, duplicates_br = broken_primal.rmv_dupl_overlaps(user_id)
+                    broken_clean_primal, duplicates_br, parallel_con2, parallel_nodes2 = broken_primal.rmv_dupl_overlaps(user_id,True)
 
                     if self.killed is True: return
 
@@ -381,7 +381,7 @@ class RoadNetworkCleaner:
 
                     # transform primal graph to dual graph
                     centroids = broken_clean_primal.get_centroids_dict()
-                    broken_dual = dlGraph(broken_clean_primal.to_dual(True, False, False),
+                    broken_dual = dlGraph(broken_clean_primal.to_dual(True, parallel_nodes2, tolerance, False, False),
                                           centroids, True)
 
                     if self.killed is True: return
@@ -398,7 +398,7 @@ class RoadNetworkCleaner:
                     merged_primal.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 60))
 
                     # error cat: duplicates
-                    merged_clean_primal, duplicates_m = merged_primal.rmv_dupl_overlaps(user_id)
+                    merged_clean_primal, duplicates_m, parallel_con3, parallel_nodes3 = merged_primal.rmv_dupl_overlaps(user_id, False)
 
                     if self.killed is True: return
                     self.cl_progress.emit(70)
@@ -419,7 +419,6 @@ class RoadNetworkCleaner:
                                       ['overlaping', overlaps],
                                       ['duplicate', duplicates],
                                       ['continuous line', to_merge],
-                                      # ['islands', islands],
                                       ['orphans', orphans], ['closed_polyline', closed_polylines]
                                       ]
                         e_path = None

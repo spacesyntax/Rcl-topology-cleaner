@@ -113,7 +113,7 @@ def inv_mlParts(name):
 
 
 def errors_to_shp(input_layer, user_id, error_list, path, name, crs, encoding, geom_type):
-    geom_input = {feat[user_id]: feat.geometry().exportToWkt() for feat in input_layer.getFeatures()}
+    geom_input = {feat[user_id]: feat.geometryAndOwnership() for feat in input_layer.getFeatures()}
     if path is None:
         network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), name, "memory")
     else:
@@ -141,7 +141,7 @@ def errors_to_shp(input_layer, user_id, error_list, path, name, crs, encoding, g
         new_feat = QgsFeature()
         new_feat.initAttributes(3)
         new_feat.setAttributes([error_count, k, v])
-        new_feat.setGeometry(QgsGeometry.fromWkt(geom_input[k]))
+        new_feat.setGeometry(geom_input[k])
         errors_feat.append(new_feat)
         error_count += 1
     pr.addFeatures(errors_feat)

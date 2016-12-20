@@ -15,7 +15,7 @@ execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/dual_graph.py'.encode('utf-8')
 from PyQt4.QtCore import QVariant
 qgsflds_types = {u'Real': QVariant.Double, u'String': QVariant.String}
 
-layer_name = 'ttt'
+layer_name = 'Netwrok_small'
 
 # cleaning settings
 
@@ -43,7 +43,6 @@ primal_cleaned, duplicates, parallel_con, parallel_nodes = any_primal_graph.rmv_
 
 # QgsMapLayerRegistry.instance().addMapLayer(primal_cleaned.to_shp(None, 't', crs, encoding, geom_type, qgsflds))
 
-
 # break at intersections and overlaping geometries
 # error cat: to_break
 broken_primal, to_break, overlaps, orphans, closed_polylines = primal_cleaned.break_graph(tolerance, simplify, user_id)
@@ -51,33 +50,36 @@ broken_primal, to_break, overlaps, orphans, closed_polylines = primal_cleaned.br
 # error cat: duplicates
 broken_clean_primal, duplicates_br, parallel_con2, parallel_nodes2 = broken_primal.rmv_dupl_overlaps(user_id, True)
 
-
 # transform primal graph to dual graph
 centroids = broken_clean_primal.get_centroids_dict()
-broken_dual = dlGraph(broken_clean_primal.to_dual(True, parallel_nodes2, False, False), centroids, True)
+broken_dual = dlGraph(broken_clean_primal.to_dual(True, parallel_nodes2, tolerance, False, False), centroids, True)
 
 # Merge between intersections
 # error cat: to_merge
-merged_primal, to_merge = broken_dual.merge(broken_clean_primal, tolerance, simplify)
+merged_primal, to_merge = broken_dual.merge(broken_clean_primal, tolerance, simplify, user_id)
 
 # error cat: duplicates
-merged_clean_primal, duplicates_m = merged_primal.rmv_dupl_overlaps()
+merged_clean_primal, duplicates_m,  parallel_con3, parallel_nodes3 = merged_primal.rmv_dupl_overlaps(None, False)
 
 name = layer_name + '_cleaned'
 
 
 centroids = merged_clean_primal.get_centroids_dict()
-merged_dual = dlGraph(merged_clean_primal.to_dual(False, False, False), merged_clean_primal.uid, centroids,
+merged_dual = dlGraph(merged_clean_primal.to_dual(False, parallel_nodes3, tolerance, False, False), centroids,
 		  True)
 
-# combine all errors
-error_list = [['invalids', invalids], ['multiparts', multiparts], ['intersections/overlaps', to_break],
-  ['duplicates', duplicates_br], ['chains', to_merge],
-  ['islands', islands], ['orphans', orphans]]
-e_path = None
-errors = errors_to_shp(error_list, e_path, 'errors', crs, encoding, geom_type)
 
+error_list = [['invalid', invalids], ['multipart', multiparts],
+                                      ['intersecting at vertex', to_break],
+                                      ['overlaping', overlaps],
+                                      ['duplicate', duplicates],
+                                      ['continuous line', to_merge],
+                                      # ['islands', islands],
+                                      ['orphans', orphans], ['closed_polyline', closed_polylines]
+          ]
+e_path = None
+input_layer = getLayerByName(parameters['layer_name'])
+QgsMapLayerRegistry.instance().addMapLayer(errors_to_shp(input_layer, parameters['user_id'], error_list, e_path, 'errors', crs, encoding, geom_type))
 
 # return cleaned shapefile and errors
-cleaned = merged_clean_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds)
-ret = (errors, cleaned,)
+QgsMapLayerRegistry.instance().addMapLayer(merged_clean_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds))
