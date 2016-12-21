@@ -113,7 +113,7 @@ def inv_mlParts(name):
 
 
 def errors_to_shp(input_layer, user_id, error_list, path, name, crs, encoding, geom_type):
-    geom_input = {feat[user_id]: feat.geometryAndOwnership() for feat in input_layer.getFeatures()}
+    geom_input = {feat[user_id]: QgsGeometry(feat.geometryAndOwnership()) for feat in input_layer.getFeatures()}
     if path is None:
         network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), name, "memory")
     else:
@@ -123,11 +123,11 @@ def errors_to_shp(input_layer, user_id, error_list, path, name, crs, encoding, g
             print "Error when creating shapefile: ", file_writer.errorMessage()
         del file_writer
         network = QgsVectorLayer(path, name, "ogr")
-    #QgsMapLayerRegistry.instance().addMapLayer(network)
     pr = network.dataProvider()
     network.startEditing()
     if path is None:
         pr.addAttributes([QgsField('error_id', QVariant.Int), QgsField('input_id', QVariant.String), QgsField('errors', QVariant.String)])
+    network.commitChanges()
     errors_feat = []
     error_count = 0
     attr_dict = {error : '' for errors in error_list for error in errors[1]}
@@ -137,14 +137,16 @@ def errors_to_shp(input_layer, user_id, error_list, path, name, crs, encoding, g
                 attr_dict[error] += str(errors[0])
             else:
                 attr_dict[error] += ', ' + str(errors[0])
+    network.startEditing()
     for k, v in attr_dict.items():
         new_feat = QgsFeature()
         new_feat.initAttributes(3)
         new_feat.setAttributes([error_count, k, v])
-        new_feat.setGeometry(geom_input[k])
+            #geom_input[k]
+        new_feat.setGeometry(QgsGeometry(geom_input[k]))
         errors_feat.append(new_feat)
+        network.addFeature(new_feat)
         error_count += 1
-    pr.addFeatures(errors_feat)
     network.commitChanges()
     return network
 
