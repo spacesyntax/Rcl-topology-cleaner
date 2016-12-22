@@ -15,7 +15,7 @@ execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/dual_graph.py'.encode('utf-8')
 from PyQt4.QtCore import QVariant
 qgsflds_types = {u'Real': QVariant.Double, u'String': QVariant.String}
 
-layer_name = 'Netwrok_small'
+layer_name = 'ttt'
 
 # cleaning settings
 
@@ -41,7 +41,7 @@ primal_graph, invalids, multiparts = transformer(parameters).read_shp_to_multi_g
 any_primal_graph = prGraph(primal_graph, True)
 primal_cleaned, duplicates, parallel_con, parallel_nodes = any_primal_graph.rmv_dupl_overlaps(user_id, False)
 
-# QgsMapLayerRegistry.instance().addMapLayer(primal_cleaned.to_shp(None, 't', crs, encoding, geom_type, qgsflds))
+QgsMapLayerRegistry.instance().addMapLayer(primal_cleaned.to_shp(None, 't', crs, encoding, geom_type, qgsflds))
 
 # break at intersections and overlaping geometries
 # error cat: to_break
@@ -50,6 +50,9 @@ broken_primal, to_break, overlaps, orphans, closed_polylines = primal_cleaned.br
 # error cat: duplicates
 broken_clean_primal, duplicates_br, parallel_con2, parallel_nodes2 = broken_primal.rmv_dupl_overlaps(user_id, True)
 
+QgsMapLayerRegistry.instance().addMapLayer(broken_clean_primal.to_shp(None, 'br', crs, encoding, geom_type, qgsflds))
+
+
 # transform primal graph to dual graph
 centroids = broken_clean_primal.get_centroids_dict()
 broken_dual = dlGraph(broken_clean_primal.to_dual(True, parallel_nodes2, tolerance, False, False), centroids, True)
@@ -57,6 +60,9 @@ broken_dual = dlGraph(broken_clean_primal.to_dual(True, parallel_nodes2, toleran
 # Merge between intersections
 # error cat: to_merge
 merged_primal, to_merge = broken_dual.merge(broken_clean_primal, tolerance, simplify, user_id)
+
+
+QgsMapLayerRegistry.instance().addMapLayer(broken_dual.to_shp(None, 'dual', crs, encoding, geom_type))
 
 # error cat: duplicates
 merged_clean_primal, duplicates_m,  parallel_con3, parallel_nodes3 = merged_primal.rmv_dupl_overlaps(None, False)

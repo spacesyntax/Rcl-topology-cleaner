@@ -123,6 +123,7 @@ class prGraph(QObject):
             if break_at_intersections and not is_parallel:
                 if len(j.keys()) == 2:
                     edges = [g.keys().pop() for g in j.values()]
+
                 else:
                     edges = []
             elif not break_at_intersections:

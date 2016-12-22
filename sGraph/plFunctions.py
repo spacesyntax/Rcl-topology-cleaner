@@ -3,7 +3,7 @@ import math
 from qgis.core import QgsPoint, QgsGeometry
 
 # plugin module imports
-from generalFunctions import mid, snap_coord, keep_decimals_string
+#from generalFunctions import mid, snap_coord, keep_decimals_string
 
 
 # -------------- POLYLINE FUNCTIONS ---------------
