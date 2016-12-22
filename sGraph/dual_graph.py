@@ -103,17 +103,12 @@ class dlGraph(QObject):
         # 2. merge lines from intersection to intersection
         # Is there a grass function for QGIS 2.14???
         # sets of connected nodes (edges of primary graph)
-        sets = []
-        for j in connected_components(self.obj):
-            sets.append(list(j))
+        sets = [list(j)for j in connected_components(self.obj)]
         sets_in_order = [set_con for set_con in sets if len(set_con) == 2 or len(set_con) == 1]
         for set in sets:
             if len(set) > 2:
-                edges = []
-                for n in set:
-                    if len(self.obj.neighbors(n)) > 2 or len(self.obj.neighbors(n)) == 1:
-                        edges.append(n)
-                        # find all shortest paths and keep longest between edges
+                edges = [n for n in set if len(self.obj.neighbors(n)) > 2 or len(self.obj.neighbors(n)) == 1]
+                # find all shortest paths and keep longest between edges
                 if len(edges) == 0:
                     edges = [set[0], set[0]]
                 list_paths = [i for i in all_simple_paths(self.obj, edges[0], edges[1])]

@@ -388,6 +388,7 @@ class RoadNetworkCleaner:
                     step = 1 / len(broken_dual.find_cont_lines())
                     broken_dual.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 50))
 
+                    # QgsMapLayerRegistry.instance().addMapLayer(broken_dual.to_shp(None, 'dual', crs, encoding, geom_type))
                     # Merge between intersections
                     # error cat: to_merge
                     merged_primal, to_merge = broken_dual.merge(broken_clean_primal, tolerance, simplify, user_id)
