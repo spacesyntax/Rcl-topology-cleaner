@@ -15,7 +15,7 @@ execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/dual_graph.py'.encode('utf-8')
 from PyQt4.QtCore import QVariant
 qgsflds_types = {u'Real': QVariant.Double, u'String': QVariant.String}
 
-layer_name = 'ttt'
+layer_name = 'ttt1'
 
 # cleaning settings
 

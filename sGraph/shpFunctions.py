@@ -5,8 +5,8 @@ from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, 
 from PyQt4.QtCore import QVariant, QObject, pyqtSignal
 
 # plugin module imports
-from utilityFunctions import getLayerByName, getLayerPath4ogr, getAllFeatures
-from plFunctions import make_snapped_wkt, snap_coord
+#from utilityFunctions import getLayerByName, getLayerPath4ogr, getAllFeatures
+#from plFunctions import make_snapped_wkt, snap_coord
 
 # ----- SHAPEFILE OPERATIONS -----
 

@@ -1,7 +1,7 @@
 # general imports
 from itertools import tee, izip
 import math
-
+from types import StringType
 
 # make iterator from a list
 # make feature list
@@ -33,6 +33,7 @@ def keep_decimals(number, number_decimals):
         decimal = ('-' + str(integer_part) + '.' + decimal_part[0:number_decimals])
     return decimal
 
+from decimal import Decimal
 
 def keep_decimals_string(string, number_decimals):
     integer_part = string.split(".")[0]
@@ -47,8 +48,25 @@ def keep_decimals_string(string, number_decimals):
     decimal = integer_part + '.' + decimal_part
     return decimal
 
-def snap_coord(coord, tolerance):
-    return int(coord * (10 ** tolerance)) * (10**(tolerance - 2*tolerance))
+def snap_coord(number, number_decimals):
+    if type(number) is not StringType:
+        string = '{:.16f}'.format(number)
+    else:
+        string = number
+    integer_part = string.split(".")[0]
+    # if the input is an integer there is no decimal part
+    if len(string.split("."))== 1:
+        decimal_part = str(0)*number_decimals
+    else:
+        decimal_part = string.split(".")[1][0:number_decimals]
+    if len(decimal_part) < number_decimals:
+        zeros = str(0) * int((number_decimals - len(decimal_part)))
+        decimal_part = decimal_part + zeros
+    decimal = integer_part + '.' + decimal_part
+    return Decimal(decimal)
+
+#def snap_coord(coord, tolerance):
+#    return int(coord * (10 ** tolerance)) * (10**(tolerance - 2*tolerance))
 
 
 # find midpoint between two points
