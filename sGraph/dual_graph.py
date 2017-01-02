@@ -8,8 +8,8 @@ from PyQt4.QtCore import QVariant, QObject, pyqtSignal
 from qgis.core import QgsField, QgsFeature, QgsGeometry, QgsPoint, QgsVectorLayer, QgsVectorFileWriter, QgsMapLayerRegistry
 
 # plugin module imports
-#from primal_graph import prGraph
-#from shpFunctions import edges_from_line
+from primal_graph import prGraph
+from shpFunctions import edges_from_line
 
 class dlGraph(QObject):
 

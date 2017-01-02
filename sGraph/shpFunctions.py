@@ -3,10 +3,11 @@ import networkx as nx
 import os
 from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsDataSourceURI, QgsField, QgsFeature, QgsGeometry
 from PyQt4.QtCore import QVariant, QObject, pyqtSignal
+from decimal import *
 
 # plugin module imports
-#from utilityFunctions import getLayerByName, getLayerPath4ogr, getAllFeatures
-#from plFunctions import make_snapped_wkt, snap_coord
+from utilityFunctions import getLayerByName, getLayerPath4ogr, getAllFeatures
+from plFunctions import make_snapped_wkt, snap_coord, vertices_from_wkt_2
 
 # ----- SHAPEFILE OPERATIONS -----
 
@@ -66,35 +67,35 @@ def edges_from_line(geom, attrs, tolerance=None, simplify=True):
         edge_attrs = attrs.copy()
         last = geom.GetPointCount() - 1
         wkt = geom.ExportToWkt()
+        pt1 = geom.GetPoint_2D(0)
+        pt2 = geom.GetPoint_2D(last)
         if tolerance is not None:
-            pt1 = geom.GetPoint_2D(0)
-            pt2 = geom.GetPoint_2D(last)
-            line = ogr.Geometry(ogr.wkbLineString)
-            line.AddPoint_2D(snap_coord(pt1[0], tolerance), snap_coord(pt1[1], tolerance))
-            line.AddPoint_2D(snap_coord(pt2[0], tolerance), snap_coord(pt2[1], tolerance))
-            geom = line
+            getcontext().prec = tolerance
             wkt = make_snapped_wkt(wkt, tolerance)
-            last = 1
-            del line
+            vertices = [i for i in vertices_from_wkt_2(wkt)]
+            first = vertices[0]
+            last = vertices[-1]
+            pt1 = (Decimal(first[0]), Decimal(first[1]))
+            pt2 = (Decimal(last[0]), Decimal(last[1]))
         edge_attrs["Wkt"] = wkt
-        yield (geom.GetPoint_2D(0), geom.GetPoint_2D(last), edge_attrs)
+        yield (pt1,pt2, edge_attrs)
     else:
         for i in range(0, geom.GetPointCount() - 1):
             pt1 = geom.GetPoint_2D(i)
             pt2 = geom.GetPoint_2D(i + 1)
             if tolerance is not None:
-                pt1 = (snap_coord(pt1[0], tolerance), snap_coord(pt1[1], tolerance))
-                pt2 = (snap_coord(pt2[0], tolerance), snap_coord(pt2[1], tolerance))
-            segment = ogr.Geometry(ogr.wkbLineString)
-            segment.AddPoint_2D(pt1[0], pt1[1])
-            segment.AddPoint_2D(pt2[0], pt2[1])
-            if segment.Length() > 0:
-                edge_attrs = attrs.copy()
-                edge_attrs["Wkt"] = segment.ExportToWkt()
-                del segment
-                yield (pt1, pt2, edge_attrs)
-            else:
-                del segment
+                pt1 = (Decimal(snap_coord(pt1[0], tolerance)), Decimal(snap_coord(pt1[1], tolerance)))
+                pt2 = (Decimal(snap_coord(pt2[0], tolerance)), Decimal(snap_coord(pt2[1], tolerance)))
+            #segment = ogr.Geometry(ogr.wkbLineString)
+            #segment.AddPoint_2D(pt1[0], pt1[1])
+            #segment.AddPoint_2D(pt2[0], pt2[1])
+            #if segment.Length() > 0:
+            edge_attrs = attrs.copy()
+            edge_attrs["Wkt"] = 'LINESTRING ('+ pt1[0]
+            #del segment
+            yield (pt1, pt2, edge_attrs)
+            #else:
+            #    del segment
 
 # identify invalids multi-parts of a layer
 

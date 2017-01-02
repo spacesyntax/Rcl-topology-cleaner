@@ -3,14 +3,15 @@
 import itertools
 from qgis.core import QgsFeature, QgsGeometry, QgsField, QgsSpatialIndex, QgsVectorLayer, QgsVectorFileWriter, QgsPoint, QgsMapLayerRegistry, QgsFields
 import networkx as nx
-import ogr
 from PyQt4.QtCore import QVariant, QObject, pyqtSignal
+from decimal import *
+
 
 # plugin module imports
 
-#from generalFunctions import angle_3_points, keep_decimals
-#from plFunctions import pl_midpoint, point_is_vertex, find_vertex_index
-#from shpFunctions import edges_from_line
+from generalFunctions import angle_3_points, keep_decimals
+from plFunctions import pl_midpoint, point_is_vertex, find_vertex_index, vertices_from_wkt_2
+from shpFunctions import edges_from_line
 
 qgsflds_types = {u'Real': QVariant.Double , u'String': QVariant.String}
 
@@ -59,12 +60,23 @@ class prGraph(QObject):
 
     # dictionary uid: geometry vertices
     def get_geom_vertices_dict(self):
-        return {edge: edge_geom.asPolyline() for edge, edge_geom in self.get_geom_dict().items()}
+        return {edge: [vertex for vertex in vertices_from_wkt_2(wkt)] for edge, wkt in self.get_wkt_dict().items()}
 
     # dictionary uid: centroid
     # TODO: some of the centroids are not correct
     def get_centroids_dict(self):
         return {edge: pl_midpoint(edge_geom) for edge, edge_geom in self.get_geom_dict().items()}
+
+    # list of endpoints from keys
+    def get_endpoints_from_keys(self, keys):
+        endpoints = []
+        for i in self.obj.edges(keys=True):
+            if i[2] in keys:
+                if i[0] not in endpoints:
+                    endpoints.append(i[0])
+                if i[1] not  in endpoints:
+                    endpoints.append(i[1])
+        return endpoints
 
     # ----- attributes
 
@@ -117,13 +129,12 @@ class prGraph(QObject):
 
             is_parallel = False
             for n in parallel_nodes:
-                if abs(i[0] - n[0]) < 10 ** (-(tolerance - 1)) and abs(i[1] - n[1]) < 10 ** (-(tolerance - 1)):
+                if i == n :
                     is_parallel = True
 
             if break_at_intersections and not is_parallel:
                 if len(j.keys()) == 2:
                     edges = [g.keys().pop() for g in j.values()]
-
                 else:
                     edges = []
             elif not break_at_intersections:
@@ -337,6 +348,7 @@ class prGraph(QObject):
         overlaps = []
         orphans = []
         closed_polylines = []
+        getcontext().prec = tolerance
 
         for k, v, error in self.find_breakages(col_id):
             attrs = attr_dict[k]
@@ -361,19 +373,19 @@ class prGraph(QObject):
                 if ind != len(v) - 1:
                     points = [geom_vertices[k][i] for i in range(index, v[ind + 1] + 1)]
                     new_key = k + '_br_' + str(count) + '_' + str(count_2)
-                    ogr_geom = ogr.Geometry(ogr.wkbLineString)
-                    for i in points:
-                        ogr_geom.AddPoint_2D(i[0], i[1])
-                    for edge in edges_from_line(ogr_geom, attrs, tolerance, simplify):
-                        e1, e2, attr = edge
-                        attr['Wkt'] = ogr_geom.ExportToWkt()
-                        # TODO: check why breaking a graph results in nodes
-                        edges_to_add.append((e1, e2, new_key, attr))
-                    del ogr_geom
+                    e1 = (Decimal(points[0][0]), Decimal(points[0][1]))
+                    e2 = (Decimal(points[-1][0]), Decimal(points[-1][1]))
+                    p = ''
+                    for point in points:
+                        p += point[0] + ' ' + point[1] + ', '
+                    wkt = 'LINESTRING (' + p[:-2] + ')'
+                    attr = attrs.copy()
+                    attr['Wkt'] = wkt
+                    edges_to_add.append((e1, e2, new_key, attr))
                     count_2 += 1
             count += 1
 
-        pairs_to_rmv = [(i[0],i[1], i[2], i[3]) for i in self.obj.edges(data = True, keys=True) if i[2] in edges_to_remove]
+        pairs_to_rmv = [(i[0], i[1], i[2], i[3]) for i in self.obj.edges(data = True, keys=True) if i[2] in edges_to_remove]
 
         self.obj.remove_edges_from(pairs_to_rmv)
 
@@ -416,7 +428,7 @@ class prGraph(QObject):
         dupl = []
         attr_dict = self.get_attr_dict()
         parallel_con = {}
-        parallel_nodes = []
+        parallel_edges = []
 
         for edge, error in self.find_dupl_overlaps_ssx(parallel):
             if error == 'dupl':
@@ -424,13 +436,13 @@ class prGraph(QObject):
                     dupl.append(attr_dict[edge][col_id])
                 edges_to_remove.append(edge)
             elif error == 'parallel' and parallel:
-                endpoints = edge[0]
-                for i in endpoints:
-                    if i not in parallel_nodes:
-                        parallel_nodes.append(i)
                 parallels = edge[1]
+                for i in parallels:
+                    if i not in parallel_edges:
+                        parallel_edges.append(i)
                 # TODO: add which connections to restore
 
+        parallel_nodes = self.get_endpoints_from_keys(parallel_edges)
 
         # TODO: test reconstructing the graph for speed purposes
         pairs_to_rmv = [(i[0], i[1], i[2], i[3]) for i in self.obj.edges(data=True, keys=True) if

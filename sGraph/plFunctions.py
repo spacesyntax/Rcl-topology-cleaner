@@ -3,7 +3,7 @@ import math
 from qgis.core import QgsPoint, QgsGeometry
 
 # plugin module imports
-#from generalFunctions import mid, snap_coord, keep_decimals_string
+from generalFunctions import mid, snap_coord, keep_decimals_string
 
 
 # -------------- POLYLINE FUNCTIONS ---------------
@@ -90,19 +90,33 @@ def vertices_from_wkt(wkt):
     for vertex in coords:
         yield vertex
 
+def vertices_from_wkt_2(wkt):
+    # the wkt representation may differ in other systems/ QGIS versions
+    # TODO: check
+    nums = [i for x in wkt[12:-1:].split(', ') for i in x.split(' ')]
+    coords = zip(*[iter(nums)] * 2)
+    for vertex in coords:
+        yield vertex
+
 
 # convert a wkt to a snapped wkt to specified number of decimals
 
 
 def make_snapped_wkt(wkt, number_decimals):
     # TODO: check in different system if '(' is included
-    snapped_wkt = 'LINESTRING'
+    snapped_wkt = 'LINESTRING '
     for i in vertices_from_wkt(wkt):
         new_vertex = str(keep_decimals_string(i[0], number_decimals)) + ' ' + str(
             keep_decimals_string(i[1], number_decimals))
         snapped_wkt += str(new_vertex) + ', '
     return snapped_wkt[0:-2] + ')'
 
+#def make_snapped_wkt_from_points(list_of_points):
+#    snapped_wkt = 'LINESTRING ('
+#    for i in list_of_points:
+#        new_vertex = []
+#        snapped_wkt += str(new_vertex) + ', '
+#    return snapped_wkt[0:-2] + ')'
 
 # read a wkt for a point and return QgsGeometry object
 # TODO test

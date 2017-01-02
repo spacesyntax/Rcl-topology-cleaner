@@ -15,7 +15,7 @@ execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/dual_graph.py'.encode('utf-8')
 from PyQt4.QtCore import QVariant
 qgsflds_types = {u'Real': QVariant.Double, u'String': QVariant.String}
 
-layer_name = 'ttt1'
+layer_name = 'madagascar'
 
 # cleaning settings
 
@@ -43,6 +43,8 @@ primal_cleaned, duplicates, parallel_con, parallel_nodes = any_primal_graph.rmv_
 
 QgsMapLayerRegistry.instance().addMapLayer(primal_cleaned.to_shp(None, 't', crs, encoding, geom_type, qgsflds))
 
+g= primal_cleaned.get_wkt_dict()
+
 # break at intersections and overlaping geometries
 # error cat: to_break
 broken_primal, to_break, overlaps, orphans, closed_polylines = primal_cleaned.break_graph(tolerance, simplify, user_id)
@@ -68,6 +70,8 @@ QgsMapLayerRegistry.instance().addMapLayer(broken_dual.to_shp(None, 'dual', crs,
 merged_clean_primal, duplicates_m,  parallel_con3, parallel_nodes3 = merged_primal.rmv_dupl_overlaps(None, False)
 
 name = layer_name + '_cleaned'
+QgsMapLayerRegistry.instance().addMapLayer(merged_clean_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds))
+
 
 
 centroids = merged_clean_primal.get_centroids_dict()
@@ -88,4 +92,3 @@ input_layer = getLayerByName(parameters['layer_name'])
 QgsMapLayerRegistry.instance().addMapLayer(errors_to_shp(input_layer, parameters['user_id'], error_list, e_path, 'errors', crs, encoding, geom_type))
 
 # return cleaned shapefile and errors
-QgsMapLayerRegistry.instance().addMapLayer(merged_clean_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds))
