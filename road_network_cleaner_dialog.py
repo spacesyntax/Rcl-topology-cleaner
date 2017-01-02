@@ -53,7 +53,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
         self.decimalsSpin.setRange(1, 16)
         self.decimalsSpin.setSingleStep(1)
-        self.decimalsSpin.setValue(3)
+        self.decimalsSpin.setValue(6)
 
         self.idCombo.setDisabled(True)
         self.decimalsSpin.setDisabled(True)
