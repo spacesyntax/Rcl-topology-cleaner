@@ -221,9 +221,23 @@ class RoadNetworkCleaner:
     def popIdColumn(self):
         self.dlg.idCombo.clear()
         cols_list = []
+        #open file
         if self.dlg.getInput(self.iface):
-            for col in self.dlg.getInput(self.iface).dataProvider().fields():
-                cols_list.append(col.name())
+            layer = self.dlg.getInput(self.iface)
+            layer_name = layer.name()
+            path, provider_type, provider = getLayerPath4ogr(layer)
+            lyr = ogr.Open(path)
+            if provider_type == 'postgres':
+                uri = QgsDataSourceURI(provider.dataSourceUri())
+                databaseSchema = uri.schema().encode('utf-8')
+                if databaseSchema == 'public':
+                    layer = [table for table in lyr if table.GetName() == layer_name][0]
+                else:
+                    layer = [table for table in lyr if table.GetName() == databaseSchema + '.' + layer_name][0]
+                cols_list = [x.GetName() for x in layer.schema]
+            elif provider_type in ('ogr', 'memory'):
+                layer = lyr[0]
+                cols_list = [x.GetName() for x in layer.schema]
         self.dlg.idCombo.addItems(cols_list)
 
     def render(self,vector_layer):
@@ -277,6 +291,7 @@ class RoadNetworkCleaner:
             self.giveMessage('Something went wrong! See the message log for more information', QgsMessageBar.CRITICAL)
 
         self.dlg.cleaningProgress.reset()
+        self.dlg.close()
 
     def killCleaning(self):
         if self.cleaning:
