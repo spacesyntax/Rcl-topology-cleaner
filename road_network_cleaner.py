@@ -32,9 +32,7 @@ import resources
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
 import os.path
 
-
-from sGraph.dual_graph import *
-from sGraph.shpFunctions import *
+from sGraph.break_tools import *
 import traceback
 
 
@@ -338,109 +336,33 @@ class RoadNetworkCleaner:
                     path = self.settings['output']
                     tolerance = self.settings['tolerance']
                     user_id = self.settings['user_id']
-                    base_id = 'id_in'
 
                     # project settings
                     n = getLayerByName(layer_name)
                     crs = n.dataProvider().crs()
                     encoding = n.dataProvider().encoding()
                     geom_type = n.dataProvider().geometryType()
-                    qgsflds = get_field_types(layer_name)
 
-                    # shp/postgis to prGraph instance
-                    transformation_type = 'shp_to_pgr'
-                    simplify = True
-                    get_invalids = False
-                    get_multiparts = False
-                    if self.settings['errors']:
-                        get_invalids = True
-                        get_multiparts = True
-                    parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify,
-                                  'id_column': base_id, 'user_id': user_id, 'get_invalids': get_invalids,
-                                  'get_multiparts': get_multiparts}
-                    # error cat: invalids, multiparts
-                    trans = transformer(parameters)
-                    step = 1 / n.featureCount()
-                    trans.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
-                    # when to disoconnect?
-                    # when finished or killed?
-                    # trans.progress.disconnect
-                    primal_graph, invalids, multiparts = trans.read_shp_to_multi_graph()
-                    any_primal_graph = prGraph(primal_graph, True)
+                    # if unique id is specified use it as keys
+                    # else create new
+                    # check uid before
 
-                    step = 1 / any_primal_graph.obj.size()
-                    any_primal_graph.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr+10))
-                    primal_cleaned, duplicates, parallel_con, parallel_nodes = any_primal_graph.rmv_dupl_overlaps(user_id, True)
+                    br = breakTool(layer_name, tolerance, user_id, self.settings['errors'])
 
-                    if self.killed is True: return
 
-                    step = 1 / any_primal_graph.obj.size()
-                    primal_cleaned.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr+20))
 
-                    # break at intersections and overlaping geometries
-                    # error cat: to_break
-                    broken_primal, to_break, overlaps, orphans, closed_polylines = primal_cleaned.break_graph(tolerance,simplify,user_id)
+                    step = 1 / br.feature_count
+                    br.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
+                    broken_features = br.break_features()
 
-                    if self.killed is True: return
-
-                    step = 1 / broken_primal.obj.size()
-                    broken_primal.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 30))
-
-                    # error cat: duplicates
-                    broken_clean_primal, duplicates_br, parallel_con2, parallel_nodes2 = broken_primal.rmv_dupl_overlaps(user_id,True)
-
-                    if self.killed is True: return
-
-                    step = 1 / broken_primal.obj.size()
-                    broken_clean_primal.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 40))
-
-                    # transform primal graph to dual graph
-                    centroids = broken_clean_primal.get_centroids_dict()
-                    broken_dual = dlGraph(broken_clean_primal.to_dual(True, parallel_nodes2, tolerance, False, False),
-                                          centroids, True)
-
-                    if self.killed is True: return
-                    step = 1 / len(broken_dual.find_cont_lines())
-                    broken_dual.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 50))
-
-                    # QgsMapLayerRegistry.instance().addMapLayer(broken_dual.to_shp(None, 'dual', crs, encoding, geom_type))
-                    # Merge between intersections
-                    # error cat: to_merge
-                    merged_primal, to_merge = broken_dual.merge(broken_clean_primal, tolerance, simplify, user_id)
-
-                    if self.killed is True: return
-
-                    step = 1 / merged_primal.obj.size()
-                    merged_primal.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 60))
-
-                    # error cat: duplicates
-                    merged_clean_primal, duplicates_m, parallel_con3, parallel_nodes3 = merged_primal.rmv_dupl_overlaps(user_id, False)
+                    broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates = br.break_features()
 
                     if self.killed is True: return
                     self.cl_progress.emit(70)
 
-                    name = layer_name + '_cleaned'
 
                     if self.settings['errors']:
-
-                        if self.killed is True: return
-                        self.cl_progress.emit(80)
-
-                        if self.killed is True: return
-                        self.cl_progress.emit(90)
-
-                        # combine all errors
-                        error_list = [['invalid', invalids], ['multipart', multiparts],
-                                      ['intersecting at vertex', to_break],
-                                      ['overlaping', overlaps],
-                                      ['duplicate', duplicates],
-                                      ['continuous line', to_merge],
-                                      ['orphans', orphans], ['closed_polyline', closed_polylines]
-                                      ]
-                        e_path = None
-                        input_layer = getLayerByName(parameters['layer_name'])
-                        errors = errors_to_shp(input_layer, parameters['user_id'], error_list, e_path, 'errors', crs, encoding, geom_type)
-                        #errors = None
+                        errors = None
                     else:
                         errors = None
 
@@ -448,7 +370,7 @@ class RoadNetworkCleaner:
                         print "survived!"
                         self.cl_progress.emit(100)
                         # return cleaned shapefile and errors
-                        cleaned = merged_clean_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds)
+                        cleaned = None
                         ret = (errors, cleaned,)
 
                 except Exception, e:

@@ -3,7 +3,7 @@ import math
 from qgis.core import QgsPoint, QgsGeometry
 
 # plugin module imports
-from generalFunctions import mid, snap_coord, keep_decimals_string
+#from generalFunctions import mid, snap_coord, keep_decimals_string
 
 
 # -------------- POLYLINE FUNCTIONS ---------------
@@ -23,8 +23,34 @@ def point_is_vertex(point,line):
     if point.asPoint() in line.asPolyline():
         return True
 
+def make_snapped_wkt(wkt, number_decimals):
+    # TODO: check in different system if '(' is included
+    snapped_wkt = 'LINESTRING('
+    for i in vertices_from_wkt_2(wkt):
+        new_vertex = str(keep_decimals_string(i[0], number_decimals)) + ' ' + str(
+            keep_decimals_string(i[1], number_decimals))
+        snapped_wkt += str(new_vertex) + ', '
+    return snapped_wkt[0:-2] + ')'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # find midpoint of a polyline geometry , input geometry type
+
 
 
 def pl_midpoint(pl_geom):
@@ -102,14 +128,7 @@ def vertices_from_wkt_2(wkt):
 # convert a wkt to a snapped wkt to specified number of decimals
 
 
-def make_snapped_wkt(wkt, number_decimals):
-    # TODO: check in different system if '(' is included
-    snapped_wkt = 'LINESTRING '
-    for i in vertices_from_wkt(wkt):
-        new_vertex = str(keep_decimals_string(i[0], number_decimals)) + ' ' + str(
-            keep_decimals_string(i[1], number_decimals))
-        snapped_wkt += str(new_vertex) + ', '
-    return snapped_wkt[0:-2] + ')'
+
 
 #def make_snapped_wkt_from_points(list_of_points):
 #    snapped_wkt = 'LINESTRING ('
