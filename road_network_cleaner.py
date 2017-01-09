@@ -31,8 +31,11 @@ import resources
 # Import the code for the dialog
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
 import os.path
+import ogr
 
 from sGraph.break_tools import *
+from sGraph.merge_tools import *
+from sGraph.utilityFunctions import *
 import traceback
 
 
@@ -221,21 +224,8 @@ class RoadNetworkCleaner:
         cols_list = []
         #open file
         if self.dlg.getInput(self.iface):
-            layer = self.dlg.getInput(self.iface)
-            layer_name = layer.name()
-            path, provider_type, provider = getLayerPath4ogr(layer)
-            lyr = ogr.Open(path)
-            if provider_type == 'postgres':
-                uri = QgsDataSourceURI(provider.dataSourceUri())
-                databaseSchema = uri.schema().encode('utf-8')
-                if databaseSchema == 'public':
-                    layer = [table for table in lyr if table.GetName() == layer_name][0]
-                else:
-                    layer = [table for table in lyr if table.GetName() == databaseSchema + '.' + layer_name][0]
-                cols_list = [x.GetName() for x in layer.schema]
-            elif provider_type in ('ogr', 'memory'):
-                layer = lyr[0]
-                cols_list = [x.GetName() for x in layer.schema]
+            for i in self.dlg.getInput(self.iface).dataProvider().fields():
+                cols_list.append(i.name())
         self.dlg.idCombo.addItems(cols_list)
 
     def render(self,vector_layer):
@@ -338,31 +328,95 @@ class RoadNetworkCleaner:
                     user_id = self.settings['user_id']
 
                     # project settings
-                    n = getLayerByName(layer_name)
-                    crs = n.dataProvider().crs()
-                    encoding = n.dataProvider().encoding()
-                    geom_type = n.dataProvider().geometryType()
+                    layer = getLayerByName(layer_name)
+                    crs = layer.dataProvider().crs()
+                    encoding = layer.dataProvider().encoding()
+                    geom_type = layer.dataProvider().geometryType()
 
                     # if unique id is specified use it as keys
                     # else create new
                     # check uid before
 
-                    br = breakTool(layer_name, tolerance, user_id, self.settings['errors'])
+                    self.cl_progress.emit(2)
+                    br = breakTool(layer, tolerance, user_id, self.settings['errors'])
+                    self.cl_progress.emit(5)
+                    self.total = 5
 
+                    if self.killed is True: return
 
-
-                    step = 1 / br.feature_count
+                    step = 45/ br.feat_count
                     br.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
-                    broken_features = br.break_features()
 
                     broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates = br.break_features()
 
+                    broken_network = br.to_shp(broken_features, crs, 'broken')
                     if self.killed is True: return
-                    self.cl_progress.emit(70)
+                    self.cl_progress.emit(45)
 
+                    mrg = mergeTool(broken_features, user_id, True)
+
+                    step = 45/ len(mrg.con_1)
+                    mrg.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
+
+                    result = mrg.merge()
+
+                    fields = br.layer_fields
+                    final = to_shp(result, fields, crs, 'f')
+                    # QgsMapLayerRegistry.instance().addMapLayer(final)
+                    cleaned_network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), 'cleaned', "memory")
+                    pr = cleaned_network.dataProvider()
+
+                    pr.addAttributes(br.layer_fields)
+
+                    cleaned_network.startEditing()
+                    pr.addFeatures(br.features)
+                    cleaned_network.commitChanges()
+
+                    # QgsMapLayerRegistry.instance().addMapLayer(broken_network)
+                    to_merge = to_shp(mrg.feat_to_merge, fields, crs, 'to_merge')
+                    # QgsMapLayerRegistry.instance().addMapLayer(to_merge)
+
+                    to_start = to_shp(mrg.edges_to_start, fields, crs, 'to_start')
+                    # QgsMapLayerRegistry.instance().addMapLayer(to_start)
 
                     if self.settings['errors']:
-                        errors = None
+
+                        errors_list = {
+                                       'breakages': breakages,
+                                       'overlaps': overlaps,
+                                       'orphans': orphans,
+                                       'closed_polylines': closed_polylines,
+                                       'self_intersecting': self_intersecting,
+                                       'duplicates': duplicates,
+                                       'multiparts': [int(i) for i in br.multiparts],
+                                       'invalids': br.invalids
+                                       }
+                        fu = br.fid_to_uid
+                        input_geometries_wkt = br.geometries_wkt
+
+                        errors = QgsVectorLayer('MultiLineString?crs=' + crs.toWkt(), 'errors', "memory")
+                        pr = errors.dataProvider()
+                        pr.addAttributes([QgsField('id_input', QVariant.String), QgsField('errors', QVariant.String)])
+                        new_features = []
+                        combined_errors = {}
+                        for k, v in errors_list.items():
+                            for item in v:
+                                try:
+                                    combined_errors[item] += ', ' + k
+                                except KeyError, e:
+                                    combined_errors[item] = k
+
+                        for k, v in combined_errors.items():
+                            new_feat = QgsFeature()
+                            new_feat.setAttributes([str(fu[k]), v])
+                            new_geom = QgsGeometry.fromWkt(input_geometries_wkt[k])
+                            #QgsGeometry()
+                            new_feat.setGeometry(new_geom)
+                            new_features.append(new_feat)
+
+                        errors.startEditing()
+                        pr.addFeatures(new_features)
+                        errors.commitChanges()
                     else:
                         errors = None
 
@@ -370,8 +424,7 @@ class RoadNetworkCleaner:
                         print "survived!"
                         self.cl_progress.emit(100)
                         # return cleaned shapefile and errors
-                        cleaned = None
-                        ret = (errors, cleaned,)
+                        ret = (errors, final, cleaned_network, broken_network, to_merge, to_start)
 
                 except Exception, e:
                     # forward the exception upstream

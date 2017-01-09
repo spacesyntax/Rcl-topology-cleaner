@@ -4,10 +4,7 @@ import itertools
 from qgis.core import QgsFeature, QgsGeometry, QgsField, QgsSpatialIndex, QgsVectorLayer, QgsVectorFileWriter, QgsPoint, QgsMapLayerRegistry, QgsFields
 from PyQt4.QtCore import QVariant, QObject, pyqtSignal
 
-# plugin module imports
-#from plFunctions import pl_midpoint, point_is_vertex, find_vertex_index, vertices_from_wkt_2, make_snapped_wkt
-#from utilityFunctions import getLayerByName
-
+#plugin module imports
 
 def keep_decimals_string(string, number_decimals):
     integer_part = string.split(".")[0]
@@ -86,7 +83,7 @@ class breakTool(QObject):
         f_count = 1
         for f in self.layer.getFeatures():
 
-            self.progress.emit(10 * + f_count / self.feat_count)
+            self.progress.emit(45 * f_count / self.feat_count)
             f_count += 1
 
             attr = f.attributes()
@@ -94,7 +91,7 @@ class breakTool(QObject):
                 attr = f.attributes()
                 if self.errors:
                     self.multiparts.append(attr[self.uid_index])
-                for multipart in f.geometry().asGeometryColelction():
+                for multipart in f.geometry().asGeometryCollection():
                     if self.uid is not None:
                         self.fid_to_uid[f.id()] = attr[self.uid_index]
                     new_key_count += 1
@@ -102,7 +99,7 @@ class breakTool(QObject):
                     new_feat = QgsFeature()
                     new_feat.setAttributes(attr)
                     new_feat.setFeatureId(new_key_count)
-                    snapped_wkt = make_snapped_wkt(multipart.geometry().exportToWkt(), self.tolerance)
+                    snapped_wkt = make_snapped_wkt(multipart.exportToWkt(), self.tolerance)
                     snapped_geom = QgsGeometry.fromWkt(snapped_wkt)
                     new_feat.setGeometry(snapped_geom)
                     self.features.append(new_feat)
@@ -156,7 +153,7 @@ class breakTool(QObject):
             # intersecting lines
             gids = self.spIndex.intersects(f_geom.boundingBox())
 
-            self.progress.emit(10 * f_count / self.feat_count)
+            self.progress.emit((45 * f_count / self.feat_count) + 5)
             f_count += 1
 
             f_errors, vertices = self.find_breakages(fid, gids)
@@ -212,10 +209,13 @@ class breakTool(QObject):
         breakages = []
 
         # is self intersecting
+        is_self_intersersecting = False
         for i in f_geom.asPolyline():
             if f_geom.asPolyline().count(i) > 1:
                 point = QgsGeometry().fromPoint(QgsPoint(i[0], i[1]))
                 breakages.append(point)
+                is_self_intersersecting = True
+                must_break = True
 
         for gid in gids:
 
@@ -273,18 +273,22 @@ class breakTool(QObject):
         if is_duplicate is True:
             return 'duplicate', []
         else:
-            if is_orphan is True:
+            # add first and last vertex
+            vertices = set([vertex for vertex in find_vertex_index(breakages, f_geom)])
+            vertices = list(vertices) + [0] + [len(f_geom.asPolyline()) - 1]
+            vertices = list(set(vertices))
+            vertices.sort()
+            if is_orphan:
                 if is_closed is True:
                     return 'closed polyline', []
                 else:
                     return 'orphan', []
-            else:
-                # add first and last vertex
-                vertices = set([vertex for vertex in find_vertex_index(breakages, f_geom)])
-                vertices = list(vertices) + [0] + [len(f_geom.asPolyline()) - 1]
-                vertices = list(set(vertices))
-                vertices.sort()
-
+            elif is_self_intersersecting:
+                if has_overlaps:
+                    return ['br', 'ovrlp'], vertices
+                else:
+                    return 'br', vertices
+            elif has_overlaps or must_break:
                 if has_overlaps is True and must_break is True:
                     return ['br', 'ovrlp'], vertices
                 elif has_overlaps is True and must_break is False:
@@ -296,6 +300,10 @@ class breakTool(QObject):
                         return None, []
                 else:
                     return None, []
+            else:
+                return None, []
+
+
 
     def to_shp(self, any_features_list, crs, name ):
         network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), name, "memory")
@@ -316,3 +324,4 @@ class breakTool(QObject):
         pr.addFeatures(new_features)
         network.commitChanges()
         return network
+
