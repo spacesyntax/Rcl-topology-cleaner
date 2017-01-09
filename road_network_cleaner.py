@@ -31,10 +31,11 @@ import resources
 # Import the code for the dialog
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
 import os.path
+import ogr
 
-
-from sGraph.dual_graph import *
-from sGraph.shpFunctions import *
+from sGraph.break_tools import *
+from sGraph.merge_tools import *
+from sGraph.utilityFunctions import *
 import traceback
 
 
@@ -223,21 +224,8 @@ class RoadNetworkCleaner:
         cols_list = []
         #open file
         if self.dlg.getInput(self.iface):
-            layer = self.dlg.getInput(self.iface)
-            layer_name = layer.name()
-            path, provider_type, provider = getLayerPath4ogr(layer)
-            lyr = ogr.Open(path)
-            if provider_type == 'postgres':
-                uri = QgsDataSourceURI(provider.dataSourceUri())
-                databaseSchema = uri.schema().encode('utf-8')
-                if databaseSchema == 'public':
-                    layer = [table for table in lyr if table.GetName() == layer_name][0]
-                else:
-                    layer = [table for table in lyr if table.GetName() == databaseSchema + '.' + layer_name][0]
-                cols_list = [x.GetName() for x in layer.schema]
-            elif provider_type in ('ogr', 'memory'):
-                layer = lyr[0]
-                cols_list = [x.GetName() for x in layer.schema]
+            for i in self.dlg.getInput(self.iface).dataProvider().fields():
+                cols_list.append(i.name())
         self.dlg.idCombo.addItems(cols_list)
 
     def render(self,vector_layer):
@@ -338,109 +326,97 @@ class RoadNetworkCleaner:
                     path = self.settings['output']
                     tolerance = self.settings['tolerance']
                     user_id = self.settings['user_id']
-                    base_id = 'id_in'
 
                     # project settings
-                    n = getLayerByName(layer_name)
-                    crs = n.dataProvider().crs()
-                    encoding = n.dataProvider().encoding()
-                    geom_type = n.dataProvider().geometryType()
-                    qgsflds = get_field_types(layer_name)
+                    layer = getLayerByName(layer_name)
+                    crs = layer.dataProvider().crs()
+                    encoding = layer.dataProvider().encoding()
+                    geom_type = layer.dataProvider().geometryType()
 
-                    # shp/postgis to prGraph instance
-                    transformation_type = 'shp_to_pgr'
-                    simplify = True
-                    get_invalids = False
-                    get_multiparts = False
-                    if self.settings['errors']:
-                        get_invalids = True
-                        get_multiparts = True
-                    parameters = {'layer_name': layer_name, 'tolerance': tolerance, 'simplify': simplify,
-                                  'id_column': base_id, 'user_id': user_id, 'get_invalids': get_invalids,
-                                  'get_multiparts': get_multiparts}
-                    # error cat: invalids, multiparts
-                    trans = transformer(parameters)
-                    step = 1 / n.featureCount()
-                    trans.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
-                    # when to disoconnect?
-                    # when finished or killed?
-                    # trans.progress.disconnect
-                    primal_graph, invalids, multiparts = trans.read_shp_to_multi_graph()
-                    any_primal_graph = prGraph(primal_graph, True)
+                    # if unique id is specified use it as keys
+                    # else create new
+                    # check uid before
 
-                    step = 1 / any_primal_graph.obj.size()
-                    any_primal_graph.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr+10))
-                    primal_cleaned, duplicates, parallel_con, parallel_nodes = any_primal_graph.rmv_dupl_overlaps(user_id, True)
+                    self.cl_progress.emit(2)
+                    br = breakTool(layer, tolerance, user_id, self.settings['errors'])
+                    self.cl_progress.emit(5)
+                    self.total = 5
 
                     if self.killed is True: return
 
-                    step = 1 / any_primal_graph.obj.size()
-                    primal_cleaned.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr+20))
+                    step = 45/ br.feat_count
+                    br.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
 
-                    # break at intersections and overlaping geometries
-                    # error cat: to_break
-                    broken_primal, to_break, overlaps, orphans, closed_polylines = primal_cleaned.break_graph(tolerance,simplify,user_id)
+                    broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates = br.break_features()
 
+                    broken_network = br.to_shp(broken_features, crs, 'broken')
                     if self.killed is True: return
+                    self.cl_progress.emit(45)
 
-                    step = 1 / broken_primal.obj.size()
-                    broken_primal.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 30))
+                    mrg = mergeTool(broken_features, user_id, True)
 
-                    # error cat: duplicates
-                    broken_clean_primal, duplicates_br, parallel_con2, parallel_nodes2 = broken_primal.rmv_dupl_overlaps(user_id,True)
+                    step = 45/ len(mrg.con_1)
+                    mrg.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
 
-                    if self.killed is True: return
+                    result = mrg.merge()
 
-                    step = 1 / broken_primal.obj.size()
-                    broken_clean_primal.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 40))
+                    fields = br.layer_fields
+                    final = to_shp(result, fields, crs, 'f')
+                    # QgsMapLayerRegistry.instance().addMapLayer(final)
+                    cleaned_network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), 'cleaned', "memory")
+                    pr = cleaned_network.dataProvider()
 
-                    # transform primal graph to dual graph
-                    centroids = broken_clean_primal.get_centroids_dict()
-                    broken_dual = dlGraph(broken_clean_primal.to_dual(True, parallel_nodes2, tolerance, False, False),
-                                          centroids, True)
+                    pr.addAttributes(br.layer_fields)
 
-                    if self.killed is True: return
-                    step = 1 / len(broken_dual.find_cont_lines())
-                    broken_dual.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 50))
+                    cleaned_network.startEditing()
+                    pr.addFeatures(br.features)
+                    cleaned_network.commitChanges()
 
-                    # QgsMapLayerRegistry.instance().addMapLayer(broken_dual.to_shp(None, 'dual', crs, encoding, geom_type))
-                    # Merge between intersections
-                    # error cat: to_merge
-                    merged_primal, to_merge = broken_dual.merge(broken_clean_primal, tolerance, simplify, user_id)
+                    # QgsMapLayerRegistry.instance().addMapLayer(broken_network)
+                    to_merge = to_shp(mrg.feat_to_merge, fields, crs, 'to_merge')
+                    # QgsMapLayerRegistry.instance().addMapLayer(to_merge)
 
-                    if self.killed is True: return
-
-                    step = 1 / merged_primal.obj.size()
-                    merged_primal.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr + 60))
-
-                    # error cat: duplicates
-                    merged_clean_primal, duplicates_m, parallel_con3, parallel_nodes3 = merged_primal.rmv_dupl_overlaps(user_id, False)
-
-                    if self.killed is True: return
-                    self.cl_progress.emit(70)
-
-                    name = layer_name + '_cleaned'
+                    to_start = to_shp(mrg.edges_to_start, fields, crs, 'to_start')
+                    # QgsMapLayerRegistry.instance().addMapLayer(to_start)
 
                     if self.settings['errors']:
 
-                        if self.killed is True: return
-                        self.cl_progress.emit(80)
+                        errors_list = {
+                                       'breakages': breakages,
+                                       'overlaps': overlaps,
+                                       'orphans': orphans,
+                                       'closed_polylines': closed_polylines,
+                                       'self_intersecting': self_intersecting,
+                                       'duplicates': duplicates,
+                                       'multiparts': [int(i) for i in br.multiparts],
+                                       'invalids': br.invalids
+                                       }
+                        fu = br.fid_to_uid
+                        input_geometries_wkt = br.geometries_wkt
 
-                        if self.killed is True: return
-                        self.cl_progress.emit(90)
+                        errors = QgsVectorLayer('MultiLineString?crs=' + crs.toWkt(), 'errors', "memory")
+                        pr = errors.dataProvider()
+                        pr.addAttributes([QgsField('id_input', QVariant.String), QgsField('errors', QVariant.String)])
+                        new_features = []
+                        combined_errors = {}
+                        for k, v in errors_list.items():
+                            for item in v:
+                                try:
+                                    combined_errors[item] += ', ' + k
+                                except KeyError, e:
+                                    combined_errors[item] = k
 
-                        # combine all errors
-                        error_list = [['invalid', invalids], ['multipart', multiparts],
-                                      ['intersecting at vertex', to_break],
-                                      ['overlaping', overlaps],
-                                      ['duplicate', duplicates],
-                                      ['continuous line', to_merge],
-                                      ['orphans', orphans], ['closed_polyline', closed_polylines]
-                                      ]
-                        e_path = None
-                        input_layer = getLayerByName(parameters['layer_name'])
-                        errors = errors_to_shp(input_layer, parameters['user_id'], error_list, e_path, 'errors', crs, encoding, geom_type)
-                        #errors = None
+                        for k, v in combined_errors.items():
+                            new_feat = QgsFeature()
+                            new_feat.setAttributes([str(fu[k]), v])
+                            new_geom = QgsGeometry.fromWkt(input_geometries_wkt[k])
+                            #QgsGeometry()
+                            new_feat.setGeometry(new_geom)
+                            new_features.append(new_feat)
+
+                        errors.startEditing()
+                        pr.addFeatures(new_features)
+                        errors.commitChanges()
                     else:
                         errors = None
 
@@ -448,8 +424,7 @@ class RoadNetworkCleaner:
                         print "survived!"
                         self.cl_progress.emit(100)
                         # return cleaned shapefile and errors
-                        cleaned = merged_clean_primal.to_shp(path, name, crs, encoding, geom_type, qgsflds)
-                        ret = (errors, cleaned,)
+                        ret = (errors, final, cleaned_network, broken_network, to_merge, to_start)
 
                 except Exception, e:
                     # forward the exception upstream
