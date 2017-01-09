@@ -349,7 +349,7 @@ class RoadNetworkCleaner:
 
                     broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates = br.break_features()
 
-                    broken_network = br.to_shp(broken_features, crs, 'broken')
+
                     if self.killed is True: return
                     self.cl_progress.emit(45)
 
@@ -361,23 +361,21 @@ class RoadNetworkCleaner:
                     result = mrg.merge()
 
                     fields = br.layer_fields
-                    final = to_shp(result, fields, crs, 'f')
-                    # QgsMapLayerRegistry.instance().addMapLayer(final)
-                    cleaned_network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), 'cleaned', "memory")
-                    pr = cleaned_network.dataProvider()
+                    final = to_shp(result, fields, crs, 'final')
 
-                    pr.addAttributes(br.layer_fields)
+                    # broken_network = br.to_shp(broken_features, crs, 'broken')
+                    #cleaned_network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), 'cleaned', "memory")
+                    #pr = cleaned_network.dataProvider()
 
-                    cleaned_network.startEditing()
-                    pr.addFeatures(br.features)
-                    cleaned_network.commitChanges()
+                    #pr.addAttributes(br.layer_fields)
 
-                    # QgsMapLayerRegistry.instance().addMapLayer(broken_network)
-                    to_merge = to_shp(mrg.feat_to_merge, fields, crs, 'to_merge')
-                    # QgsMapLayerRegistry.instance().addMapLayer(to_merge)
+                    #cleaned_network.startEditing()
+                    #pr.addFeatures(br.features)
+                    #cleaned_network.commitChanges()
 
-                    to_start = to_shp(mrg.edges_to_start, fields, crs, 'to_start')
-                    # QgsMapLayerRegistry.instance().addMapLayer(to_start)
+                    #to_merge = to_shp(mrg.feat_to_merge, fields, crs, 'to_merge')
+
+                    #to_start = to_shp(mrg.edges_to_start, fields, crs, 'to_start')
 
                     if self.settings['errors']:
 
@@ -389,7 +387,8 @@ class RoadNetworkCleaner:
                                        'self_intersecting': self_intersecting,
                                        'duplicates': duplicates,
                                        'multiparts': [int(i) for i in br.multiparts],
-                                       'invalids': br.invalids
+                                       'invalids': br.invalids,
+                                       'points': br.points
                                        }
                         fu = br.fid_to_uid
                         input_geometries_wkt = br.geometries_wkt
@@ -409,8 +408,10 @@ class RoadNetworkCleaner:
                         for k, v in combined_errors.items():
                             new_feat = QgsFeature()
                             new_feat.setAttributes([str(fu[k]), v])
-                            new_geom = QgsGeometry.fromWkt(input_geometries_wkt[k])
-                            #QgsGeometry()
+                            if v=='invalids' or v== 'points':
+                                new_geom = QgsGeometry()
+                            else:
+                                new_geom = QgsGeometry.fromWkt(input_geometries_wkt[k])
                             new_feat.setGeometry(new_geom)
                             new_features.append(new_feat)
 
@@ -424,7 +425,8 @@ class RoadNetworkCleaner:
                         print "survived!"
                         self.cl_progress.emit(100)
                         # return cleaned shapefile and errors
-                        ret = (errors, final, cleaned_network, broken_network, to_merge, to_start)
+                        ret = (errors, final,)
+                        #cleaned_network, broken_network, to_merge, to_start
 
                 except Exception, e:
                     # forward the exception upstream
