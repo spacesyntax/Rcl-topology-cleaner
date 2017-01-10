@@ -34,6 +34,8 @@ def vertices_from_wkt_2(wkt):
     # the wkt representation may differ in other systems/ QGIS versions
     # TODO: check
     nums = [i for x in wkt[11:-1:].split(', ') for i in x.split(' ')]
+    if wkt[0:12] == u'LineString (':
+        nums = [i for x in wkt[12:-1:].split(', ') for i in x.split(' ')]
     coords = zip(*[iter(nums)] * 2)
     for vertex in coords:
         yield vertex

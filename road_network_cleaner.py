@@ -363,7 +363,7 @@ class RoadNetworkCleaner:
                     fields = br.layer_fields
                     final = to_shp(result, fields, crs, 'final')
 
-                    # broken_network = br.to_shp(broken_features, crs, 'broken')
+                    broken_network = br.to_shp(broken_features, crs, 'broken')
                     #cleaned_network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), 'cleaned', "memory")
                     #pr = cleaned_network.dataProvider()
 
@@ -407,7 +407,10 @@ class RoadNetworkCleaner:
 
                         for k, v in combined_errors.items():
                             new_feat = QgsFeature()
-                            new_feat.setAttributes([str(fu[k]), v])
+                            try:
+                                new_feat.setAttributes([str(fu[k]), v])
+                            except KeyError, e:
+                                new_feat.setAttributes(['could not find', v])
                             if v=='invalids' or v== 'points':
                                 new_geom = QgsGeometry()
                             else:
@@ -425,7 +428,7 @@ class RoadNetworkCleaner:
                         print "survived!"
                         self.cl_progress.emit(100)
                         # return cleaned shapefile and errors
-                        ret = (errors, final,)
+                        ret = (errors, final, broken_network,)
                         #cleaned_network, broken_network, to_merge, to_start
 
                 except Exception, e:
