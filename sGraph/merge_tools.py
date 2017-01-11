@@ -1,19 +1,11 @@
 
+# general imports
 import itertools
-from qgis.core import QgsFeature, QgsGeometry, QgsField, QgsSpatialIndex, QgsVectorLayer, QgsVectorFileWriter, QgsPoint, QgsMapLayerRegistry, QgsFields
-from PyQt4.QtCore import QVariant, QObject, pyqtSignal
+from qgis.core import QgsGeometry
+from PyQt4.QtCore import QObject, pyqtSignal
 
-def vertices_from_wkt_2(wkt):
-    # the wkt representation may differ in other systems/ QGIS versions
-    # TODO: check
-    nums = [i for x in wkt[11:-1:].split(', ') for i in x.split(' ')]
-    coords = zip(*[iter(nums)] * 2)
-    for vertex in coords:
-        yield vertex
-
-def get_next_vertex(tree, all_con):
-    last = tree[-1]
-    return tree + [i for i in all_con[last] if i not in tree]
+# plugin module imports
+from utilityFunctions import *
 
 
 class mergeTool(QObject):
@@ -159,19 +151,5 @@ class mergeTool(QObject):
         return merged_features + self.feat_to_copy
 
 
-def to_shp(any_features_list, fields, crs, name ):
-    network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), name, "memory")
-    pr = network.dataProvider()
-    pr.addAttributes(fields)
-    new_features = []
-    for i in any_features_list:
-        new_feat = QgsFeature()
-        new_feat.setFeatureId(i[0])
-        new_feat.setAttributes(i[1])
-        new_feat.setGeometry(QgsGeometry.fromWkt(i[2]))
-        new_features.append(new_feat)
-    network.startEditing()
-    pr.addFeatures(new_features)
-    network.commitChanges()
-    return network
+
 

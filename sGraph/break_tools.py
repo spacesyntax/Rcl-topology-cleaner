@@ -1,55 +1,10 @@
 
 # general imports
-import itertools
-from qgis.core import QgsFeature, QgsGeometry, QgsField, QgsSpatialIndex, QgsVectorLayer, QgsVectorFileWriter, QgsPoint, QgsMapLayerRegistry, QgsFields
-from PyQt4.QtCore import QVariant, QObject, pyqtSignal
+from qgis.core import QgsFeature, QgsGeometry, QgsSpatialIndex, QgsPoint, QgsVectorFileWriter, QgsField
+from PyQt4.QtCore import QObject, pyqtSignal, QVariant
 
-#plugin module imports
-
-def keep_decimals_string(string, number_decimals):
-    integer_part = string.split(".")[0]
-    # if the input is an integer there is no decimal part
-    if len(string.split("."))== 1:
-        decimal_part = str(0)*number_decimals
-    else:
-        decimal_part = string.split(".")[1][0:number_decimals]
-    if len(decimal_part) < number_decimals:
-        zeros = str(0) * int((number_decimals - len(decimal_part)))
-        decimal_part = decimal_part + zeros
-    decimal = integer_part + '.' + decimal_part
-    return decimal
-
-
-def find_vertex_index(points, f_geom):
-    for point in points:
-        yield f_geom.asPolyline().index(point.asPoint())
-
-
-def point_is_vertex(point, line):
-    if point.asPoint() in line.asPolyline():
-        return True
-
-
-def vertices_from_wkt_2(wkt):
-    # the wkt representation may differ in other systems/ QGIS versions
-    # TODO: check
-    nums = [i for x in wkt[11:-1:].split(', ') for i in x.split(' ')]
-    if wkt[0:12] == u'LineString (':
-        nums = [i for x in wkt[12:-1:].split(', ') for i in x.split(' ')]
-    coords = zip(*[iter(nums)] * 2)
-    for vertex in coords:
-        yield vertex
-
-
-def make_snapped_wkt(wkt, number_decimals):
-    # TODO: check in different system if '(' is included
-    snapped_wkt = 'LINESTRING('
-    for i in vertices_from_wkt_2(wkt):
-        new_vertex = str(keep_decimals_string(i[0], number_decimals)) + ' ' + str(
-            keep_decimals_string(i[1], number_decimals))
-        snapped_wkt += str(new_vertex) + ', '
-    return snapped_wkt[0:-2] + ')'
-
+# plugin module imports
+from utilityFunctions import *
 
 class breakTool(QObject):
 
@@ -81,6 +36,7 @@ class breakTool(QObject):
         if self.uid is not None:
             self.uid_index = [index for index,field in enumerate(self.layer_fields) if field.name() == self.uid].pop()
         self.fid_to_uid = {}
+        self.uid_to_fid = {}
         new_key_count = 0
         f_count = 1
         for f in self.layer.getFeatures():
@@ -91,8 +47,9 @@ class breakTool(QObject):
             attr = f.attributes()
             if f.geometry().wkbType() == 5 :
                 attr = f.attributes()
-                if self.errors:
+                if self.errors and self.uid is not None:
                     self.multiparts.append(attr[self.uid_index])
+                    self.uid_to_fid[attr[self.uid_index]] = f.id()
                 for multipart in f.geometry().asGeometryCollection():
                     if self.uid is not None:
                         self.fid_to_uid[f.id()] = attr[self.uid_index]
@@ -119,8 +76,6 @@ class breakTool(QObject):
                     self.invalids.append(attr[self.uid_index])
             elif f.geometry().wkbType() == 2:
                 attr = f.attributes()
-                if self.uid is not None:
-                    self.fid_to_uid[f.id()] = attr[self.uid_index]
                 snapped_wkt = make_snapped_wkt(f.geometry().exportToWkt(), self.tolerance)
                 snapped_geom = QgsGeometry.fromWkt(snapped_wkt)
                 f.setGeometry(snapped_geom)
@@ -133,6 +88,9 @@ class breakTool(QObject):
                 self.geometries_vertices[f.id()] = [vertex for vertex in vertices_from_wkt_2(snapped_wkt)]
                 # insert features to index
                 self.spIndex.insertFeature(f)
+                if self.uid is not None:
+                    self.fid_to_uid[f.id()] = attr[self.uid_index]
+                    self.uid_to_fid[attr[self.uid_index]] = f.id()
 
     def break_features(self):
 
@@ -162,18 +120,18 @@ class breakTool(QObject):
 
             if self.errors is True:
                 if f_errors == ['br', 'ovrlp']:
-                    breakages.append(fid)
-                    overlaps.append(fid)
+                    breakages.append(self.fid_to_uid[fid])
+                    overlaps.append(self.fid_to_uid[fid])
                 elif f_errors == 'br':
-                    breakages.append(fid)
+                    breakages.append(self.fid_to_uid[fid])
                 elif f_errors == 'ovrlp':
-                    overlaps.append(fid)
+                    overlaps.append(self.fid_to_uid[fid])
                 elif f_errors == 'orphan':
-                    orphans.append(fid)
+                    orphans.append(self.fid_to_uid[fid])
                 elif f_errors == 'closed polyline':
-                    closed_polylines.append(fid)
+                    closed_polylines.append(self.fid_to_uid[fid])
                 elif f_errors == 'duplicate':
-                    duplicates.append(fid)
+                    duplicates.append(self.fid_to_uid[fid])
 
             if f_errors is None:
                 vertices = [0, len(f_geom.asPolyline()) - 1 ]
@@ -190,7 +148,6 @@ class breakTool(QObject):
                         new_fid = self.feat_count
                         new_feat = [new_fid, f_attrs, wkt]
                         broken_features.append(new_feat)
-
 
         return broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates
 

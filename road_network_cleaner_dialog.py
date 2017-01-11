@@ -68,7 +68,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
     def setOutput(self):
         file_name = QtGui.QFileDialog.getSaveFileName(self, "Save output file ", "cleaned_network", '*.shp')
         if file_name:
-            self.outputText.setText(file_name)
+            self.outputCleaned.setText(file_name)
 
     def getOutput(self):
         print len(self.outputCleaned.text()) > 0

@@ -1,7 +1,6 @@
 # general imports
 from os.path import expanduser
-from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsDataSourceURI, QgsField
-from PyQt4.QtCore import QVariant
+from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsFeature, QgsGeometry,QgsFields
 
 # source: ess utility functions
 
@@ -14,87 +13,79 @@ def getLayerByName(name):
     return layer
 
 
-def copy_shp(temp_layer, path):
-    features_to_copy = getAllFeatures(temp_layer)
-    provider = temp_layer.dataProvider()
-    writer = QgsVectorFileWriter(path, provider.encoding(), provider.fields(), provider.geometryType(), provider.crs(),
-                                 "ESRI Shapefile")
-
-    # TODO: push message
-    if writer.hasError() != QgsVectorFileWriter.NoError:
-        print "Error when creating shapefile: ", writer.errorMessage()
-
-    for fet in features_to_copy.values():
-        writer.addFeature(fet)
-
-    del writer
-    layer = QgsVectorLayer(path, temp_layer.name(), "ogr")
-    return layer
-
-# source: ess utility functions
+def get_next_vertex(tree, all_con):
+    last = tree[-1]
+    return tree + [i for i in all_con[last] if i not in tree]
 
 
-def getLayerPath4ogr(layer):
-    path = ''
-    provider = layer.dataProvider()
-    provider_type = provider.name()
-    # TODO: if provider_type == 'spatialite'
-    if provider_type == 'postgres':
-        uri = QgsDataSourceURI(provider.dataSourceUri())
-        databaseName = uri.database().encode('utf-8')
-        databaseServer = uri.host().encode('utf-8')
-        databaseUser = uri.username().encode('utf-8')
-        databasePW = uri.password().encode('utf-8')
-        databasePort = uri.port().encode('utf-8')
-        path = "PG: host=%s dbname=%s port=%s user=%s password=%s" % (
-            databaseServer, databaseName, databasePort, databaseUser, databasePW)
-    elif provider_type == 'ogr':
-        uri = provider.dataSourceUri()
-        path = uri.split("|")[0]
-    elif provider_type == 'memory':
-        # save temp file in home directory
-        home = expanduser("~")
-        path = home + '/' + layer.name() + '.shp'
-        copied_layer = copy_shp(layer, path)
-    return path, provider_type, provider
+def keep_decimals_string(string, number_decimals):
+    integer_part = string.split(".")[0]
+    # if the input is an integer there is no decimal part
+    if len(string.split("."))== 1:
+        decimal_part = str(0)*number_decimals
+    else:
+        decimal_part = string.split(".")[1][0:number_decimals]
+    if len(decimal_part) < number_decimals:
+        zeros = str(0) * int((number_decimals - len(decimal_part)))
+        decimal_part = decimal_part + zeros
+    decimal = integer_part + '.' + decimal_part
+    return decimal
 
 
-# update unique id column on a network
-# limitation: works only with shapefiles
-# TODO: add function for postgres provider
+def find_vertex_index(points, f_geom):
+    for point in points:
+        yield f_geom.asPolyline().index(point.asPoint())
 
 
-def update_unqid(layer_name, attr_column, prfx):
-    network = getLayerByName(layer_name)
+def point_is_vertex(point, line):
+    if point.asPoint() in line.asPolyline():
+        return True
+
+
+def vertices_from_wkt_2(wkt):
+    # the wkt representation may differ in other systems/ QGIS versions
+    # TODO: check
+    nums = [i for x in wkt[11:-1:].split(', ') for i in x.split(' ')]
+    if wkt[0:12] == u'LineString (':
+        nums = [i for x in wkt[12:-1:].split(', ') for i in x.split(' ')]
+    coords = zip(*[iter(nums)] * 2)
+    for vertex in coords:
+        yield vertex
+
+
+def make_snapped_wkt(wkt, number_decimals):
+    # TODO: check in different system if '(' is included
+    snapped_wkt = 'LINESTRING('
+    for i in vertices_from_wkt_2(wkt):
+        new_vertex = str(keep_decimals_string(i[0], number_decimals)) + ' ' + str(
+            keep_decimals_string(i[1], number_decimals))
+        snapped_wkt += str(new_vertex) + ', '
+    return snapped_wkt[0:-2] + ')'
+
+
+def to_shp(path, any_features_list, layer_fields, crs, name, encoding, geom_type):
+    if path is None:
+        network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), name, "memory")
+    else:
+        fields = QgsFields()
+        for field in layer_fields:
+            fields.append(field)
+        file_writer = QgsVectorFileWriter(path, encoding, fields, geom_type, crs, "ESRI Shapefile")
+        if file_writer.hasError() != QgsVectorFileWriter.NoError:
+            print "Error when creating shapefile: ", file_writer.errorMessage()
+        del file_writer
+        network = QgsVectorLayer(path, name, "ogr")
     pr = network.dataProvider()
-    fieldIdx = pr.fields().indexFromName(attr_column)
-    if fieldIdx == -1:
-        pr.addAttributes([QgsField(attr_column, QVariant.String)])
-        fieldIdx = pr.fields().indexFromName(attr_column)
-    fid = 0
-    updateMap = {}
-    for f in network.dataProvider().getFeatures():
-        updateMap[f.id()] = {fieldIdx: prfx + '_' + str(fid)}
-        fid += 1
-    pr.changeAttributeValues(updateMap)
+    if path is None:
+        pr.addAttributes(layer_fields)
+    new_features = []
+    for i in any_features_list:
+        new_feat = QgsFeature()
+        new_feat.setFeatureId(i[0])
+        new_feat.setAttributes(i[1])
+        new_feat.setGeometry(QgsGeometry.fromWkt(i[2]))
+        new_features.append(new_feat)
+    network.startEditing()
+    pr.addFeatures(new_features)
+    network.commitChanges()
     return network
-
-
-def getAllFeatures(layer):
-    allfeatures = {}
-    if layer:
-        features = layer.getFeatures()
-        allfeatures = {feature.id(): feature for feature in features}
-    return allfeatures
-
-
-def add_column(v_layer, col_name, col_type):
-    pr = v_layer.dataProvider()
-    v_layer.startEditing()
-    pr.addAttributes([QgsField(col_name, col_type)])
-    v_layer.commitChanges()
-
-def add_field_to_fields(fields,field_name,field_type):
-    return [QgsField(fld.name,fld.type) for fld in fields] + [QgsField(field_name,field_type)]
-
-

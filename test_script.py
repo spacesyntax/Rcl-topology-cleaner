@@ -1,29 +1,17 @@
 
 execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/break_tools.py'.encode('utf-8'))
 execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/merge_tools.py'.encode('utf-8'))
-
-
+execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/utilityFunctions.py'.encode('utf-8'))
 
 # _________________________ TRANSFORMATIONS ______________________________
 
 # transform shapefile to primal graph
-
-from PyQt4.QtCore import QVariant
-qgsflds_types = {u'Real': QVariant.Double, u'String': QVariant.String}
 
 #layer_name = 'london_ax_ex'
 #layer_name = 'New scratch layer'
 #layer_name = 'Netwrok_small'
 #layer_name = 'madagascar'
 layer_name = 'nyc_streets'
-
-
-def getLayerByName(name):
-    layer = None
-    for i in QgsMapLayerRegistry.instance().mapLayers().values():
-        if i.name() == name:
-            layer = i
-    return layer
 
 # cleaning settings
 

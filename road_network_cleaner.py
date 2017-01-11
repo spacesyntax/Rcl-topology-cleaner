@@ -31,7 +31,7 @@ import resources
 # Import the code for the dialog
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
 import os.path
-import ogr
+
 
 from sGraph.break_tools import *
 from sGraph.merge_tools import *
@@ -361,20 +361,15 @@ class RoadNetworkCleaner:
                     result = mrg.merge()
 
                     fields = br.layer_fields
-                    final = to_shp(result, fields, crs, 'final')
+                    final = to_shp(path, result, fields, crs, 'cleaned', encoding, geom_type)
 
-                    broken_network = br.to_shp(broken_features, crs, 'broken')
                     #cleaned_network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), 'cleaned', "memory")
                     #pr = cleaned_network.dataProvider()
-
                     #pr.addAttributes(br.layer_fields)
-
                     #cleaned_network.startEditing()
                     #pr.addFeatures(br.features)
                     #cleaned_network.commitChanges()
-
                     #to_merge = to_shp(mrg.feat_to_merge, fields, crs, 'to_merge')
-
                     #to_start = to_shp(mrg.edges_to_start, fields, crs, 'to_start')
 
                     if self.settings['errors']:
@@ -388,9 +383,10 @@ class RoadNetworkCleaner:
                                        'duplicates': duplicates,
                                        'multiparts': [int(i) for i in br.multiparts],
                                        'invalids': br.invalids,
-                                       'points': br.points
+                                       'points': br.points,
+                                       'continuous line': mrg.fids_to_merge
                                        }
-                        fu = br.fid_to_uid
+                        uf = br.uid_to_fid
                         input_geometries_wkt = br.geometries_wkt
 
                         errors = QgsVectorLayer('MultiLineString?crs=' + crs.toWkt(), 'errors', "memory")
@@ -405,18 +401,21 @@ class RoadNetworkCleaner:
                                 except KeyError, e:
                                     combined_errors[item] = k
 
+                        # TODO: fix why it throws KeyError
                         for k, v in combined_errors.items():
                             new_feat = QgsFeature()
                             try:
-                                new_feat.setAttributes([str(fu[k]), v])
+                                if v == 'invalids' or v == 'points':
+                                    new_geom = QgsGeometry()
+                                else:
+                                    new_geom = QgsGeometry.fromWkt(input_geometries_wkt[uf[k]])
+                                new_feat.setAttributes([k, v])
+                                new_feat.setGeometry(new_geom)
+                                new_features.append(new_feat)
                             except KeyError, e:
-                                new_feat.setAttributes(['could not find', v])
-                            if v=='invalids' or v== 'points':
-                                new_geom = QgsGeometry()
-                            else:
-                                new_geom = QgsGeometry.fromWkt(input_geometries_wkt[k])
-                            new_feat.setGeometry(new_geom)
-                            new_features.append(new_feat)
+                                new_feat.setAttributes(['could not find id', v])
+                                new_feat.setGeometry(QgsGeometry())
+                                new_features.append(new_feat)
 
                         errors.startEditing()
                         pr.addFeatures(new_features)
@@ -428,7 +427,7 @@ class RoadNetworkCleaner:
                         print "survived!"
                         self.cl_progress.emit(100)
                         # return cleaned shapefile and errors
-                        ret = (errors, final, broken_network,)
+                        ret = (errors, final, )
                         #cleaned_network, broken_network, to_merge, to_start
 
                 except Exception, e:
