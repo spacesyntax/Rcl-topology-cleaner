@@ -90,7 +90,10 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.inputCombo.addItems(layers_list)
 
     def getTolerance(self):
-        return self.decimalsSpin.value()
+        if self.snapCheckBox.isChecked():
+            return self.decimalsSpin.value()
+        else:
+            return None
 
     def get_errors(self):
         return self.errorsCheckBox.isChecked()

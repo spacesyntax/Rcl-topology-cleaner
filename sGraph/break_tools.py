@@ -58,7 +58,10 @@ class breakTool(QObject):
                     new_feat = QgsFeature()
                     new_feat.setAttributes(attr)
                     new_feat.setFeatureId(new_key_count)
-                    snapped_wkt = make_snapped_wkt(multipart.exportToWkt(), self.tolerance)
+                    if self.tolerance:
+                        snapped_wkt = make_snapped_wkt(multipart.exportToWkt(), self.tolerance)
+                    else:
+                        snapped_wkt = multipart.exportToWkt()
                     snapped_geom = QgsGeometry.fromWkt(snapped_wkt)
                     new_feat.setGeometry(snapped_geom)
                     self.features.append(new_feat)
@@ -76,7 +79,10 @@ class breakTool(QObject):
                     self.invalids.append(attr[self.uid_index])
             elif f.geometry().wkbType() == 2:
                 attr = f.attributes()
-                snapped_wkt = make_snapped_wkt(f.geometry().exportToWkt(), self.tolerance)
+                if self.tolerance:
+                    snapped_wkt = make_snapped_wkt(f.geometry().exportToWkt(), self.tolerance)
+                else:
+                    snapped_wkt = f.geometry().exportToWkt()
                 snapped_geom = QgsGeometry.fromWkt(snapped_wkt)
                 f.setGeometry(snapped_geom)
                 new_key_count += 1
