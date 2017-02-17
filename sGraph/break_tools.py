@@ -51,9 +51,9 @@ class breakTool(QObject):
                     self.multiparts.append(attr[self.uid_index])
                     self.uid_to_fid[attr[self.uid_index]] = f.id()
                 for multipart in f.geometry().asGeometryCollection():
-                    if self.uid is not None:
-                        self.fid_to_uid[f.id()] = attr[self.uid_index]
                     new_key_count += 1
+                    if self.uid is not None:
+                        self.fid_to_uid[new_key_count] = attr[self.uid_index]
                     attr = f.attributes()
                     new_feat = QgsFeature()
                     new_feat.setAttributes(attr)
@@ -65,12 +65,12 @@ class breakTool(QObject):
                     snapped_geom = QgsGeometry.fromWkt(snapped_wkt)
                     new_feat.setGeometry(snapped_geom)
                     self.features.append(new_feat)
-                    self.attributes[f.id()] = attr
-                    self.geometries[f.id()] = new_feat.geometryAndOwnership()
-                    self.geometries_wkt[f.id()] = snapped_wkt
-                    self.geometries_vertices[f.id()] = [vertex for vertex in vertices_from_wkt_2(snapped_wkt)]
+                    self.attributes[new_key_count] = attr
+                    self.geometries[new_key_count] = new_feat.geometryAndOwnership()
+                    self.geometries_wkt[new_key_count] = snapped_wkt
+                    self.geometries_vertices[new_key_count] = [vertex for vertex in vertices_from_wkt_2(snapped_wkt)]
                     # insert features to index
-                    self.spIndex.insertFeature(f)
+                    self.spIndex.insertFeature(new_feat)
             elif f.geometry().wkbType() == 1:
                 if self.errors and self.uid is not None:
                     self.points.append(attr[self.uid_index])
