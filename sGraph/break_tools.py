@@ -3,6 +3,7 @@
 from qgis.core import QgsFeature, QgsGeometry, QgsSpatialIndex, QgsPoint, QgsVectorFileWriter, QgsField
 from PyQt4.QtCore import QObject, pyqtSignal, QVariant
 
+
 # plugin module imports
 from utilityFunctions import *
 
@@ -45,7 +46,13 @@ class breakTool(QObject):
             f_count += 1
 
             attr = f.attributes()
-            if f.geometry().wkbType() == 5 :
+            geom_type = f.geometry().wkbType()
+
+            if geom_type not in [5,2,1] and f.geometry().geometry().is3D():
+                f.geometry().geometry().dropZValue()
+                geom_type = f.geometry().wkbType()
+
+            if geom_type == 5:
                 attr = f.attributes()
                 if self.errors and self.uid is not None:
                     self.multiparts.append(attr[self.uid_index])
@@ -71,13 +78,13 @@ class breakTool(QObject):
                     self.geometries_vertices[new_key_count] = [vertex for vertex in vertices_from_wkt_2(snapped_wkt)]
                     # insert features to index
                     self.spIndex.insertFeature(new_feat)
-            elif f.geometry().wkbType() == 1:
+            elif geom_type == 1:
                 if self.errors and self.uid is not None:
                     self.points.append(attr[self.uid_index])
             elif not f.geometry().isGeosValid():
                 if self.errors and self.uid is not None:
                     self.invalids.append(attr[self.uid_index])
-            elif f.geometry().wkbType() == 2:
+            elif geom_type == 2:
                 attr = f.attributes()
                 if self.tolerance:
                     snapped_wkt = make_snapped_wkt(f.geometry().exportToWkt(), self.tolerance)
