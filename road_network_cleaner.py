@@ -290,6 +290,9 @@ class RoadNetworkCleaner:
             self.cleaning.cl_progress.disconnect(self.dlg.cleaningProgress.setValue)
             # Clean up thread and analysis
             self.cleaning.kill()
+            # kill process of breaking if it is running
+            # kill process of merging if it is running
+
             self.cleaning.deleteLater()
             self.thread.quit()
             self.thread.wait()
@@ -309,7 +312,7 @@ class RoadNetworkCleaner:
         def __init__(self, settings, iface):
             QObject.__init__(self)
             self.settings = settings
-            self.killed = False
+            self.cl_killed = False
             self.iface = iface
             self.total =0
 
@@ -342,15 +345,15 @@ class RoadNetworkCleaner:
                     self.cl_progress.emit(5)
                     self.total = 5
 
-                    if self.killed is True: return
+                    if self.cl_killed is True: return
 
                     step = 45/ br.feat_count
                     br.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
+                    br.killedsignal.connect(self.killCleaning)
 
                     broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates = br.break_features()
 
-
-                    if self.killed is True: return
+                    if self.cl_killed is True: return
                     self.cl_progress.emit(45)
 
                     mrg = mergeTool(broken_features, user_id, True)
@@ -362,15 +365,6 @@ class RoadNetworkCleaner:
 
                     fields = br.layer_fields
                     final = to_shp(path, result, fields, crs, 'cleaned', encoding, geom_type)
-
-                    #cleaned_network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), 'cleaned', "memory")
-                    #pr = cleaned_network.dataProvider()
-                    #pr.addAttributes(br.layer_fields)
-                    #cleaned_network.startEditing()
-                    #pr.addFeatures(br.features)
-                    #cleaned_network.commitChanges()
-                    #to_merge = to_shp(mrg.feat_to_merge, fields, crs, 'to_merge')
-                    #to_start = to_shp(mrg.edges_to_start, fields, crs, 'to_start')
 
                     if self.settings['errors']:
 
@@ -423,7 +417,7 @@ class RoadNetworkCleaner:
                     else:
                         errors = None
 
-                    if self.killed is False:
+                    if self.cl_killed is False:
                         print "survived!"
                         self.cl_progress.emit(100)
                         # return cleaned shapefile and errors
@@ -437,7 +431,7 @@ class RoadNetworkCleaner:
                 self.finished.emit(ret)
 
         def kill(self):
-            self.killed = True
+            self.cl_killed = True
 
 
     def run(self):

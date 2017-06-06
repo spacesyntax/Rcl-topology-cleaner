@@ -13,9 +13,11 @@ class breakTool(QObject):
     error = pyqtSignal(Exception, basestring)
     progress = pyqtSignal(float)
     warning = pyqtSignal(str)
+    killedsignal = pyqtSignal(bool)
 
     def __init__(self,layer, tolerance, uid, errors):
         QObject.__init__(self)
+
         self.layer = layer
         self.feat_count = self.layer.featureCount()
         self.tolerance = tolerance
@@ -120,6 +122,10 @@ class breakTool(QObject):
 
         for fid in self.geometries.keys():
 
+            if self.killed is True:
+                self.killedsignal.emit(True)
+                break
+
             f_geom = self.geometries[fid]
             f_attrs = self.attributes[fid]
 
@@ -163,6 +169,9 @@ class breakTool(QObject):
                         broken_features.append(new_feat)
 
         return broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates
+
+    def kill(self):
+        self.br_killed = True
 
     def find_breakages(self, fid, gids):
 
