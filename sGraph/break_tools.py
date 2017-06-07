@@ -13,7 +13,7 @@ class breakTool(QObject):
     error = pyqtSignal(Exception, basestring)
     progress = pyqtSignal(float)
     warning = pyqtSignal(str)
-    killedsignal = pyqtSignal(bool)
+
 
     def __init__(self,layer, tolerance, uid, errors):
         QObject.__init__(self)

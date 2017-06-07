@@ -308,11 +308,11 @@ class RoadNetworkCleaner:
         error = pyqtSignal(Exception, basestring)
         cl_progress = pyqtSignal(float)
         warning = pyqtSignal(str)
+        cl_killed = pyqtSignal(bool)
 
         def __init__(self, settings, iface):
             QObject.__init__(self)
             self.settings = settings
-            self.cl_killed = False
             self.iface = iface
             self.total =0
 
@@ -349,7 +349,7 @@ class RoadNetworkCleaner:
 
                     step = 45/ br.feat_count
                     br.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
-                    br.killedsignal.connect(self.killCleaning)
+                    br.killedsignal.connect(lambda em_val=br.br_killed: self.cl_killed.emit(em_val))
 
                     broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates = br.break_features()
 
