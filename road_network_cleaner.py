@@ -228,8 +228,6 @@ class RoadNetworkCleaner:
                 cols_list.append(i.name())
         self.dlg.idCombo.addItems(cols_list)
 
-    def render(self,vector_layer):
-        QgsMapLayerRegistry.instance().addMapLayer(vector_layer)
 
     # SOURCE: Network Segmenter https://github.com/OpenDigitalWorks/NetworkSegmenter
     # SOURCE: https://snorfalorpagus.net/blog/2013/12/07/multithreading-in-qgis-python-plugins/
@@ -267,8 +265,8 @@ class RoadNetworkCleaner:
         try:
             # report the result
             # a, b = ret
-            for i in ret:
-                self.render(i)
+            for layer in ret:
+                QgsMapLayerRegistry.instance().addMapLayer(layer)
             self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
 
         except Exception, e:
@@ -276,12 +274,14 @@ class RoadNetworkCleaner:
             self.cleaning.error.emit(e, traceback.format_exc())
             self.giveMessage('Something went wrong! See the message log for more information', QgsMessageBar.CRITICAL)
 
+        self.cleaning.iface.mapCanvas().refresh()
         self.cleaning.deleteLater()
         self.thread.quit()
         self.thread.wait()
         self.thread.deleteLater()
         self.dlg.cleaningProgress.reset()
         self.cleaning = None
+
         self.dlg.close()
 
     def killCleaning(self):
