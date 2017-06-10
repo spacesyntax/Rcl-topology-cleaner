@@ -261,28 +261,46 @@ class RoadNetworkCleaner:
 
     def cleaningFinished(self, ret):
         # clean up  the worker and thread
-        self.cleaning.deleteLater()
-        self.thread.quit()
-        self.thread.wait()
-        self.thread.deleteLater()
-        self.cleaning = None
 
-        if ret:
+
+
+        try:
             # report the result
             # a, b = ret
             for i in ret:
                 self.render(i)
             self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
 
-        else:
+        except Exception, e:
             # notify the user that sth went wrong
+            self.cleaning.error.emit(e, traceback.format_exc())
             self.giveMessage('Something went wrong! See the message log for more information', QgsMessageBar.CRITICAL)
 
+        self.cleaning.deleteLater()
+        self.thread.quit()
+        self.thread.wait()
+        self.thread.deleteLater()
         self.dlg.cleaningProgress.reset()
+        self.cleaning = None
         self.dlg.close()
 
     def killCleaning(self):
+        # add emit signal to breakTool or mergeTool only to stop the loop
+
         if self.cleaning:
+
+            try:
+                dummy = self.cleaning.br
+                del dummy
+                self.cleaning.br.killed = True
+            except AttributeError:
+                pass
+            try:
+                dummy = self.cleaning.mrg
+                del dummy
+                self.cleaning.mrg.killed = True
+            except AttributeError:
+                pass
             # Disconnect signals
             self.cleaning.finished.disconnect(self.cleaningFinished)
             self.cleaning.error.disconnect(self.cleaningError)
@@ -299,6 +317,9 @@ class RoadNetworkCleaner:
             self.thread.deleteLater()
             self.cleaning = None
             self.dlg.cleaningProgress.reset()
+            self.dlg.close()
+        else:
+            self.dlg.close()
 
     # SOURCE: https://snorfalorpagus.net/blog/2013/12/07/multithreading-in-qgis-python-plugins/
     class clean(QObject):
@@ -341,29 +362,35 @@ class RoadNetworkCleaner:
                     # check uid before
 
                     self.cl_progress.emit(2)
-                    br = breakTool(layer, tolerance, user_id, self.settings['errors'])
+
+                    self.br = breakTool(layer, tolerance, user_id, self.settings['errors'])
+
+                    if self.cl_killed is True or self.br.killed is True: return
+
+                    self.br.add_edges()
+                    if self.cl_killed is True or self.br.killed is True: return
+
                     self.cl_progress.emit(5)
                     self.total = 5
 
-                    if self.cl_killed is True: return
+                    step = 45/ self.br.feat_count
+                    self.br.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
 
-                    step = 45/ br.feat_count
-                    br.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
-                    br.killedsignal.connect(lambda em_val=br.br_killed: self.cl_killed.emit(em_val))
+                    broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates = self.br.break_features()
 
-                    broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates = br.break_features()
-
-                    if self.cl_killed is True: return
+                    if self.cl_killed is True or self.br.killed is True: return
                     self.cl_progress.emit(45)
 
-                    mrg = mergeTool(broken_features, user_id, True)
+                    self.mrg = mergeTool(broken_features, user_id, True)
 
-                    step = 45/ len(mrg.con_1)
-                    mrg.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
+                    step = 45/ len(self.mrg.con_1)
+                    self.mrg.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
 
-                    result = mrg.merge()
+                    result = self.mrg.merge()
 
-                    fields = br.layer_fields
+                    if self.cl_killed is True or self.mrg.killed is True: return
+
+                    fields = self.br.layer_fields
                     final = to_shp(path, result, fields, crs, 'cleaned', encoding, geom_type)
 
                     if self.settings['errors']:
@@ -375,13 +402,13 @@ class RoadNetworkCleaner:
                                        'closed_polylines': closed_polylines,
                                        'self_intersecting': self_intersecting,
                                        'duplicates': duplicates,
-                                       'multiparts': [int(i) for i in br.multiparts],
-                                       'invalids': br.invalids,
-                                       'points': br.points,
-                                       'continuous line': mrg.fids_to_merge
+                                       'multiparts': [int(i) for i in self.br.multiparts],
+                                       'invalids': self.br.invalids,
+                                       'points': self.br.points,
+                                       'continuous line': self.mrg.fids_to_merge
                                        }
-                        uf = br.uid_to_fid
-                        input_geometries_wkt = br.geometries_wkt
+                        uf = self.br.uid_to_fid
+                        input_geometries_wkt = self.br.geometries_wkt
 
                         errors = QgsVectorLayer('MultiLineString?crs=' + crs.toWkt(), 'errors', "memory")
                         pr = errors.dataProvider()
@@ -417,12 +444,12 @@ class RoadNetworkCleaner:
                     else:
                         errors = None
 
-                    if self.cl_killed is False:
-                        print "survived!"
-                        self.cl_progress.emit(100)
-                        # return cleaned shapefile and errors
-                        ret = (errors, final, )
-                        #cleaned_network, broken_network, to_merge, to_start
+                    #if self.cl_killed is False:
+                    print "survived!"
+                    self.cl_progress.emit(100)
+                    # return cleaned shapefile and errors
+                    ret = (errors, final, )
+                    #cleaned_network, broken_network, to_merge, to_start
 
                 except Exception, e:
                     # forward the exception upstream

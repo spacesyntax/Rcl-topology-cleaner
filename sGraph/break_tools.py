@@ -13,6 +13,7 @@ class breakTool(QObject):
     error = pyqtSignal(Exception, basestring)
     progress = pyqtSignal(float)
     warning = pyqtSignal(str)
+    killed = pyqtSignal(bool)
 
 
     def __init__(self,layer, tolerance, uid, errors):
@@ -40,12 +41,19 @@ class breakTool(QObject):
             self.uid_index = [index for index,field in enumerate(self.layer_fields) if field.name() == self.uid].pop()
         self.fid_to_uid = {}
         self.uid_to_fid = {}
+
+    def add_edges(self):
+
         new_key_count = 0
         f_count = 1
+
         for f in self.layer.getFeatures():
 
             self.progress.emit(45 * f_count / self.feat_count)
             f_count += 1
+
+            if self.killed is True:
+                break
 
             attr = f.attributes()
             geom_type = f.geometry().wkbType()
@@ -123,7 +131,6 @@ class breakTool(QObject):
         for fid in self.geometries.keys():
 
             if self.killed is True:
-                self.killedsignal.emit(True)
                 break
 
             f_geom = self.geometries[fid]

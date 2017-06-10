@@ -14,6 +14,7 @@ class mergeTool(QObject):
     error = pyqtSignal(Exception, basestring)
     progress = pyqtSignal(float)
     warning = pyqtSignal(str)
+    killed = pyqtSignal(bool)
 
     def __init__(self, features, uid, errors):
         QObject.__init__(self)
@@ -99,6 +100,9 @@ class mergeTool(QObject):
         edges_passed = []
         all_trees = []
         for edge in self.con_1:
+
+            if self.killed is True:
+                break
 
             self.progress.emit((45 * f_count / akra_count) + 45)
             f_count += 1
