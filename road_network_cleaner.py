@@ -30,6 +30,7 @@ from qgis.utils import *
 import resources
 # Import the code for the dialog
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
+from settings_dialog import SettingsDialog
 import os.path
 
 
@@ -97,6 +98,9 @@ class RoadNetworkCleaner:
         # self.dockwidget.cleanButton.clicked.connect(self.runCleaning)
         self.dlg.cleanButton.clicked.connect(self.startCleaning)
         self.dlg.cancelButton.clicked.connect(self.killCleaning)
+
+        # settings popup
+        self.dlg.settingsButton.clicked.connect(self.openSettings)
         self.dlg.snapCheckBox.stateChanged.connect(self.dlg.set_enabled_tolerance)
         self.dlg.errorsCheckBox.stateChanged.connect(self.dlg.set_enabled_id)
         self.dlg.inputCombo.currentIndexChanged.connect(self.popIdColumn)
@@ -229,6 +233,10 @@ class RoadNetworkCleaner:
         self.dlg.idCombo.addItems(cols_list)
 
 
+    def openSettings(self):
+        self.dialog_instance = SettingsDialog()
+        self.dialog_instance.exec_()
+
     # SOURCE: Network Segmenter https://github.com/OpenDigitalWorks/NetworkSegmenter
     # SOURCE: https://snorfalorpagus.net/blog/2013/12/07/multithreading-in-qgis-python-plugins/
 
@@ -243,19 +251,23 @@ class RoadNetworkCleaner:
     def startCleaning(self, settings):
         self.dlg.cleaningProgress.reset()
         settings = self.dlg.get_settings()
-        cleaning = self.clean(settings, self.iface)
+        if settings['input']:
 
-        # start the cleaning in a new thread
-        thread = QThread()
-        cleaning.moveToThread(thread)
-        cleaning.finished.connect(self.cleaningFinished)
-        cleaning.error.connect(self.cleaningError)
-        cleaning.warning.connect(self.giveMessage)
-        cleaning.cl_progress.connect(self.dlg.cleaningProgress.setValue)
-        thread.started.connect(cleaning.run)
-        thread.start()
-        self.thread = thread
-        self.cleaning = cleaning
+            cleaning = self.clean(settings, self.iface)
+
+            # start the cleaning in a new thread
+            thread = QThread()
+            cleaning.moveToThread(thread)
+            cleaning.finished.connect(self.cleaningFinished)
+            cleaning.error.connect(self.cleaningError)
+            cleaning.warning.connect(self.giveMessage)
+            cleaning.cl_progress.connect(self.dlg.cleaningProgress.setValue)
+            thread.started.connect(cleaning.run)
+            thread.start()
+            self.thread = thread
+            self.cleaning = cleaning
+        else:
+            return
 
     def cleaningFinished(self, ret):
         # clean up  the worker and thread

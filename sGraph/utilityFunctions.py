@@ -1,6 +1,7 @@
 # general imports
 from os.path import expanduser
 from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsFeature, QgsGeometry,QgsFields
+import psycopg2
 
 # source: ess utility functions
 
@@ -89,3 +90,58 @@ def to_shp(path, any_features_list, layer_fields, crs, name, encoding, geom_type
     pr.addFeatures(new_features)
     network.commitChanges()
     return network
+
+def qgs_to_postgis_fields(qgs_flds, postgis_flds, arrays = False):
+    postgis_flds = ''
+    for f in qgs_flds:
+        if arrays:
+            if f.type() == 2:
+                # bigint
+                postgis_flds += f.name() + ' bigint[],'
+            elif f.type() == 6:
+                # numeric
+                postgis_flds += f.name() + ' numeric[],'
+            elif f.type() == 1:
+                # numeric
+                postgis_flds += f.name() + ' bool[],'
+            else:
+                # string
+                postgis_flds += f.name() + ' text[],'
+        else:
+            if f.type() == 2:
+                # bigint
+                postgis_flds += f.name() + ' bigint,'
+            elif f.type() == 6:
+                # numeric
+                postgis_flds += f.name() + ' numeric,'
+            elif f.type() == 1:
+                # numeric
+                postgis_flds += f.name() + ' bool,'
+            else:
+                # string
+                postgis_flds += f.name() + ' text,'
+    return postgis_flds[:-1]
+
+
+def to_dblayer( dbname, user, host, port, password, schema, table_name, postgis_flds, any_features_list):
+    connstring = "dbname=%s user=%s host=%s port=%s password=%s" % (dbname, user, host, port, password)
+    try:
+        con = psycopg2.connect(connstring)
+        cur = con.cursor()
+        query = "DROP TABLE IF EXISTS %s.%s; CREATE TABLE %s.%s( id serial, identifier text, class text, roadnumber text, street_name text, startnode text, endnode text, geom geometry(LineString, 27700), CONSTRAINT %s PRIMARY KEY(id)); ALTER TABLE %s.%s OWNER TO postgres; " % (
+        schema, table_name, schema, table_name, table_name + '_pk', schema, table_name)
+        cur.execute(query)
+        con.commit()
+        for f in any_features_list:
+            wkt = f.geometry().exportToWkt()
+            # TODO: fix NULL values
+            # TODO: fix schema, table_name w-o single quotes
+            query = "INSERT INTO simpl.dual_carriageways (identifier, class, roadnumber, street_name, startnode, endnode, geom) VALUES(%s, %s, %s, %s, %s, %s, ST_GeomFromText(%s,27700));"
+            cur.execute(query, (
+            f['identifier'], replace_null_w_none(f['class']), None, None, f['startnode'], f['endnode'], wkt))
+            # schema, table_name,
+            # f['identifier'], replace_null_w_none(f['class']), replace_null_w_none(f['roadnumber']), replace_null_w_none(f['name1']), f['startnode'], f['endnode'], wkt))
+            con.commit()
+        con.close()
+    except psycopg2.DatabaseError, e:
+        print 'Error %s' % e
