@@ -102,7 +102,6 @@ class RoadNetworkCleaner:
 
         # settings popup
         self.dlg.settingsButton.clicked.connect(self.openSettings)
-        self.dlg.selectButton.clicked.connect(self.openDbSettings)
         self.dlg.snapCheckBox.stateChanged.connect(self.dlg.set_enabled_tolerance)
         self.dlg.errorsCheckBox.stateChanged.connect(self.dlg.set_enabled_id)
         self.dlg.inputCombo.currentIndexChanged.connect(self.popIdColumn)
