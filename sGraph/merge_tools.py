@@ -134,6 +134,7 @@ class mergeTool(QObject):
                         print "infinite"
                         break
                 all_trees.append(tree)
+                #TODO keep merged attributes
                 f_attrs = self.f_dict[tree[0]][0]
                 # new_geom = geom_dict[set_to_merge[0]]
                 geom_to_merge = [QgsGeometry.fromWkt(self.f_dict[node][1]) for node in tree]

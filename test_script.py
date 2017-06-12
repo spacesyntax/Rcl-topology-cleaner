@@ -53,4 +53,9 @@ final = to_shp(result, fields, crs, 'f' )
 QgsMapLayerRegistry.instance().addMapLayer(final)
 
 
+layer = iface.mapCanvas().currentLayer()
+qgs_flds = [QgsField(i.name(), i.type()) for i in layer.dataProvider().fields()]
+postgis_flds = qgs_to_postgis_fields(qgs_flds, arrays = False)
+
+
 

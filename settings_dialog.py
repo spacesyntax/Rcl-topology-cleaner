@@ -67,6 +67,8 @@ class SettingsDialog(QtGui.QDialog, FORM_CLASS):
         self.orphansCheckBox.setDisabled(False)
         self.orphansCheckBox.setChecked(True)
 
+    def getCleaningSettings(self):
+        pass
 
     def closeEvent(self, event):
         self.closingPlugin.emit()

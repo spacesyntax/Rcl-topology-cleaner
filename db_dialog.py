@@ -44,9 +44,12 @@ class DatabaseDialog(QtGui.QDialog, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
-        self.dbCombo.setDisabled(True)
+        self.dbCombo.setDisabled(False)
         self.schemaCombo.setDisabled(True)
-        self.nameLineEdit.setDisabled(True)
+        self.nameLineEdit.setDisabled(False)
+
+    def getDbSettings(self):
+        pass
 
     def closeEvent(self, event):
         self.closingPlugin.emit()

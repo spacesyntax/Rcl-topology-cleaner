@@ -91,7 +91,7 @@ def to_shp(path, any_features_list, layer_fields, crs, name, encoding, geom_type
     network.commitChanges()
     return network
 
-def qgs_to_postgis_fields(qgs_flds, postgis_flds, arrays = False):
+def qgs_to_postgis_fields(qgs_flds, arrays = False):
     postgis_flds = ''
     for f in qgs_flds:
         if arrays:
@@ -123,24 +123,23 @@ def qgs_to_postgis_fields(qgs_flds, postgis_flds, arrays = False):
     return postgis_flds[:-1]
 
 
-def to_dblayer( dbname, user, host, port, password, schema, table_name, postgis_flds, any_features_list):
+def to_dblayer( dbname, user, host, port, password, schema, table_name, postgis_flds, any_features_list, crs):
     connstring = "dbname=%s user=%s host=%s port=%s password=%s" % (dbname, user, host, port, password)
     try:
         con = psycopg2.connect(connstring)
         cur = con.cursor()
-        query = "DROP TABLE IF EXISTS %s.%s; CREATE TABLE %s.%s( id serial, identifier text, class text, roadnumber text, street_name text, startnode text, endnode text, geom geometry(LineString, 27700), CONSTRAINT %s PRIMARY KEY(id)); ALTER TABLE %s.%s OWNER TO postgres; " % (
-        schema, table_name, schema, table_name, table_name + '_pk', schema, table_name)
+        query = "DROP TABLE IF EXISTS %s.%s; CREATE TABLE %s.%s( %s, geom geometry(LINESTRING,%s))" % (
+        schema, table_name, schema, table_name, postgis_flds, crs)
         cur.execute(query)
         con.commit()
         for f in any_features_list:
+            # TODO
+            attrs = f.attributes()
             wkt = f.geometry().exportToWkt()
             # TODO: fix NULL values
             # TODO: fix schema, table_name w-o single quotes
-            query = "INSERT INTO simpl.dual_carriageways (identifier, class, roadnumber, street_name, startnode, endnode, geom) VALUES(%s, %s, %s, %s, %s, %s, ST_GeomFromText(%s,27700));"
-            cur.execute(query, (
-            f['identifier'], replace_null_w_none(f['class']), None, None, f['startnode'], f['endnode'], wkt))
-            # schema, table_name,
-            # f['identifier'], replace_null_w_none(f['class']), replace_null_w_none(f['roadnumber']), replace_null_w_none(f['name1']), f['startnode'], f['endnode'], wkt))
+            query = "INSERT INTO %s.%s VALUES(%s, ST_GeomFromText(%s,crs));" % (schema, table_name, attrs, wkt)
+            cur.execute(query)
             con.commit()
         con.close()
     except psycopg2.DatabaseError, e:

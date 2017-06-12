@@ -31,6 +31,7 @@ import resources
 # Import the code for the dialog
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
 from settings_dialog import SettingsDialog
+from db_dialog import DatabaseDialog
 import os.path
 
 
@@ -101,6 +102,7 @@ class RoadNetworkCleaner:
 
         # settings popup
         self.dlg.settingsButton.clicked.connect(self.openSettings)
+        self.dlg.selectButton.clicked.connect(self.openDbSettings)
         self.dlg.snapCheckBox.stateChanged.connect(self.dlg.set_enabled_tolerance)
         self.dlg.errorsCheckBox.stateChanged.connect(self.dlg.set_enabled_id)
         self.dlg.inputCombo.currentIndexChanged.connect(self.popIdColumn)
@@ -236,6 +238,10 @@ class RoadNetworkCleaner:
     def openSettings(self):
         self.dialog_instance = SettingsDialog()
         self.dialog_instance.exec_()
+
+    def openDbSettings(self):
+        self.dbsettings = DatabaseDialog()
+        self.dbsettings.exec_()
 
     # SOURCE: Network Segmenter https://github.com/OpenDigitalWorks/NetworkSegmenter
     # SOURCE: https://snorfalorpagus.net/blog/2013/12/07/multithreading-in-qgis-python-plugins/

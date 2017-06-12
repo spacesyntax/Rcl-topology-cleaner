@@ -61,6 +61,9 @@
      <height>22</height>
     </rect>
    </property>
+   <property name="text">
+    <string>cleaned</string>
+   </property>
   </widget>
   <widget class="QComboBox" name="comboBox">
    <property name="geometry">
