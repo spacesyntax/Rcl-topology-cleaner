@@ -30,7 +30,8 @@ from qgis.utils import *
 import resources
 # Import the code for the dialog
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
-from settings_dialog import SettingsDialog
+from DbSettings_dialog import DbSettingsDialog
+from DbSettings import DbSettings
 from db_dialog import DatabaseDialog
 import os.path
 
@@ -101,10 +102,13 @@ class RoadNetworkCleaner:
         self.dlg.cancelButton.clicked.connect(self.killCleaning)
 
         # settings popup
-        self.dlg.settingsButton.clicked.connect(self.openSettings)
+#        self.dlg.settingsButton.clicked.connect(self.openSettings)
         self.dlg.snapCheckBox.stateChanged.connect(self.dlg.set_enabled_tolerance)
         self.dlg.errorsCheckBox.stateChanged.connect(self.dlg.set_enabled_id)
         self.dlg.inputCombo.currentIndexChanged.connect(self.popIdColumn)
+
+        self.dbsettings_dlg = DbSettingsDialog()
+        self.dlg.settingsButton.clicked.connect(self.newDBSettingsDialog)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -233,14 +237,6 @@ class RoadNetworkCleaner:
                 cols_list.append(i.name())
         self.dlg.idCombo.addItems(cols_list)
 
-
-    def openSettings(self):
-        self.dialog_instance = SettingsDialog()
-        self.dialog_instance.exec_()
-
-    def openDbSettings(self):
-        self.dbsettings = DatabaseDialog()
-        self.dbsettings.exec_()
 
     # SOURCE: Network Segmenter https://github.com/OpenDigitalWorks/NetworkSegmenter
     # SOURCE: https://snorfalorpagus.net/blog/2013/12/07/multithreading-in-qgis-python-plugins/
@@ -477,6 +473,20 @@ class RoadNetworkCleaner:
         def kill(self):
             self.cl_killed = True
 
+    def newDBSettingsDialog(self):
+        """Run method that performs all the real work"""
+        # show the dialog
+        self.dbsettings_dlg.show()
+        # Run the dialog event loop
+        result = self.dbsettings_dlg.exec_()
+        # TODO: add db, schema
+        self.dbsettings_dlg.popDbs()
+
+        self.dbsettings_dlg.popSchemas()
+
+        # See if OK was pressed
+        if result:
+            pass
 
     def run(self):
         """Run method that performs all the real work"""
@@ -485,6 +495,7 @@ class RoadNetworkCleaner:
         self.dlg.popActiveLayers(self.getActiveLayers(self.iface))
         # Run the dialog event loop
         result = self.dlg.exec_()
+
         # See if OK was pressed
         if result:
             # Do something useful here - delete the line containing pass and

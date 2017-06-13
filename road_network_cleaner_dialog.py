@@ -71,7 +71,6 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
             self.outputCleaned.setText(file_name)
 
     def getOutput(self):
-        print len(self.outputCleaned.text()) > 0
         if len(self.outputCleaned.text()) > 0:
             return self.outputCleaned.text()
         else:

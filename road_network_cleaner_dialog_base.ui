@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>250</width>
-    <height>313</height>
+    <width>274</width>
+    <height>362</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -25,16 +25,7 @@
      <property name="sizeConstraint">
       <enum>QLayout::SetMinimumSize</enum>
      </property>
-     <property name="leftMargin">
-      <number>5</number>
-     </property>
-     <property name="topMargin">
-      <number>5</number>
-     </property>
-     <property name="rightMargin">
-      <number>5</number>
-     </property>
-     <property name="bottomMargin">
+     <property name="margin">
       <number>5</number>
      </property>
      <item row="17" column="2">
@@ -72,16 +63,6 @@
        </property>
        <property name="text">
         <string>Input layer</string>
-       </property>
-      </widget>
-     </item>
-     <item row="10" column="0" colspan="3">
-      <widget class="QLineEdit" name="outputCleaned">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
        </property>
       </widget>
      </item>
@@ -265,7 +246,17 @@
        </property>
       </widget>
      </item>
-     <item row="8" column="2">
+     <item row="10" column="0" colspan="2">
+      <widget class="QLineEdit" name="outputCleaned">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+      </widget>
+     </item>
+     <item row="10" column="2">
       <widget class="QPushButton" name="browseCleaned">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">

@@ -1,38 +1,38 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>Dialog</class>
- <widget class="QDialog" name="Dialog">
+ <class>DbSettingsDialogBase</class>
+ <widget class="QDialog" name="DbSettingsDialogBase">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>263</width>
-    <height>110</height>
+    <width>528</width>
+    <height>415</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Dialog</string>
+   <string>DbSettings</string>
   </property>
-  <widget class="QLabel" name="label_7">
+  <widget class="QLineEdit" name="nameLineEdit">
    <property name="geometry">
     <rect>
-     <x>6</x>
-     <y>72</y>
+     <x>74</x>
+     <y>100</y>
      <width>127</width>
      <height>22</height>
     </rect>
    </property>
    <property name="text">
-    <string>table name</string>
+    <string>cleaned</string>
    </property>
   </widget>
   <widget class="QLabel" name="label_5">
    <property name="geometry">
     <rect>
-     <x>6</x>
-     <y>12</y>
-     <width>127</width>
-     <height>20</height>
+     <x>1</x>
+     <y>20</y>
+     <width>54</width>
+     <height>16</height>
     </rect>
    </property>
    <property name="text">
@@ -42,44 +42,44 @@
   <widget class="QLabel" name="label_6">
    <property name="geometry">
     <rect>
-     <x>6</x>
-     <y>42</y>
-     <width>127</width>
-     <height>20</height>
+     <x>1</x>
+     <y>60</y>
+     <width>46</width>
+     <height>16</height>
     </rect>
    </property>
    <property name="text">
     <string>schema</string>
    </property>
   </widget>
-  <widget class="QLineEdit" name="lineEdit">
+  <widget class="QComboBox" name="dbCombo">
    <property name="geometry">
     <rect>
-     <x>143</x>
-     <y>72</y>
-     <width>98</width>
-     <height>22</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>cleaned</string>
-   </property>
-  </widget>
-  <widget class="QComboBox" name="comboBox">
-   <property name="geometry">
-    <rect>
-     <x>140</x>
-     <y>10</y>
+     <x>71</x>
+     <y>18</y>
      <width>104</width>
      <height>26</height>
     </rect>
    </property>
   </widget>
-  <widget class="QComboBox" name="comboBox_2">
+  <widget class="QLabel" name="label_7">
    <property name="geometry">
     <rect>
-     <x>140</x>
-     <y>40</y>
+     <x>1</x>
+     <y>100</y>
+     <width>65</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>table name</string>
+   </property>
+  </widget>
+  <widget class="QComboBox" name="schemaCombo">
+   <property name="geometry">
+    <rect>
+     <x>71</x>
+     <y>58</y>
      <width>104</width>
      <height>26</height>
     </rect>

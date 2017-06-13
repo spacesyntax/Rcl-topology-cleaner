@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 /***************************************************************************
- RoadNetworkCleanerDialog
+ DbSettingsDialog
                                  A QGIS plugin
- This plugin clean a road centre line map.
+ This is to load the postgis db settings
                              -------------------
-        begin                : 2016-11-10
+        begin                : 2017-06-12
         git sha              : $Format:%H$
-        copyright            : (C) 2016 by Space SyntaxLtd
+        copyright            : (C) 2017 by Ioanna Kolovou
         email                : i.kolovou@spacesyntax.com
  ***************************************************************************/
 
@@ -25,18 +25,19 @@ import os
 
 from PyQt4 import QtGui, uic
 from PyQt4.QtCore import pyqtSignal, Qt
+from PyQt4 import QtGui, uic
+
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'road_network_cleaner_dialog_base.ui'))
+    os.path.dirname(__file__), 'DbSettings_dialog_base.ui'))
 
 
-class DatabaseDialog(QtGui.QDialog, FORM_CLASS):
-
+class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
     closingPlugin = pyqtSignal()
 
     def __init__(self, parent=None):
         """Constructor."""
-        super(DatabaseDialog, self).__init__(parent)
+        super(DbSettingsDialog, self).__init__(parent)
         # Set up the user interface from Designer.
         # After setupUI you can access any designer object by doing
         # self.<objectname>, and you can use autoconnect slots - see
@@ -44,11 +45,14 @@ class DatabaseDialog(QtGui.QDialog, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
-        self.dbCombo.setDisabled(False)
-        self.schemaCombo.setDisabled(True)
-        self.nameLineEdit.setDisabled(False)
-
     def getDbSettings(self):
+        pass
+
+    def popDbs(self):
+        self.dbCombo.clear()
+        self.inputCombo.addItems([])
+
+    def popSchemas(self, db):
         pass
 
     def closeEvent(self, event):
