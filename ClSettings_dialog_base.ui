@@ -6,92 +6,120 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>168</width>
-    <height>302</height>
+    <width>149</width>
+    <height>285</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
-  <widget class="QWidget" name="layoutWidget">
+  <widget class="QWidget" name="">
    <property name="geometry">
     <rect>
      <x>10</x>
      <y>10</y>
-     <width>141</width>
-     <height>291</height>
+     <width>125</width>
+     <height>259</height>
     </rect>
    </property>
-   <layout class="QVBoxLayout" name="verticalLayout">
+   <layout class="QVBoxLayout" name="verticalLayout_2">
     <item>
-     <widget class="QCheckBox" name="invalidsCheckBox">
-      <property name="text">
-       <string>invalids</string>
-      </property>
-     </widget>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <item>
+       <widget class="QCheckBox" name="invalidsCheckBox">
+        <property name="text">
+         <string>invalids</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="pointsCheckBox">
+        <property name="text">
+         <string>points</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="multipartsCheckBox">
+        <property name="text">
+         <string>multiparts</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="selfinterCheckBox">
+        <property name="text">
+         <string>self intersecting</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="duplicatesCheckBox">
+        <property name="text">
+         <string>duplicates</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="overlapsCheckBox">
+        <property name="text">
+         <string>overlaps</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="closedplCheckBox">
+        <property name="text">
+         <string>closed polylines</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="breakCheckBox">
+        <property name="text">
+         <string>break at vertices</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="mergeCheckBox">
+        <property name="text">
+         <string>continuous lines</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="orphansCheckBox">
+        <property name="text">
+         <string>orphans</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </item>
     <item>
-     <widget class="QCheckBox" name="pointsCheckBox">
-      <property name="text">
-       <string>points</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QCheckBox" name="multipartsCheckBox">
-      <property name="text">
-       <string>multiparts</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QCheckBox" name="selfinterCheckBox">
-      <property name="text">
-       <string>self intersecting</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QCheckBox" name="duplicatesCheckBox">
-      <property name="text">
-       <string>duplicates</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QCheckBox" name="overlapsCheckBox">
-      <property name="text">
-       <string>overlaps</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QCheckBox" name="closedplCheckBox">
-      <property name="text">
-       <string>closed polylines</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QCheckBox" name="breakCheckBox">
-      <property name="text">
-       <string>break at vertices</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QCheckBox" name="mergeCheckBox">
-      <property name="text">
-       <string>continuous lines</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QCheckBox" name="orphansCheckBox">
-      <property name="text">
-       <string>orphans</string>
-      </property>
-     </widget>
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <spacer name="horizontalSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pushButton">
+        <property name="text">
+         <string>OK</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </item>
    </layout>
   </widget>

@@ -96,12 +96,10 @@ class RoadNetworkCleaner:
             pydevd.settrace('localhost', port=53100, stdoutToServer=True, stderrToServer=True, suspend=True)
 
         # setup GUI signals
-        # self.dockwidget.cleanButton.clicked.connect(self.runCleaning)
         self.dlg.cleanButton.clicked.connect(self.startCleaning)
         self.dlg.cancelButton.clicked.connect(self.killCleaning)
 
         # settings popup
-#        self.dlg.settingsButton.clicked.connect(self.openSettings)
         self.dlg.snapCheckBox.stateChanged.connect(self.dlg.set_enabled_tolerance)
         self.dlg.errorsCheckBox.stateChanged.connect(self.dlg.set_enabled_id)
         self.dlg.inputCombo.currentIndexChanged.connect(self.popIdColumn)
@@ -111,6 +109,8 @@ class RoadNetworkCleaner:
 
         self.dlg.browseCleaned.clicked.connect(self.setOutput)
         self.dlg.settingsButton.clicked.connect(self.openClSettings)
+
+        #self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.dbsettings_dlg.popSchemas)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -126,7 +126,6 @@ class RoadNetworkCleaner:
         """
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
         return QCoreApplication.translate('RoadNetworkCleaner', message)
-
 
     def add_action(
         self,
@@ -249,7 +248,7 @@ class RoadNetworkCleaner:
             # Run the dialog event loop
             result = self.dbsettings_dlg.exec_()
             # TODO: add db, schema
-            #self.dbsettings_dlg.popDbs()
+            #self.dbsettings_dlg.popDbs(self.dbsettings_dlg.getQGISDbs())
             #self.dbsettings_dlg.popSchemas()
 
     def openClSettings(self):
@@ -496,6 +495,10 @@ class RoadNetworkCleaner:
         # show the dialog
         self.dlg.show()
         self.dlg.popActiveLayers(self.getActiveLayers(self.iface))
+        available_dbs = self.dbsettings_dlg.getQGISDbs()
+        self.dbsettings_dlg.popDbs(available_dbs)
+        self.dbsettings_dlg.popSchemas(available_dbs, self.dbsettings_dlg.dbCombo.currentText())
+        self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(lambda db_selected=self.dbsettings_dlg.dbCombo.currentText(): self.dbsettings_dlg.popSchemas(available_dbs, db_selected))
 
         # Run the dialog event loop
         result = self.dlg.exec_()

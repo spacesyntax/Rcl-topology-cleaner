@@ -23,8 +23,12 @@
 
 import os
 
-from PyQt4.QtCore import pyqtSignal, Qt
+from PyQt4.QtCore import pyqtSignal, QSettings
 from PyQt4 import QtGui, uic
+
+import db_manager.db_plugins.postgis.connector as con
+from qgis.core import QgsDataSourceURI
+
 
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
@@ -45,28 +49,40 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
-    def getDbSettings(self):
-        pass
+    def getQGISDbs(self):
+        from PyQt4.QtCore import QSettings
+        qs = QSettings()
+        available_dbs = {}
+        for k in sorted(qs.allKeys()):
+            if k[0:23] == 'PostgreSQL/connections/' and k[-9:] == '/database':
+                available_dbs[k[23:].split('/')[0]] = {}
 
-    def popDbs(self):
+        for dbname, info in available_dbs.items():
+            host = qs.value('PostgreSQL/connections/' + dbname + '/host')
+            port = qs.value('PostgreSQL/connections/' + dbname + '/port')
+            username = qs.value('PostgreSQL/connections/' + dbname + '/username')
+            password = qs.value('PostgreSQL/connections/' + dbname + '/password')
+            info['host'] = host
+            info['port'] = port
+            info['username'] = username
+            info['password'] = password
+            available_dbs[dbname] = dict(info)
+
+        return available_dbs
+
+    def popDbs(self, available_dbs):
         self.dbCombo.clear()
-        self.inputCombo.addItems([])
+        self.dbCombo.addItems(available_dbs.keys())
+        return
 
-    def popSchemas(self, db):
+    def popSchemas(self, available_dbs, selected_db):
+        uri = QgsDataSourceURI()
+        db_info = available_dbs[selected_db]
+        uri.setConnection(db_info['host'], db_info['port'], selected_db, db_info['username'], db_info['password'])
+        c = con.PostGisDBConnector(uri)
+        schemas = list(set([i[2] for i in c.getTables()]))
+        self.schemaCombo.addItems(schemas)
         pass
-
-    def newDBSettingsDialog(self):
-        """Run method that performs all the real work"""
-        # show the dialog
-        self.dbsettings_dlg.show()
-        # Run the dialog event loop
-        result = self.dbsettings_dlg.exec_()
-        # TODO: add db, schema
-        self.dbsettings_dlg.popDbs()
-        self.dbsettings_dlg.popSchemas()
-        # See if OK was pressed
-        if result:
-            pass
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
