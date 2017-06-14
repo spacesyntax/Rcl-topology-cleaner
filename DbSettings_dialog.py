@@ -23,7 +23,6 @@
 
 import os
 
-from PyQt4 import QtGui, uic
 from PyQt4.QtCore import pyqtSignal, Qt
 from PyQt4 import QtGui, uic
 
