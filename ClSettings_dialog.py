@@ -27,16 +27,16 @@ from PyQt4 import QtGui, uic
 from PyQt4.QtCore import pyqtSignal, Qt
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'road_network_cleaner_dialog_base.ui'))
+    os.path.dirname(__file__), 'ClSettings_dialog_base.ui'))
 
 
-class SettingsDialog(QtGui.QDialog, FORM_CLASS):
+class ClSettingsDialog(QtGui.QDialog, FORM_CLASS):
 
     closingPlugin = pyqtSignal()
 
     def __init__(self, parent=None):
         """Constructor."""
-        super(SettingsDialog, self).__init__(parent)
+        super(ClSettingsDialog, self).__init__(parent)
         # Set up the user interface from Designer.
         # After setupUI you can access any designer object by doing
         # self.<objectname>, and you can use autoconnect slots - see

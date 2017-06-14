@@ -23,7 +23,7 @@
 from PyQt4.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, Qt, QThread
 from PyQt4.QtGui import QAction, QIcon
 from qgis.core import QgsMapLayer, QgsMapLayerRegistry, QgsMessageLog
-from qgis.gui import QgsMessageBar
+from PyQt4 import QtGui, uic
 
 from qgis.utils import *
 # Initialize Qt resources from file resources.py
@@ -31,10 +31,9 @@ import resources
 # Import the code for the dialog
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
 from DbSettings_dialog import DbSettingsDialog
-from DbSettings import DbSettings
-from db_dialog import DatabaseDialog
-import os.path
+from ClSettings_dialog import ClSettingsDialog
 
+import os.path
 
 from sGraph.break_tools import *
 from sGraph.merge_tools import *
@@ -108,7 +107,10 @@ class RoadNetworkCleaner:
         self.dlg.inputCombo.currentIndexChanged.connect(self.popIdColumn)
 
         self.dbsettings_dlg = DbSettingsDialog()
-        self.dlg.settingsButton.clicked.connect(self.newDBSettingsDialog)
+        self.clsettings_dlg = ClSettingsDialog()
+
+        self.dlg.browseCleaned.clicked.connect(self.setOutput)
+        self.dlg.settingsButton.clicked.connect(self.openClSettings)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -237,6 +239,23 @@ class RoadNetworkCleaner:
                 cols_list.append(i.name())
         self.dlg.idCombo.addItems(cols_list)
 
+    def setOutput(self):
+        if self.dlg.shpRadioButton.isChecked():
+            file_name = QtGui.QFileDialog.getSaveFileName(self.dlg, "Save output file ", "cleaned_network", '*.shp')
+            if file_name:
+                self.dlg.outputCleaned.setText(file_name)
+        else:
+            self.dbsettings_dlg.show()
+            # Run the dialog event loop
+            result = self.dbsettings_dlg.exec_()
+            # TODO: add db, schema
+            #self.dbsettings_dlg.popDbs()
+            #self.dbsettings_dlg.popSchemas()
+
+    def openClSettings(self):
+        self.clsettings_dlg.show()
+        result = self.clsettings_dlg.exec_()
+
 
     # SOURCE: Network Segmenter https://github.com/OpenDigitalWorks/NetworkSegmenter
     # SOURCE: https://snorfalorpagus.net/blog/2013/12/07/multithreading-in-qgis-python-plugins/
@@ -272,8 +291,6 @@ class RoadNetworkCleaner:
 
     def cleaningFinished(self, ret):
         # clean up  the worker and thread
-
-
 
         try:
             # report the result
@@ -473,26 +490,13 @@ class RoadNetworkCleaner:
         def kill(self):
             self.cl_killed = True
 
-    def newDBSettingsDialog(self):
-        """Run method that performs all the real work"""
-        # show the dialog
-        self.dbsettings_dlg.show()
-        # Run the dialog event loop
-        result = self.dbsettings_dlg.exec_()
-        # TODO: add db, schema
-        self.dbsettings_dlg.popDbs()
-
-        self.dbsettings_dlg.popSchemas()
-
-        # See if OK was pressed
-        if result:
-            pass
 
     def run(self):
         """Run method that performs all the real work"""
         # show the dialog
         self.dlg.show()
         self.dlg.popActiveLayers(self.getActiveLayers(self.iface))
+
         # Run the dialog event loop
         result = self.dlg.exec_()
 

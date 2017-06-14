@@ -45,7 +45,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.setupUi(self)
 
         self.outputCleaned.setPlaceholderText("Save as temporary layer...")
-        self.browseCleaned.clicked.connect(self.setOutput)
+
 
         # Setup the progress bar
         self.cleaningProgress.setMinimum(0)
@@ -64,11 +64,6 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
     def getNetwork(self):
         return self.inputCombo.currentText()
-
-    def setOutput(self):
-        file_name = QtGui.QFileDialog.getSaveFileName(self, "Save output file ", "cleaned_network", '*.shp')
-        if file_name:
-            self.outputCleaned.setText(file_name)
 
     def getOutput(self):
         if len(self.outputCleaned.text()) > 0:

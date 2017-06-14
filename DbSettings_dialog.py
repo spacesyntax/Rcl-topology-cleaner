@@ -32,6 +32,7 @@ FORM_CLASS, _ = uic.loadUiType(os.path.join(
 
 
 class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
+
     closingPlugin = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -53,6 +54,19 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
 
     def popSchemas(self, db):
         pass
+
+    def newDBSettingsDialog(self):
+        """Run method that performs all the real work"""
+        # show the dialog
+        self.dbsettings_dlg.show()
+        # Run the dialog event loop
+        result = self.dbsettings_dlg.exec_()
+        # TODO: add db, schema
+        self.dbsettings_dlg.popDbs()
+        self.dbsettings_dlg.popSchemas()
+        # See if OK was pressed
+        if result:
+            pass
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
