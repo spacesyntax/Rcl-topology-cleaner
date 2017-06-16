@@ -24,6 +24,8 @@ from PyQt4.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, Qt,
 from PyQt4.QtGui import QAction, QIcon
 from qgis.core import QgsMapLayer, QgsMapLayerRegistry, QgsMessageLog
 from PyQt4 import QtGui, uic
+from qgis.gui import QgsMessageBar
+from PyQt4.QtCore import QSettings
 
 from qgis.utils import *
 # Initialize Qt resources from file resources.py
@@ -64,6 +66,9 @@ class RoadNetworkCleaner:
         """
         # Save reference to the QGIS interface
         self.iface = iface
+
+        qs = QSettings()
+        self.qs = qs
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
         # initialize locale
@@ -379,6 +384,15 @@ class RoadNetworkCleaner:
                     path = self.settings['output']
                     tolerance = self.settings['tolerance']
                     user_id = self.settings['user_id']
+                    output_type = self.settings['output_type']
+                    if output_type == 'postGIS':
+                        merge_attrs = True
+                    elif output_type == 'shp':
+                        merge_attrs = False
+                    else:
+                        self.giveMessage('Specify otput type',
+                                         QgsMessageBar.CRITICAL)
+                        return
 
                     # project settings
                     layer = getLayerByName(layer_name)
@@ -415,7 +429,7 @@ class RoadNetworkCleaner:
                     step = 45/ len(self.mrg.con_1)
                     self.mrg.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
 
-                    result = self.mrg.merge()
+                    result = self.mrg.merge(merge_attrs)
 
                     if self.cl_killed is True or self.mrg.killed is True: return
 
@@ -495,10 +509,11 @@ class RoadNetworkCleaner:
         # show the dialog
         self.dlg.show()
         self.dlg.popActiveLayers(self.getActiveLayers(self.iface))
-        available_dbs = self.dbsettings_dlg.getQGISDbs()
+        available_dbs = self.dbsettings_dlg.getQGISDbs(self.qs)
         self.dbsettings_dlg.popDbs(available_dbs)
-        self.dbsettings_dlg.popSchemas(available_dbs, self.dbsettings_dlg.dbCombo.currentText())
-        self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(lambda db_selected=self.dbsettings_dlg.dbCombo.currentText(): self.dbsettings_dlg.popSchemas(available_dbs, db_selected))
+        if self.dbsettings_dlg.dbCombo.currentText() in available_dbs.keys():
+            self.dbsettings_dlg.popSchemas(available_dbs, self.dbsettings_dlg.dbCombo.currentText())
+        #self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(lambda db_selected=self.dbsettings_dlg.dbCombo.currentText(): self.dbsettings_dlg.popSchemas(available_dbs, db_selected))
 
         # Run the dialog event loop
         result = self.dlg.exec_()

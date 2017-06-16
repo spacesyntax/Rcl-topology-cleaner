@@ -58,6 +58,8 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.idCombo.setDisabled(True)
         self.decimalsSpin.setDisabled(True)
 
+        self.shpRadioButton.setChecked(True)
+
     def closeEvent(self, event):
         self.closingPlugin.emit()
         event.accept()
@@ -98,6 +100,12 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         else:
             return None
 
+    def get_output_type(self):
+        if self.shpRadioButton.isChecked():
+            return 'shp'
+        else:
+            return 'postgis'
+
     def set_enabled_tolerance(self):
         if self.snapCheckBox.isChecked():
             self.decimalsSpin.setDisabled(False)
@@ -112,6 +120,6 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
     def get_settings(self):
         settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'tolerance': self.getTolerance(),
-                    'errors': self.get_errors(), 'user_id': self.get_user_id()}
+                    'errors': self.get_errors(), 'user_id': self.get_user_id(), 'output_type': self.get_output_type()}
         return settings
 

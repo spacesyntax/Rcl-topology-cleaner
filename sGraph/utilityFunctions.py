@@ -2,6 +2,7 @@
 from os.path import expanduser
 from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsFeature, QgsGeometry,QgsFields
 import psycopg2
+from psycopg2.extensions import AsIs
 
 # source: ess utility functions
 
@@ -91,10 +92,9 @@ def to_shp(path, any_features_list, layer_fields, crs, name, encoding, geom_type
     network.commitChanges()
     return network
 
-def qgs_to_postgis_fields(qgs_flds, arrays = False):
+def qgs_to_postgis_fields(qgs_flds):
     postgis_flds = ''
     for f in qgs_flds:
-        if arrays:
             if f.type() == 2:
                 # bigint
                 postgis_flds += f.name() + ' bigint[],'
@@ -107,40 +107,35 @@ def qgs_to_postgis_fields(qgs_flds, arrays = False):
             else:
                 # string
                 postgis_flds += f.name() + ' text[],'
-        else:
-            if f.type() == 2:
-                # bigint
-                postgis_flds += f.name() + ' bigint,'
-            elif f.type() == 6:
-                # numeric
-                postgis_flds += f.name() + ' numeric,'
-            elif f.type() == 1:
-                # numeric
-                postgis_flds += f.name() + ' bool,'
-            else:
-                # string
-                postgis_flds += f.name() + ' text,'
     return postgis_flds[:-1]
 
 
 def to_dblayer( dbname, user, host, port, password, schema, table_name, postgis_flds, any_features_list, crs):
+    crs_id = crs.postgisSrid ()
+    postgis_flds_names = None
     connstring = "dbname=%s user=%s host=%s port=%s password=%s" % (dbname, user, host, port, password)
     try:
         con = psycopg2.connect(connstring)
         cur = con.cursor()
         query = "DROP TABLE IF EXISTS %s.%s; CREATE TABLE %s.%s( %s, geom geometry(LINESTRING,%s))" % (
-        schema, table_name, schema, table_name, postgis_flds, crs)
+        schema, table_name, schema, table_name, postgis_flds, crs_id)
         cur.execute(query)
         con.commit()
-        for f in any_features_list:
-            # TODO
-            attrs = f.attributes()
-            wkt = f.geometry().exportToWkt()
-            # TODO: fix NULL values
-            # TODO: fix schema, table_name w-o single quotes
-            query = "INSERT INTO %s.%s VALUES(%s, ST_GeomFromText(%s,crs));" % (schema, table_name, attrs, wkt)
-            cur.execute(query)
-            con.commit()
+
+        data = []
+        for (fid, attrs, wkt) in any_features_list:
+            attrs = '{' + str([str(i) if i else None for i in attrs])[1:-1] + '}'
+            values = attrs + wkt
+            data.append(tuple(values))
+
+        args_str = ','.join(
+            cur.mogrify("(" + "%s, "* (len(attrs)-1) + "ST_GeomFromText(%s,27700))", x) for x in tuple(data))
+        ins_str = cur.mogrify(
+            "INSERT INTO %s.%s (" + postgis_flds_names.join(', ') + " geom) VALUES ",
+            (AsIs(schema), AsIs(table_name)))
+        cur.execute(ins_str + args_str)
+        con.commit()
         con.close()
+
     except psycopg2.DatabaseError, e:
         print 'Error %s' % e

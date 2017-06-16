@@ -49,9 +49,8 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
-    def getQGISDbs(self):
-        from PyQt4.QtCore import QSettings
-        qs = QSettings()
+    def getQGISDbs(self, qs):
+
         available_dbs = {}
         for k in sorted(qs.allKeys()):
             if k[0:23] == 'PostgreSQL/connections/' and k[-9:] == '/database':
