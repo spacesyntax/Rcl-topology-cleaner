@@ -22,25 +22,25 @@
 """
 from PyQt4.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, Qt, QThread
 from PyQt4.QtGui import QAction, QIcon
-from qgis.core import QgsMapLayer, QgsMapLayerRegistry, QgsMessageLog
 from PyQt4 import QtGui, uic
-from qgis.gui import QgsMessageBar
-from PyQt4.QtCore import QSettings
 
+from qgis.core import QgsMapLayer, QgsMapLayerRegistry, QgsMessageLog, QgsDataSourceURI
+from qgis.gui import QgsMessageBar
 from qgis.utils import *
+
+import db_manager.db_plugins.postgis.connector as con
+import os.path
+import traceback
+
 # Initialize Qt resources from file resources.py
 import resources
 # Import the code for the dialog
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
 from DbSettings_dialog import DbSettingsDialog
 from ClSettings_dialog import ClSettingsDialog
-
-import os.path
-
 from sGraph.break_tools import *
 from sGraph.merge_tools import *
 from sGraph.utilityFunctions import *
-import traceback
 
 
 # Import the debug library
@@ -114,6 +114,9 @@ class RoadNetworkCleaner:
 
         self.dlg.browseCleaned.clicked.connect(self.setOutput)
         self.dlg.settingsButton.clicked.connect(self.openClSettings)
+
+        self.available_dbs = self.dbsettings_dlg.getQGISDbs(self.qs)
+        print self.available_dbs
 
         #self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.dbsettings_dlg.popSchemas)
 
@@ -242,6 +245,18 @@ class RoadNetworkCleaner:
             for i in self.dlg.getInput(self.iface).dataProvider().fields():
                 cols_list.append(i.name())
         self.dlg.idCombo.addItems(cols_list)
+
+    def popSchemas(self):
+        self.dbsettings_dlg.schemaCombo.clear()
+        schemas = []
+        if self.dbsettings_dlg.getSelectedDb(self.iface):
+            uri = QgsDataSourceURI()
+            selected_db = self.dbsettings_dlg.getSelectedDb(self.iface)
+            db_info = self.available_dbs[selected_db]
+            uri.setConnection(db_info['host'], db_info['port'], selected_db, db_info['username'], db_info['password'])
+            c = con.PostGisDBConnector(uri)
+            schemas = list(set([i[2] for i in c.getTables()]))
+        self.dbsettings_dlg.schemaCombo.addItems(schemas)
 
     def setOutput(self):
         if self.dlg.shpRadioButton.isChecked():
@@ -509,11 +524,12 @@ class RoadNetworkCleaner:
         # show the dialog
         self.dlg.show()
         self.dlg.popActiveLayers(self.getActiveLayers(self.iface))
-        available_dbs = self.dbsettings_dlg.getQGISDbs(self.qs)
-        self.dbsettings_dlg.popDbs(available_dbs)
-        if self.dbsettings_dlg.dbCombo.currentText() in available_dbs.keys():
-            self.dbsettings_dlg.popSchemas(available_dbs, self.dbsettings_dlg.dbCombo.currentText())
-        #self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(lambda db_selected=self.dbsettings_dlg.dbCombo.currentText(): self.dbsettings_dlg.popSchemas(available_dbs, db_selected))
+
+        self.dbsettings_dlg.popDbs(self.available_dbs)
+        if self.dbsettings_dlg.dbCombo.currentText() in self.available_dbs.keys():
+            self.popSchemas()
+
+        self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.popSchemas)
 
         # Run the dialog event loop
         result = self.dlg.exec_()

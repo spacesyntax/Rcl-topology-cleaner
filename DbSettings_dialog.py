@@ -26,8 +26,7 @@ import os
 from PyQt4.QtCore import pyqtSignal, QSettings
 from PyQt4 import QtGui, uic
 
-import db_manager.db_plugins.postgis.connector as con
-from qgis.core import QgsDataSourceURI
+
 
 
 
@@ -48,6 +47,8 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
         # http://qt-project.org/doc/qt-4.8/designer-using-a-ui-file.html
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
+
+        self.nameLineEdit.setText("cleaned")
 
     def getQGISDbs(self, qs):
 
@@ -74,14 +75,12 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
         self.dbCombo.addItems(available_dbs.keys())
         return
 
-    def popSchemas(self, available_dbs, selected_db):
-        uri = QgsDataSourceURI()
-        db_info = available_dbs[selected_db]
-        uri.setConnection(db_info['host'], db_info['port'], selected_db, db_info['username'], db_info['password'])
-        c = con.PostGisDBConnector(uri)
-        schemas = list(set([i[2] for i in c.getTables()]))
-        self.schemaCombo.addItems(schemas)
-        pass
+    def getSelectedDb(self, iface):
+        return self.dbCombo.currentText()
+
+    def getDbSettings(self):
+        (db_name, schema_name, table_name) = (self.dbCombo.currentText(), self.schemaCombo.currentText(), self.nameLineEdit.currentText())
+        return db_name, schema_name, table_name
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
