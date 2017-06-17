@@ -13,6 +13,15 @@ execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/utilityFunctions.py'.encode('u
 #layer_name = 'madagascar'
 layer_name = 'nyc_streets'
 
+dbname = 'nyc'
+user = 'postgres'
+host = 'localhost'
+port = 5432
+password = 'spaces01'
+schema = '"public"'
+table_name = '"1 test"'
+connstring = "dbname=%s user=%s host=%s port=%s password=%s" % (dbname, user, host, port, password)
+
 # cleaning settings
 
 path = None
@@ -31,6 +40,7 @@ br = breakTool(layer, tolerance, user_id, True)
 input_geometries = br.geometries
 input_fid_to_id = br.fid_to_uid
 
+br.add_edges()
 broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates = br.break_features()
 
 #broken_network = br.to_shp(broken_features, crs, 'broken')

@@ -68,7 +68,7 @@ class ClSettingsDialog(QtGui.QDialog, FORM_CLASS):
         self.orphansCheckBox.setChecked(True)
 
     def getCleaningSettings(self):
-        pass
+        return {'break': self.breakCheckBox.isChecked(), 'merge': self.mergeCheckBox.isChecked(), 'orphans': self.orphansCheckBox.isChecked()}
 
     def closeEvent(self, event):
         self.closingPlugin.emit()

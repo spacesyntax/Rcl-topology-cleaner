@@ -290,6 +290,8 @@ class RoadNetworkCleaner:
     def startCleaning(self, settings):
         self.dlg.cleaningProgress.reset()
         settings = self.dlg.get_settings()
+        cl_settings = self.clsettings_dlg.getCleaningSettings()
+        settings.update(cl_settings)
         if settings['input']:
 
             cleaning = self.clean(settings, self.iface)
@@ -306,6 +308,7 @@ class RoadNetworkCleaner:
             self.thread = thread
             self.cleaning = cleaning
         else:
+            self.giveMessage('Missing user input!', QgsMessageBar.INFO)
             return
 
     def cleaningFinished(self, ret):
@@ -402,7 +405,7 @@ class RoadNetworkCleaner:
                     output_type = self.settings['output_type']
                     if output_type == 'postGIS':
                         merge_attrs = True
-                    elif output_type == 'shp':
+                    elif output_type in [ 'shp', 'memory']:
                         merge_attrs = False
                     else:
                         self.giveMessage('Specify otput type',

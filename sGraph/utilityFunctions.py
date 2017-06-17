@@ -92,50 +92,97 @@ def to_shp(path, any_features_list, layer_fields, crs, name, encoding, geom_type
     network.commitChanges()
     return network
 
-def qgs_to_postgis_fields(qgs_flds):
-    postgis_flds = ''
-    for f in qgs_flds:
+def qgs_to_postgis_fields(qgs_flds, crs, arrays = False):
+    postgis_flds = []
+
+    if arrays:
+        for f in qgs_flds:
             if f.type() == 2:
                 # bigint
-                postgis_flds += f.name() + ' bigint[],'
+                postgis_flds.append((AsIs('"f.name().lower()"'), ' bigint[]'))
             elif f.type() == 6:
                 # numeric
-                postgis_flds += f.name() + ' numeric[],'
+                postgis_flds.append((AsIs('"f.name().lower()"'), ' numeric[]'))
             elif f.type() == 1:
                 # numeric
-                postgis_flds += f.name() + ' bool[],'
+                postgis_flds.append((AsIs('"f.name().lower()"'), ' bool[]'))
             else:
                 # string
-                postgis_flds += f.name() + ' text[],'
-    return postgis_flds[:-1]
+                postgis_flds.append((AsIs('"f.name().lower()"'), ' text[]'))
+    else:
+        for f in qgs_flds:
+            if f.type() == 2:
+                # bigint
+                postgis_flds.append((AsIs('"f.name().lower()"'), ' bigint'))
+            elif f.type() == 6:
+                # numeric
+                postgis_flds.append((AsIs('"f.name().lower()"'), ' numeric'))
+            elif f.type() == 1:
+                # numeric
+                postgis_flds.append((AsIs('"f.name().lower()"'), ' bool'))
+            else:
+                # string
+                postgis_flds.append((f.name().lower(), ' text'))
+    postgis_flds.append(('geom', 'geometry(LINESTRING,' + str(crs_id) + ')'))
+    return postgis_flds
 
+def rmv_parenthesis(my_string):
+    idx = my_string.find(',ST_GeomFromText') - 1
+    return  my_string[:idx] + my_string[(idx+1):]
 
-def to_dblayer( dbname, user, host, port, password, schema, table_name, postgis_flds, any_features_list, crs):
-    crs_id = crs.postgisSrid ()
-    postgis_flds_names = None
+def to_dblayer(dbname, user, host, port, password, schema, table_name, qgs_flds, any_features_list, crs, arrays=False):
+
+    crs_id = str(crs.postgisSrid())
     connstring = "dbname=%s user=%s host=%s port=%s password=%s" % (dbname, user, host, port, password)
     try:
         con = psycopg2.connect(connstring)
         cur = con.cursor()
-        query = "DROP TABLE IF EXISTS %s.%s; CREATE TABLE %s.%s( %s, geom geometry(LINESTRING,%s))" % (
-        schema, table_name, schema, table_name, postgis_flds, crs_id)
+        if arrays:
+            post_q_flds = {2: 'bigint[]', 6: 'numeric[]', 1: 'bool[]', 'else':'text[]'}
+        else:
+            post_q_flds = {2: 'bigint', 6: 'numeric', 1: 'bool', 'else':'text'}
+
+        postgis_flds_q = """"""
+        for f in qgs_flds:
+            f_name = '\"'  + f.name()  + '\"'
+            try: f_type = post_q_flds[f.type()]
+            except KeyError: f_type = post_q_flds['else']
+            postgis_flds_q += cur.mogrify("""%s %s,""", (AsIs(f_name), AsIs(f_type)))
+
+        query = cur.mogrify("""DROP TABLE IF EXISTS %s.%s; CREATE TABLE %s.%s(%s geom geometry(LINESTRING, %s))""", (AsIs(schema), AsIs(table_name), AsIs(schema), AsIs(table_name), AsIs(postgis_flds_q), AsIs(crs_id)))
         cur.execute(query)
         con.commit()
 
         data = []
-        for (fid, attrs, wkt) in any_features_list:
-            attrs = '{' + str([str(i) if i else None for i in attrs])[1:-1] + '}'
-            values = attrs + wkt
-            data.append(tuple(values))
 
-        args_str = ','.join(
-            cur.mogrify("(" + "%s, "* (len(attrs)-1) + "ST_GeomFromText(%s,27700))", x) for x in tuple(data))
-        ins_str = cur.mogrify(
-            "INSERT INTO %s.%s (" + postgis_flds_names.join(', ') + " geom) VALUES ",
-            (AsIs(schema), AsIs(table_name)))
+        if arrays:
+            for (fid, attrs, wkt) in any_features_list:
+                for idx, l_attrs in enumerate(attrs):
+                    attrs[idx] = [i if i else None for i in l_attrs]
+                data.append(tuple((attrs, wkt)))
+            args_str = ','.join(
+                [rmv_parenthesis(cur.mogrify("%s,ST_GeomFromText(%s,%s))", (tuple(attrs)[1:-1], wkt, AsIs(crs_id)))) for
+                 (attrs, wkt) in tuple(data)])
+
+        else:
+            for (fid, attrs, wkt) in any_features_list:
+                data.append(tuple(([i if i else None for i in attrs], wkt)))
+            args_str = ','.join(
+                [rmv_parenthesis(cur.mogrify("%s,ST_GeomFromText(%s,%s))", (tuple(attrs), wkt, AsIs(crs_id)))) for
+                 (attrs, wkt) in tuple(data)])
+
+        ins_str = cur.mogrify("""INSERT INTO %s.%s VALUES """, (AsIs(schema), AsIs(table_name)))
         cur.execute(ins_str + args_str)
         con.commit()
         con.close()
 
+        print "success!"
+
     except psycopg2.DatabaseError, e:
         print 'Error %s' % e
+
+    return
+
+
+
+

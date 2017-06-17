@@ -5,7 +5,7 @@ from qgis.core import QgsGeometry
 from PyQt4.QtCore import QObject, pyqtSignal
 
 # plugin module imports
-from utilityFunctions import *
+#from utilityFunctions import *
 
 
 class mergeTool(QObject):
@@ -136,10 +136,10 @@ class mergeTool(QObject):
                 all_trees.append(tree)
                 #TODO test
                 if merge_attrs:
-                    f_attrs_dict = [self.f_dict[node][0] for node in tree]
+                    f_attrs_list = [self.f_dict[node][0] for node in tree]
                     f_attrs = []
-                    for i in range(0,len(self.f_dict[tree[0]][0])):
-                        f_attrs += list(set([attr_list[i] for attr_list in f_attrs_dict]))
+                    for i in range(0, len(self.f_attrs_list[0])):
+                        f_attrs += [[f_attr[i] for f_attr in f_attrs_list]]
                 else:
                     f_attrs = self.f_dict[tree[0]][0]
                 # new_geom = geom_dict[set_to_merge[0]]
