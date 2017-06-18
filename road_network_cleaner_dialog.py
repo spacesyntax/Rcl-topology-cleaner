@@ -46,7 +46,6 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
         self.outputCleaned.setText("temporary layer")
 
-
         # Setup the progress bar
         self.cleaningProgress.setMinimum(0)
         self.cleaningProgress.setMaximum(100)
@@ -63,6 +62,8 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.shpRadioButton.setChecked(False)
         self.postgisRadioButton.setChecked(False)
         self.browseCleaned.setDisabled(True)
+
+        self.outputCleaned.setDisabled(True)
 
     def closeEvent(self, event):
         self.closingPlugin.emit()

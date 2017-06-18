@@ -141,8 +141,7 @@ def to_dblayer(dbname, user, host, port, password, schema, table_name, qgs_flds,
         return QgsVectorLayer(uri.uri(), table_name, "postgres")
 
     except psycopg2.DatabaseError, e:
-        print 'Error %s' % e
-        return None
+        return e
 
 
 

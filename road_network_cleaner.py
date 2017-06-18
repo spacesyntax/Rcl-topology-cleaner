@@ -116,6 +116,8 @@ class RoadNetworkCleaner:
         self.dbsettings_dlg = DbSettingsDialog()
         self.clsettings_dlg = ClSettingsDialog()
 
+        self.available_dbs = self.dbsettings_dlg.getQGISDbs(self.qs)
+
         self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.setDbOutput)
         self.dbsettings_dlg.schemaCombo.currentIndexChanged.connect(self.setDbOutput)
         self.dbsettings_dlg.nameLineEdit.textChanged.connect(self.setDbOutput)
@@ -125,7 +127,7 @@ class RoadNetworkCleaner:
         self.dlg.shpRadioButton.clicked.connect(self.setShpOutput)
         self.dlg.postgisRadioButton.clicked.connect(self.setDbOutput)
 
-        self.available_dbs = self.dbsettings_dlg.getQGISDbs(self.qs)
+
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -282,6 +284,7 @@ class RoadNetworkCleaner:
     def setDbOutput(self):
         self.dlg.disable_browse()
         self.dlg.outputCleaned.clear()
+        self.dbsettings = self.dbsettings_dlg.getDbSettings(self.available_dbs)
         try:
             db_layer_name = "%s:%s:%s" % (self.dbsettings['dbname'], self.dbsettings['schema'], self.dbsettings['table_name'])
             self.dlg.outputCleaned.setText(db_layer_name)
@@ -477,6 +480,11 @@ class RoadNetworkCleaner:
                         final = to_shp(path, merged_features, fields, crs, 'cleaned', encoding, geom_type)
                     else:
                         final = to_dblayer(self.settings['dbname'], self.settings['user'], self.settings['host'], self.settings['port'],self.settings['password'], self.settings['schema'], self.settings['table_name'], fields, merged_features, crs)
+                        try:
+                            # None will be emitted if db layer is not created
+                            self.error.emit(final, traceback.format_exc())
+                        except:
+                            pass
 
                     if self.settings['errors']:
 
@@ -555,18 +563,12 @@ class RoadNetworkCleaner:
 
         if self.dlg.memoryRadioButton.isChecked():
             self.dlg.outputCleaned.setText('temporary layer')
-        elif self.dlg.postgisRadioButton.isChecked():
-            self.setDbOutput()
-        elif self.dlg.shpRadioButton.isChecked():
-            self.setShpOutput()
+        #elif self.dlg.postgisRadioButton.isChecked():
+        #    self.setDbOutput()
+        #elif self.dlg.shpRadioButton.isChecked():
+        #    self.setShpOutput()
 
         self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.popSchemas)
-
-
-        self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.setDbOutput)
-        self.dbsettings_dlg.schemaCombo.currentIndexChanged.connect(self.setDbOutput)
-        self.dbsettings_dlg.nameLineEdit.textChanged.connect(self.setDbOutput)
-
 
         # Run the dialog event loop
         result = self.dlg.exec_()
