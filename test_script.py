@@ -43,11 +43,13 @@ input_fid_to_id = br.fid_to_uid
 br.add_edges()
 broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates = br.break_features()
 
+
+to_dblayer(dbname, user, host, port, password, schema, table_name, br.layer_fields, broken_features, crs, arrays=False)
+
 #broken_network = br.to_shp(broken_features, crs, 'broken')
 #QgsMapLayerRegistry.instance().addMapLayer(broken_network)
 
 mrg = mergeTool(broken_features, user_id, True)
-all_con, con_1, f_dict, feat_to_copy, feat_to_merge, edges_to_start = mrg.prepare()
 
 #fields = br.layer_fields
 #to_merge = to_shp(feat_to_merge, fields, crs, 'to_merge')
@@ -58,8 +60,11 @@ all_con, con_1, f_dict, feat_to_copy, feat_to_merge, edges_to_start = mrg.prepar
 
 result = mrg.merge()
 
+to_dblayer(dbname, user, host, port, password, schema, table_name, br.layer_fields, result, crs, arrays=True)
+
+
 fields = br.layer_fields
-final = to_shp(result, fields, crs, 'f' )
+final = to_shp(path, result, fields, crs, 'f', encoding, geom_type )
 QgsMapLayerRegistry.instance().addMapLayer(final)
 
 

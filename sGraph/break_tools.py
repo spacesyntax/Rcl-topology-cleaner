@@ -5,7 +5,7 @@ from PyQt4.QtCore import QObject, pyqtSignal, QVariant
 
 
 # plugin module imports
-#from utilityFunctions import *
+from utilityFunctions import *
 
 class breakTool(QObject):
 

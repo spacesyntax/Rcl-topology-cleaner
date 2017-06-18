@@ -104,21 +104,28 @@ class RoadNetworkCleaner:
         self.dlg.cleanButton.clicked.connect(self.startCleaning)
         self.dlg.cancelButton.clicked.connect(self.killCleaning)
 
+
         # settings popup
         self.dlg.snapCheckBox.stateChanged.connect(self.dlg.set_enabled_tolerance)
+
+        self.dlg.browseCleaned.clicked.connect(self.setOutput)
+        self.dlg.settingsButton.clicked.connect(self.openClSettings)
         self.dlg.errorsCheckBox.stateChanged.connect(self.dlg.set_enabled_id)
         self.dlg.inputCombo.currentIndexChanged.connect(self.popIdColumn)
 
         self.dbsettings_dlg = DbSettingsDialog()
         self.clsettings_dlg = ClSettingsDialog()
 
-        self.dlg.browseCleaned.clicked.connect(self.setOutput)
-        self.dlg.settingsButton.clicked.connect(self.openClSettings)
+        self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.setDbOutput)
+        self.dbsettings_dlg.schemaCombo.currentIndexChanged.connect(self.setDbOutput)
+        self.dbsettings_dlg.nameLineEdit.textChanged.connect(self.setDbOutput)
+
+        self.dlg.memoryRadioButton.clicked.connect(self.setTempOutput)
+        self.dlg.memoryRadioButton.clicked.connect(self.dlg.update_output_text)
+        self.dlg.shpRadioButton.clicked.connect(self.setShpOutput)
+        self.dlg.postgisRadioButton.clicked.connect(self.setDbOutput)
 
         self.available_dbs = self.dbsettings_dlg.getQGISDbs(self.qs)
-        print self.available_dbs
-
-        #self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.dbsettings_dlg.popSchemas)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -260,21 +267,42 @@ class RoadNetworkCleaner:
 
     def setOutput(self):
         if self.dlg.shpRadioButton.isChecked():
-            file_name = QtGui.QFileDialog.getSaveFileName(self.dlg, "Save output file ", "cleaned_network", '*.shp')
-            if file_name:
-                self.dlg.outputCleaned.setText(file_name)
-        else:
+            self.file_name = QtGui.QFileDialog.getSaveFileName(self.dlg, "Save output file ", "cleaned_network", '*.shp')
+            if self.file_name:
+                self.dlg.outputCleaned.setText(self.file_name)
+            else:
+                self.dlg.outputCleaned.clear()
+        elif self.dlg.postgisRadioButton.isChecked():
             self.dbsettings_dlg.show()
             # Run the dialog event loop
-            result = self.dbsettings_dlg.exec_()
-            # TODO: add db, schema
-            #self.dbsettings_dlg.popDbs(self.dbsettings_dlg.getQGISDbs())
-            #self.dbsettings_dlg.popSchemas()
+            result2 = self.dbsettings_dlg.exec_()
+            self.dbsettings = self.dbsettings_dlg.getDbSettings(self.available_dbs)
+        return
+
+    def setDbOutput(self):
+        self.dlg.disable_browse()
+        self.dlg.outputCleaned.clear()
+        try:
+            db_layer_name = "%s:%s:%s" % (self.dbsettings['dbname'], self.dbsettings['schema'], self.dbsettings['table_name'])
+            self.dlg.outputCleaned.setText(db_layer_name)
+        except:
+            self.dlg.outputCleaned.clear()
+
+    def setTempOutput(self):
+        self.dlg.disable_browse()
+        temp_name = 'temporary layer'
+        self.dlg.outputCleaned.setText(temp_name)
+
+    def setShpOutput(self):
+        self.dlg.disable_browse()
+        try:
+            self.dlg.outputCleaned.setText(self.file_name)
+        except :
+            self.dlg.outputCleaned.clear()
 
     def openClSettings(self):
         self.clsettings_dlg.show()
-        result = self.clsettings_dlg.exec_()
-
+        result1 = self.clsettings_dlg.exec_()
 
     # SOURCE: Network Segmenter https://github.com/OpenDigitalWorks/NetworkSegmenter
     # SOURCE: https://snorfalorpagus.net/blog/2013/12/07/multithreading-in-qgis-python-plugins/
@@ -290,8 +318,9 @@ class RoadNetworkCleaner:
     def startCleaning(self, settings):
         self.dlg.cleaningProgress.reset()
         settings = self.dlg.get_settings()
-        cl_settings = self.clsettings_dlg.getCleaningSettings()
-        settings.update(cl_settings)
+        if settings['output_type'] == 'postgis':
+            db_settings = self.dbsettings_dlg.getDbSettings(self.available_dbs)
+            settings.update(db_settings)
         if settings['input']:
 
             cleaning = self.clean(settings, self.iface)
@@ -313,12 +342,11 @@ class RoadNetworkCleaner:
 
     def cleaningFinished(self, ret):
         # clean up  the worker and thread
-
         try:
             # report the result
-            # a, b = ret
             for layer in ret:
-                QgsMapLayerRegistry.instance().addMapLayer(layer)
+                if layer:
+                    QgsMapLayerRegistry.instance().addMapLayer(layer)
             self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
 
         except Exception, e:
@@ -403,14 +431,6 @@ class RoadNetworkCleaner:
                     tolerance = self.settings['tolerance']
                     user_id = self.settings['user_id']
                     output_type = self.settings['output_type']
-                    if output_type == 'postGIS':
-                        merge_attrs = True
-                    elif output_type in [ 'shp', 'memory']:
-                        merge_attrs = False
-                    else:
-                        self.giveMessage('Specify otput type',
-                                         QgsMessageBar.CRITICAL)
-                        return
 
                     # project settings
                     layer = getLayerByName(layer_name)
@@ -447,12 +467,16 @@ class RoadNetworkCleaner:
                     step = 45/ len(self.mrg.con_1)
                     self.mrg.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
 
-                    result = self.mrg.merge(merge_attrs)
+                    merged_features = self.mrg.merge()
 
                     if self.cl_killed is True or self.mrg.killed is True: return
 
                     fields = self.br.layer_fields
-                    final = to_shp(path, result, fields, crs, 'cleaned', encoding, geom_type)
+
+                    if output_type in ['shp', 'memory']:
+                        final = to_shp(path, merged_features, fields, crs, 'cleaned', encoding, geom_type)
+                    else:
+                        final = to_dblayer(self.settings['dbname'], self.settings['user'], self.settings['host'], self.settings['port'],self.settings['password'], self.settings['schema'], self.settings['table_name'], fields, merged_features, crs)
 
                     if self.settings['errors']:
 
@@ -473,7 +497,7 @@ class RoadNetworkCleaner:
 
                         errors = QgsVectorLayer('MultiLineString?crs=' + crs.toWkt(), 'errors', "memory")
                         pr = errors.dataProvider()
-                        pr.addAttributes([QgsField('id_input', QVariant.String), QgsField('errors', QVariant.String)])
+                        pr.addAttributes([QgsField('error_id', QVariant.Int), QgsField('errors', QVariant.String)])
                         new_features = []
                         combined_errors = {}
                         for k, v in errors_list.items():
@@ -484,20 +508,17 @@ class RoadNetworkCleaner:
                                     combined_errors[item] = k
 
                         # TODO: fix why it throws KeyError
+                        e_count = 0
                         for k, v in combined_errors.items():
                             new_feat = QgsFeature()
-                            try:
-                                if v == 'invalids' or v == 'points':
-                                    new_geom = QgsGeometry()
-                                else:
-                                    new_geom = QgsGeometry.fromWkt(input_geometries_wkt[uf[k]])
-                                new_feat.setAttributes([k, v])
-                                new_feat.setGeometry(new_geom)
-                                new_features.append(new_feat)
-                            except KeyError, e:
-                                new_feat.setAttributes(['could not find id', v])
-                                new_feat.setGeometry(QgsGeometry())
-                                new_features.append(new_feat)
+                            if v == 'invalids' or v == 'points':
+                                new_geom = QgsGeometry()
+                            else:
+                                new_geom = QgsGeometry.fromWkt(input_geometries_wkt[uf[k]])
+                            new_feat.setAttributes([e_count, v])
+                            new_feat.setGeometry(new_geom)
+                            new_features.append(new_feat)
+                            e_count += 1
 
                         errors.startEditing()
                         pr.addFeatures(new_features)
@@ -505,12 +526,10 @@ class RoadNetworkCleaner:
                     else:
                         errors = None
 
-                    #if self.cl_killed is False:
                     print "survived!"
                     self.cl_progress.emit(100)
                     # return cleaned shapefile and errors
                     ret = (errors, final, )
-                    #cleaned_network, broken_network, to_merge, to_start
 
                 except Exception, e:
                     # forward the exception upstream
@@ -521,7 +540,6 @@ class RoadNetworkCleaner:
         def kill(self):
             self.cl_killed = True
 
-
     def run(self):
         """Run method that performs all the real work"""
         # show the dialog
@@ -529,10 +547,26 @@ class RoadNetworkCleaner:
         self.dlg.popActiveLayers(self.getActiveLayers(self.iface))
 
         self.dbsettings_dlg.popDbs(self.available_dbs)
+
         if self.dbsettings_dlg.dbCombo.currentText() in self.available_dbs.keys():
             self.popSchemas()
 
+        self.dbsettings = self.dbsettings_dlg.getDbSettings(self.available_dbs)
+
+        if self.dlg.memoryRadioButton.isChecked():
+            self.dlg.outputCleaned.setText('temporary layer')
+        elif self.dlg.postgisRadioButton.isChecked():
+            self.setDbOutput()
+        elif self.dlg.shpRadioButton.isChecked():
+            self.setShpOutput()
+
         self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.popSchemas)
+
+
+        self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.setDbOutput)
+        self.dbsettings_dlg.schemaCombo.currentIndexChanged.connect(self.setDbOutput)
+        self.dbsettings_dlg.nameLineEdit.textChanged.connect(self.setDbOutput)
+
 
         # Run the dialog event loop
         result = self.dlg.exec_()

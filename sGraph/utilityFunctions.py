@@ -1,6 +1,6 @@
 # general imports
 from os.path import expanduser
-from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsFeature, QgsGeometry,QgsFields
+from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsFeature, QgsGeometry,QgsFields, QgsDataSourceURI
 import psycopg2
 from psycopg2.extensions import AsIs
 
@@ -84,64 +84,27 @@ def to_shp(path, any_features_list, layer_fields, crs, name, encoding, geom_type
     for i in any_features_list:
         new_feat = QgsFeature()
         new_feat.setFeatureId(i[0])
-        new_feat.setAttributes(i[1])
-        new_feat.setGeometry(QgsGeometry.fromWkt(i[2]))
+        new_feat.setAttributes([attr[0] for attr in i[1]])
+        new_feat.setGeometry(QgsGeometry(QgsGeometry.fromWkt(str(i[2]))))
+        #QgsGeometry()
         new_features.append(new_feat)
     network.startEditing()
     pr.addFeatures(new_features)
     network.commitChanges()
     return network
 
-def qgs_to_postgis_fields(qgs_flds, crs, arrays = False):
-    postgis_flds = []
-
-    if arrays:
-        for f in qgs_flds:
-            if f.type() == 2:
-                # bigint
-                postgis_flds.append((AsIs('"f.name().lower()"'), ' bigint[]'))
-            elif f.type() == 6:
-                # numeric
-                postgis_flds.append((AsIs('"f.name().lower()"'), ' numeric[]'))
-            elif f.type() == 1:
-                # numeric
-                postgis_flds.append((AsIs('"f.name().lower()"'), ' bool[]'))
-            else:
-                # string
-                postgis_flds.append((AsIs('"f.name().lower()"'), ' text[]'))
-    else:
-        for f in qgs_flds:
-            if f.type() == 2:
-                # bigint
-                postgis_flds.append((AsIs('"f.name().lower()"'), ' bigint'))
-            elif f.type() == 6:
-                # numeric
-                postgis_flds.append((AsIs('"f.name().lower()"'), ' numeric'))
-            elif f.type() == 1:
-                # numeric
-                postgis_flds.append((AsIs('"f.name().lower()"'), ' bool'))
-            else:
-                # string
-                postgis_flds.append((f.name().lower(), ' text'))
-    postgis_flds.append(('geom', 'geometry(LINESTRING,' + str(crs_id) + ')'))
-    return postgis_flds
-
 def rmv_parenthesis(my_string):
     idx = my_string.find(',ST_GeomFromText') - 1
     return  my_string[:idx] + my_string[(idx+1):]
 
-def to_dblayer(dbname, user, host, port, password, schema, table_name, qgs_flds, any_features_list, crs, arrays=False):
+def to_dblayer(dbname, user, host, port, password, schema, table_name, qgs_flds, any_features_list, crs):
 
     crs_id = str(crs.postgisSrid())
     connstring = "dbname=%s user=%s host=%s port=%s password=%s" % (dbname, user, host, port, password)
     try:
         con = psycopg2.connect(connstring)
         cur = con.cursor()
-        if arrays:
-            post_q_flds = {2: 'bigint[]', 6: 'numeric[]', 1: 'bool[]', 'else':'text[]'}
-        else:
-            post_q_flds = {2: 'bigint', 6: 'numeric', 1: 'bool', 'else':'text'}
-
+        post_q_flds = {2: 'bigint[]', 6: 'numeric[]', 1: 'bool[]', 'else':'text[]'}
         postgis_flds_q = """"""
         for f in qgs_flds:
             f_name = '\"'  + f.name()  + '\"'
@@ -155,21 +118,14 @@ def to_dblayer(dbname, user, host, port, password, schema, table_name, qgs_flds,
 
         data = []
 
-        if arrays:
-            for (fid, attrs, wkt) in any_features_list:
-                for idx, l_attrs in enumerate(attrs):
-                    attrs[idx] = [i if i else None for i in l_attrs]
-                data.append(tuple((attrs, wkt)))
-            args_str = ','.join(
-                [rmv_parenthesis(cur.mogrify("%s,ST_GeomFromText(%s,%s))", (tuple(attrs)[1:-1], wkt, AsIs(crs_id)))) for
-                 (attrs, wkt) in tuple(data)])
+        for (fid, attrs, wkt) in any_features_list:
+            for idx, l_attrs in enumerate(attrs):
+                attrs[idx] = [i if i else None for i in l_attrs]
+            data.append(tuple((attrs, wkt)))
 
-        else:
-            for (fid, attrs, wkt) in any_features_list:
-                data.append(tuple(([i if i else None for i in attrs], wkt)))
-            args_str = ','.join(
-                [rmv_parenthesis(cur.mogrify("%s,ST_GeomFromText(%s,%s))", (tuple(attrs), wkt, AsIs(crs_id)))) for
-                 (attrs, wkt) in tuple(data)])
+        args_str = ','.join(
+            [rmv_parenthesis(cur.mogrify("%s,ST_GeomFromText(%s,%s))", (tuple(attrs), wkt, AsIs(crs_id)))) for
+             (attrs, wkt) in tuple(data)])
 
         ins_str = cur.mogrify("""INSERT INTO %s.%s VALUES """, (AsIs(schema), AsIs(table_name)))
         cur.execute(ins_str + args_str)
@@ -177,11 +133,16 @@ def to_dblayer(dbname, user, host, port, password, schema, table_name, qgs_flds,
         con.close()
 
         print "success!"
+        uri = QgsDataSourceURI()
+        # set host name, port, database name, username and password
+        uri.setConnection(host, port, dbname, user, password)
+        # set database schema, table name, geometry column and optionally
+        uri.setDataSource(schema, table_name, "geom")
+        return QgsVectorLayer(uri.uri(), table_name, "postgres")
 
     except psycopg2.DatabaseError, e:
         print 'Error %s' % e
-
-    return
+        return None
 
 
 

@@ -60,12 +60,13 @@ class ClSettingsDialog(QtGui.QDialog, FORM_CLASS):
         self.closedplCheckBox.setDisabled(True)
         self.closedplCheckBox.setChecked(True)
 
-        self.breakCheckBox.setDisabled(False)
+        self.breakCheckBox.setDisabled(True)
         self.breakCheckBox.setChecked(True)
-        self.mergeCheckBox.setDisabled(False)
+        self.mergeCheckBox.setDisabled(True)
         self.mergeCheckBox.setChecked(True)
-        self.orphansCheckBox.setDisabled(False)
+        self.orphansCheckBox.setDisabled(True)
         self.orphansCheckBox.setChecked(True)
+
 
     def getCleaningSettings(self):
         return {'break': self.breakCheckBox.isChecked(), 'merge': self.mergeCheckBox.isChecked(), 'orphans': self.orphansCheckBox.isChecked()}

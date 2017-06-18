@@ -49,6 +49,7 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
         self.setupUi(self)
 
         self.nameLineEdit.setText("cleaned")
+        self.okButton.clicked.connect(self.close)
 
     def getQGISDbs(self, qs):
 
@@ -78,9 +79,15 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
     def getSelectedDb(self, iface):
         return self.dbCombo.currentText()
 
-    def getDbSettings(self):
-        (db_name, schema_name, table_name) = (self.dbCombo.currentText(), self.schemaCombo.currentText(), self.nameLineEdit.currentText())
-        return db_name, schema_name, table_name
+    def getDbSettings(self, available_dbs):
+        dbname = self.dbCombo.currentText()
+        return {'dbname': dbname,
+        'user': available_dbs[dbname]['username'],
+        'host': available_dbs[dbname]['host'],
+        'port': available_dbs[dbname]['port'],
+        'password': available_dbs[dbname]['password'],
+        'schema': self.schemaCombo.currentText(),
+        'table_name': self.nameLineEdit.text()}
 
     def closeEvent(self, event):
         self.closingPlugin.emit()

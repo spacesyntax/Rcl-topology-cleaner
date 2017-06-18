@@ -5,7 +5,7 @@ from qgis.core import QgsGeometry
 from PyQt4.QtCore import QObject, pyqtSignal
 
 # plugin module imports
-#from utilityFunctions import *
+from utilityFunctions import *
 
 
 class mergeTool(QObject):
@@ -79,8 +79,7 @@ class mergeTool(QObject):
         self.fids_to_merge = list(set([fid for k, v in self.con_2.items() for fid in v]))
         self.copy_fids = list(set(self.all_fids) - set(self.fids_to_merge))
         self.feat_to_merge = [[i, self.f_dict[i][0], self.f_dict[i][1]] for i in self.fids_to_merge if i not in self.duplicates]
-        self.feat_to_copy =[[i, self.f_dict[i][0], self.f_dict[i][1]] for i in self.copy_fids if i not in self.duplicates]
-
+        self.feat_to_copy =[[i, [[x] for x in self.f_dict[i][0]], self.f_dict[i][1]] for i in self.copy_fids if i not in self.duplicates]
         self.con_1 = []
         for k,v in self.all_con.items():
             if len(v) == 1:
@@ -90,7 +89,7 @@ class mergeTool(QObject):
 
         self.edges_to_start = [[i, self.f_dict[i][0], self.f_dict[i][1]] for i in self.con_1 ]
 
-    def merge(self, merge_attrs=True):
+    def merge(self):
 
         merged_features = []
 
@@ -134,15 +133,13 @@ class mergeTool(QObject):
                         print "infinite"
                         break
                 all_trees.append(tree)
-                #TODO test
-                if merge_attrs:
-                    f_attrs_list = [self.f_dict[node][0] for node in tree]
-                    f_attrs = []
-                    for i in range(0, len(self.f_attrs_list[0])):
-                        f_attrs += [[f_attr[i] for f_attr in f_attrs_list]]
-                else:
-                    f_attrs = self.f_dict[tree[0]][0]
-                # new_geom = geom_dict[set_to_merge[0]]
+
+                # merge attributes
+                f_attrs_list = [self.f_dict[node][0] for node in tree]
+                f_attrs = []
+                for i in range(0, len(f_attrs_list[0])):
+                    f_attrs += [[f_attr[i] for f_attr in f_attrs_list]]
+
                 geom_to_merge = [QgsGeometry.fromWkt(self.f_dict[node][1]) for node in tree]
                 for ind, line in enumerate(geom_to_merge[1:], start=1):
                     second_geom = line

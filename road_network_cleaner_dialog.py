@@ -44,7 +44,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
-        self.outputCleaned.setPlaceholderText("Save as temporary layer...")
+        self.outputCleaned.setText("temporary layer")
 
 
         # Setup the progress bar
@@ -56,9 +56,13 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.decimalsSpin.setValue(6)
 
         self.idCombo.setDisabled(True)
+        self.idCombo.setVisible(False)
         self.decimalsSpin.setDisabled(True)
 
-        self.shpRadioButton.setChecked(True)
+        self.memoryRadioButton.setChecked(True)
+        self.shpRadioButton.setChecked(False)
+        self.postgisRadioButton.setChecked(False)
+        self.browseCleaned.setDisabled(True)
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
@@ -68,7 +72,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         return self.inputCombo.currentText()
 
     def getOutput(self):
-        if len(self.outputCleaned.text()) > 0:
+        if self.outputCleaned.text() != 'temporary layer':
             return self.outputCleaned.text()
         else:
             return None
@@ -91,8 +95,21 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         else:
             return None
 
+    def disable_browse(self):
+        if self.memoryRadioButton.isChecked():
+            self.browseCleaned.setDisabled(True)
+        else:
+            self.browseCleaned.setDisabled(False)
+
     def get_errors(self):
         return self.errorsCheckBox.isChecked()
+
+    def update_output_text(self):
+        if self.memoryRadioButton.isChecked():
+            return "temporary layer"
+        else:
+            return
+
 
     def get_user_id(self):
         if self.errorsCheckBox.isChecked():
@@ -103,8 +120,10 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
     def get_output_type(self):
         if self.shpRadioButton.isChecked():
             return 'shp'
-        else:
+        elif self.postgisRadioButton.isChecked():
             return 'postgis'
+        else:
+            return 'memory'
 
     def set_enabled_tolerance(self):
         if self.snapCheckBox.isChecked():
