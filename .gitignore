@@ -3,3 +3,5 @@
 *.xml
 *.pyc
 help/
+.idea/misc.xml
+.idea/Rcl-topology-validation.iml
