@@ -91,6 +91,9 @@ class RoadNetworkCleaner:
         self.clsettings_dlg = ClSettingsDialog()
         self.cleaning = None
 
+        self.dbsettings_dlg = DbSettingsDialog()
+        self.clsettings_dlg = ClSettingsDialog()
+
         # Declare instance attributes
         self.actions = []
         self.menu = self.tr(u'&RoadNetworkCleaner')
@@ -102,32 +105,6 @@ class RoadNetworkCleaner:
         if has_pydevd and is_debug:
             pydevd.settrace('localhost', port=53100, stdoutToServer=True, stderrToServer=True, suspend=True)
 
-        # setup GUI signals
-        self.dlg.cleanButton.clicked.connect(self.startCleaning)
-        self.dlg.cancelButton.clicked.connect(self.killCleaning)
-
-
-        # settings popup
-        self.dlg.snapCheckBox.stateChanged.connect(self.dlg.set_enabled_tolerance)
-
-        self.dlg.browseCleaned.clicked.connect(self.setOutput)
-        self.dlg.settingsButton.clicked.connect(self.openClSettings)
-        self.dlg.errorsCheckBox.stateChanged.connect(self.dlg.set_enabled_id)
-        self.dlg.inputCombo.currentIndexChanged.connect(self.popIdColumn)
-
-        self.dbsettings_dlg = DbSettingsDialog()
-        self.clsettings_dlg = ClSettingsDialog()
-
-        self.available_dbs = self.dbsettings_dlg.getQGISDbs()
-
-        self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.setDbOutput)
-        self.dbsettings_dlg.schemaCombo.currentIndexChanged.connect(self.setDbOutput)
-        self.dbsettings_dlg.nameLineEdit.textChanged.connect(self.setDbOutput)
-
-        self.dlg.memoryRadioButton.clicked.connect(self.setTempOutput)
-        self.dlg.memoryRadioButton.clicked.connect(self.dlg.update_output_text)
-        self.dlg.shpRadioButton.clicked.connect(self.setShpOutput)
-        self.dlg.postgisRadioButton.clicked.connect(self.setDbOutput)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
