@@ -90,6 +90,7 @@ class RoadNetworkCleaner:
         self.dbsettings_dlg = DbSettingsDialog()
         self.clsettings_dlg = ClSettingsDialog()
         self.cleaning = None
+        self.available_dbs = self.dbsettings_dlg.getQGISDbs()
 
         # Declare instance attributes
         self.actions = []
@@ -101,32 +102,6 @@ class RoadNetworkCleaner:
         # Setup debugger
         if has_pydevd and is_debug:
             pydevd.settrace('localhost', port=53100, stdoutToServer=True, stderrToServer=True, suspend=True)
-
-        # setup GUI signals
-        self.dlg.cleanButton.clicked.connect(self.startCleaning)
-        self.dlg.cancelButton.clicked.connect(self.killCleaning)
-
-        # settings popup
-        self.dlg.snapCheckBox.stateChanged.connect(self.dlg.set_enabled_tolerance)
-
-        #self.dlg.browseCleaned.clicked.connect(self.setOutput)
-        self.dlg.settingsButton.clicked.connect(self.openClSettings)
-        self.dlg.errorsCheckBox.stateChanged.connect(self.dlg.set_enabled_id)
-        self.dlg.inputCombo.currentIndexChanged.connect(self.popIdColumn)
-
-        self.dbsettings_dlg = DbSettingsDialog()
-        self.clsettings_dlg = ClSettingsDialog()
-
-        self.available_dbs = self.dbsettings_dlg.getQGISDbs()
-
-        self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.setDbOutput)
-        self.dbsettings_dlg.schemaCombo.currentIndexChanged.connect(self.setDbOutput)
-        self.dbsettings_dlg.nameLineEdit.textChanged.connect(self.setDbOutput)
-
-        self.dlg.memoryRadioButton.clicked.connect(self.setTempOutput)
-        self.dlg.memoryRadioButton.clicked.connect(self.dlg.update_output_text)
-        self.dlg.shpRadioButton.clicked.connect(self.setShpOutput)
-        self.dlg.postgisRadioButton.clicked.connect(self.setDbOutput)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -577,19 +552,19 @@ class RoadNetworkCleaner:
 
     def run(self):
         """Run method that performs all the real work"""
+
+        # show the dialog
+        self.dlg.show()
+
         # setup GUI signals
         self.dlg.cleanButton.clicked.connect(self.startCleaning)
         self.dlg.cancelButton.clicked.connect(self.killCleaning)
 
-        # settings popup
         self.dlg.snapCheckBox.stateChanged.connect(self.dlg.set_enabled_tolerance)
-
         self.dlg.browseCleaned.clicked.connect(self.setOutput)
         self.dlg.settingsButton.clicked.connect(self.openClSettings)
         self.dlg.errorsCheckBox.stateChanged.connect(self.dlg.set_enabled_id)
         self.dlg.inputCombo.currentIndexChanged.connect(self.popIdColumn)
-
-        self.available_dbs = self.dbsettings_dlg.getQGISDbs()
 
         self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.setDbOutput)
         self.dbsettings_dlg.schemaCombo.currentIndexChanged.connect(self.setDbOutput)
@@ -600,8 +575,6 @@ class RoadNetworkCleaner:
         self.dlg.shpRadioButton.clicked.connect(self.setShpOutput)
         self.dlg.postgisRadioButton.clicked.connect(self.setDbOutput)
 
-        # show the dialog
-        self.dlg.show()
         self.dlg.popActiveLayers(self.getActiveLayers(self.iface))
 
         self.dbsettings_dlg.popDbs(self.available_dbs)
@@ -616,7 +589,6 @@ class RoadNetworkCleaner:
 
         # Run the dialog event loop
         result = self.dlg.exec_()
-
         # See if OK was pressed
         if result:
             # Do something useful here - delete the line containing pass and
