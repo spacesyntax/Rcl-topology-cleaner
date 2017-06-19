@@ -590,7 +590,7 @@ class RoadNetworkCleaner:
         self.dlg.errorsCheckBox.stateChanged.connect(self.dlg.set_enabled_id)
         self.dlg.inputCombo.currentIndexChanged.connect(self.popIdColumn)
 
-        self.available_dbs = self.dbsettings_dlg.getQGISDbs(self.qs)
+        self.available_dbs = self.dbsettings_dlg.getQGISDbs()
 
         self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.setDbOutput)
         self.dbsettings_dlg.schemaCombo.currentIndexChanged.connect(self.setDbOutput)
