@@ -51,29 +51,50 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
         self.nameLineEdit.setText("cleaned")
         self.okButton.clicked.connect(self.close)
 
-    def getQGISDbs(self, qs):
+    #def getQGISDbs(self, qs):
+    #    available_dbs = {}
+    #    for k in sorted(qs.allKeys()):
+    #        if k[0:23] == 'PostgreSQL/connections/' and k[-9:] == '/database':
+    #            available_dbs[k[23:].split('/')[0]] = {}
+    #    for dbname, info in available_dbs.items():
+    #        host = qs.value('PostgreSQL/connections/' + dbname + '/host')
+    #        port = qs.value('PostgreSQL/connections/' + dbname + '/port')
+    #        username = qs.value('PostgreSQL/connections/' + dbname + '/username')
+    #       password = qs.value('PostgreSQL/connections/' + dbname + '/password')
+    #       info['host'] = host
+    #        info['port'] = port
+    #        info['username'] = username
+    #        info['password'] = password
+    #        available_dbs[dbname] = dict(info)
+    #    return available_dbs
 
-        available_dbs = {}
-        for k in sorted(qs.allKeys()):
-            if k[0:23] == 'PostgreSQL/connections/' and k[-9:] == '/database':
-                available_dbs[k[23:].split('/')[0]] = {}
-
-        for dbname, info in available_dbs.items():
-            host = qs.value('PostgreSQL/connections/' + dbname + '/host')
-            port = qs.value('PostgreSQL/connections/' + dbname + '/port')
-            username = qs.value('PostgreSQL/connections/' + dbname + '/username')
-            password = qs.value('PostgreSQL/connections/' + dbname + '/password')
-            info['host'] = host
-            info['port'] = port
-            info['username'] = username
-            info['password'] = password
-            available_dbs[dbname] = dict(info)
-
-        return available_dbs
+    def getQGISDbs(self):
+        """Return all PostGIS connection settings stored in QGIS
+        :return: connection dict() with name and other settings
+        """
+        con_settings = []
+        settings = QSettings()
+        settings.beginGroup('/PostgreSQL/connections')
+        for item in settings.childGroups():
+            con = dict()
+            con['name'] = unicode(item)
+            con['host'] = unicode(settings.value(u'%s/host' % unicode(item)))
+            con['port'] = unicode(settings.value(u'%s/port' % unicode(item)))
+            con['database'] = unicode(settings.value(u'%s/database' % unicode(item)))
+            con['username'] = unicode(settings.value(u'%s/username' % unicode(item)))
+            con['password'] = unicode(settings.value(u'%s/password' % unicode(item)))
+            con_settings.append(con)
+        settings.endGroup()
+        if len(con_settings) < 1:
+            con_settings = None
+        dbs = {}
+        for conn in con_settings:
+            dbs[conn['name']]= conn
+        return dbs
 
     def popDbs(self, available_dbs):
         self.dbCombo.clear()
-        self.dbCombo.addItems(available_dbs.keys())
+        self.dbCombo.addItems(sorted(available_dbs.keys()))
         return
 
     def getSelectedDb(self, iface):

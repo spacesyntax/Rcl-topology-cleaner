@@ -118,7 +118,6 @@ class mergeTool(QObject):
                     # TODO in con_1 or is self loop
                     if last in self.con_1 and n_iter != 1:
                         edges_passed.append(last)
-                        #print "no other line connected"
                         n_iter = 0
                         break
                     else:
@@ -139,7 +138,7 @@ class mergeTool(QObject):
                 f_attrs = []
                 for i in range(0, len(f_attrs_list[0])):
                     f_attrs += [[f_attr[i] for f_attr in f_attrs_list]]
-
+                f_attrs = [list(set(item)) for item in f_attrs]
                 geom_to_merge = [QgsGeometry.fromWkt(self.f_dict[node][1]) for node in tree]
                 for ind, line in enumerate(geom_to_merge[1:], start=1):
                     second_geom = line

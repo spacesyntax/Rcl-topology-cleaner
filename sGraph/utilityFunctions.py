@@ -40,9 +40,17 @@ def find_vertex_index(points, f_geom):
 
 
 def point_is_vertex(point, line):
-    if point.asPoint() in line.asPolyline():
-        return True
-
+    pl_l = line.asPolyline()
+    try:
+        idx = pl_l.index(point.asPoint())
+        if idx == 0 or idx == (len(pl_l) - 1):
+            return True
+        else:
+            return False
+    except ValueError:
+        return False
+    #if point.asPoint() in line.asPolyline():
+    #    return True
 
 def vertices_from_wkt_2(wkt):
     # the wkt representation may differ in other systems/ QGIS versions
@@ -142,6 +150,43 @@ def to_dblayer(dbname, user, host, port, password, schema, table_name, qgs_flds,
 
     except psycopg2.DatabaseError, e:
         return e
+
+# SOURCE: ESS TOOLKIT
+def getPostgisSchemas(connstring, commit=False):
+    """Execute query (string) with given parameters (tuple)
+    (optionally perform commit to save Db)
+    :return: result set [header,data] or [error] error
+    """
+
+    try:
+        connection = psycopg2.connect(connstring)
+    except psycopg2.Error, e:
+        print e.pgerror
+        connection = None
+
+    schemas = []
+    data = []
+    if connection:
+        query = unicode("""SELECT schema_name from information_schema.schemata;""")
+        cursor = connection.cursor()
+        try:
+            cursor.execute(query)
+            if cursor.description is not None:
+                data = cursor.fetchall()
+            if commit:
+                connection.commit()
+        except psycopg2.Error, e:
+            connection.rollback()
+        cursor.close()
+
+    # only extract user schemas
+    for schema in data:
+        if schema[0] not in ('topology', 'information_schema') and schema[0][:3] != 'pg_':
+            schemas.append(schema[0])
+    #return the result even if empty
+    return sorted(schemas)
+
+
 
 
 

@@ -114,6 +114,7 @@ class breakTool(QObject):
                 if self.uid is not None:
                     self.fid_to_uid[f.id()] = attr[self.uid_index]
                     self.uid_to_fid[attr[self.uid_index]] = f.id()
+
         self.uid_to_fid_input = dict(self.uid_to_fid)
 
     def break_features(self):

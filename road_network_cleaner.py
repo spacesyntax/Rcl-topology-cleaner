@@ -116,7 +116,7 @@ class RoadNetworkCleaner:
         self.dbsettings_dlg = DbSettingsDialog()
         self.clsettings_dlg = ClSettingsDialog()
 
-        self.available_dbs = self.dbsettings_dlg.getQGISDbs(self.qs)
+        self.available_dbs = self.dbsettings_dlg.getQGISDbs()
 
         self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.setDbOutput)
         self.dbsettings_dlg.schemaCombo.currentIndexChanged.connect(self.setDbOutput)
@@ -126,8 +126,6 @@ class RoadNetworkCleaner:
         self.dlg.memoryRadioButton.clicked.connect(self.dlg.update_output_text)
         self.dlg.shpRadioButton.clicked.connect(self.setShpOutput)
         self.dlg.postgisRadioButton.clicked.connect(self.setDbOutput)
-
-
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -258,13 +256,27 @@ class RoadNetworkCleaner:
     def popSchemas(self):
         self.dbsettings_dlg.schemaCombo.clear()
         schemas = []
-        if self.dbsettings_dlg.getSelectedDb(self.iface):
-            uri = QgsDataSourceURI()
-            selected_db = self.dbsettings_dlg.getSelectedDb(self.iface)
-            db_info = self.available_dbs[selected_db]
-            uri.setConnection(db_info['host'], db_info['port'], selected_db, db_info['username'], db_info['password'])
-            c = con.PostGisDBConnector(uri)
-            schemas = list(set([i[2] for i in c.getTables()]))
+        selected_db = self.dbsettings_dlg.getSelectedDb(self.iface)
+        if len(self.dbsettings_dlg.getSelectedDb(self.iface)) > 1:
+            try:
+                print 'tries'
+                uri = QgsDataSourceURI()
+                db_info = self.available_dbs[selected_db]
+                print db_info, selected_db
+                conname = selected_db
+                dbname = db_info['database']
+                user = db_info['username']
+                host = db_info['host']
+                port = db_info['port']
+                password = db_info['password']
+                uri.setConnection(host, port, dbname, user, password)
+                #c = con.PostGisDBConnector(uri)
+                #schemas = sorted(list(set([i[2] for i in c.getTables()])))
+                connstring = "dbname=%s user=%s host=%s port=%s password=%s" % (dbname, user, host, port, password)
+                schemas = getPostgisSchemas(connstring)
+            except:
+                print 'error'
+                pass
         self.dbsettings_dlg.schemaCombo.addItems(schemas)
 
     def setOutput(self):
@@ -452,12 +464,13 @@ class RoadNetworkCleaner:
                     if self.cl_killed is True or self.br.killed is True: return
 
                     self.br.add_edges()
+
                     if self.cl_killed is True or self.br.killed is True: return
 
                     self.cl_progress.emit(5)
                     self.total = 5
 
-                    step = 45/ self.br.feat_count
+                    step = 40/ self.br.feat_count
                     self.br.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
 
                     broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates = self.br.break_features()
@@ -467,7 +480,12 @@ class RoadNetworkCleaner:
 
                     self.mrg = mergeTool(broken_features, user_id, True)
 
-                    step = 45/ len(self.mrg.con_1)
+                    # TODO fix division by zero when features to merge = 0
+                    #try:
+                    step = 40/ len(self.mrg.con_1)
+                    #except ZeroDivisionError:
+                        #step = 45 / 0.00000001
+
                     self.mrg.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
 
                     merged_features = self.mrg.merge()
@@ -562,14 +580,8 @@ class RoadNetworkCleaner:
         if self.dbsettings_dlg.dbCombo.currentText() in self.available_dbs.keys():
             self.popSchemas()
 
-        self.dbsettings = self.dbsettings_dlg.getDbSettings(self.available_dbs)
-
         if self.dlg.memoryRadioButton.isChecked():
             self.dlg.outputCleaned.setText('temporary layer')
-        #elif self.dlg.postgisRadioButton.isChecked():
-        #    self.setDbOutput()
-        #elif self.dlg.shpRadioButton.isChecked():
-        #    self.setShpOutput()
 
         self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.popSchemas)
 
