@@ -84,7 +84,7 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
 
     def getDbSettings(self, available_dbs):
         connection = self.dbCombo.currentText()
-        return {'dbname': available_dbs[connection]['dbname'],
+        return {'dbname': available_dbs[connection]['name'],
         'user': available_dbs[connection]['username'],
         'host': available_dbs[connection]['host'],
         'port': available_dbs[connection]['port'],
