@@ -106,11 +106,10 @@ class RoadNetworkCleaner:
         self.dlg.cleanButton.clicked.connect(self.startCleaning)
         self.dlg.cancelButton.clicked.connect(self.killCleaning)
 
-
         # settings popup
         self.dlg.snapCheckBox.stateChanged.connect(self.dlg.set_enabled_tolerance)
 
-        self.dlg.browseCleaned.clicked.connect(self.setOutput)
+        #self.dlg.browseCleaned.clicked.connect(self.setOutput)
         self.dlg.settingsButton.clicked.connect(self.openClSettings)
         self.dlg.errorsCheckBox.stateChanged.connect(self.dlg.set_enabled_id)
         self.dlg.inputCombo.currentIndexChanged.connect(self.popIdColumn)
@@ -126,8 +125,8 @@ class RoadNetworkCleaner:
 
         self.dlg.memoryRadioButton.clicked.connect(self.setTempOutput)
         self.dlg.memoryRadioButton.clicked.connect(self.dlg.update_output_text)
-        #self.dlg.shpRadioButton.clicked.connect(self.setShpOutput)
-        #self.dlg.postgisRadioButton.clicked.connect(self.setDbOutput)
+        self.dlg.shpRadioButton.clicked.connect(self.setShpOutput)
+        self.dlg.postgisRadioButton.clicked.connect(self.setDbOutput)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
