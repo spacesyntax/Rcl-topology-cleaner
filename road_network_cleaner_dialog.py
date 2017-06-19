@@ -63,7 +63,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.postgisRadioButton.setChecked(False)
         self.browseCleaned.setDisabled(True)
 
-        self.outputCleaned.setDisabled(True)
+        self.outputCleaned.setDisabled(False)
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
