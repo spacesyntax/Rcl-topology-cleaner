@@ -51,23 +51,6 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
         self.nameLineEdit.setText("cleaned")
         self.okButton.clicked.connect(self.close)
 
-    #def getQGISDbs(self, qs):
-    #    available_dbs = {}
-    #    for k in sorted(qs.allKeys()):
-    #        if k[0:23] == 'PostgreSQL/connections/' and k[-9:] == '/database':
-    #            available_dbs[k[23:].split('/')[0]] = {}
-    #    for dbname, info in available_dbs.items():
-    #        host = qs.value('PostgreSQL/connections/' + dbname + '/host')
-    #        port = qs.value('PostgreSQL/connections/' + dbname + '/port')
-    #        username = qs.value('PostgreSQL/connections/' + dbname + '/username')
-    #       password = qs.value('PostgreSQL/connections/' + dbname + '/password')
-    #       info['host'] = host
-    #        info['port'] = port
-    #        info['username'] = username
-    #        info['password'] = password
-    #        available_dbs[dbname] = dict(info)
-    #    return available_dbs
-
     def getQGISDbs(self):
         """Return all PostGIS connection settings stored in QGIS
         :return: connection dict() with name and other settings
@@ -85,11 +68,10 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
             con['password'] = unicode(settings.value(u'%s/password' % unicode(item)))
             con_settings.append(con)
         settings.endGroup()
-        if len(con_settings) < 1:
-            con_settings = None
         dbs = {}
-        for conn in con_settings:
-            dbs[conn['name']]= conn
+        if len(con_settings) > 1:
+            for conn in con_settings:
+                dbs[conn['name']]= conn
         return dbs
 
     def popDbs(self, available_dbs):
@@ -97,16 +79,16 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
         self.dbCombo.addItems(sorted(available_dbs.keys()))
         return
 
-    def getSelectedDb(self, iface):
+    def getSelectedDb(self):
         return self.dbCombo.currentText()
 
     def getDbSettings(self, available_dbs):
-        dbname = self.dbCombo.currentText()
-        return {'dbname': dbname,
-        'user': available_dbs[dbname]['username'],
-        'host': available_dbs[dbname]['host'],
-        'port': available_dbs[dbname]['port'],
-        'password': available_dbs[dbname]['password'],
+        connection = self.dbCombo.currentText()
+        return {'dbname': available_dbs[connection]['dbname'],
+        'user': available_dbs[connection]['username'],
+        'host': available_dbs[connection]['host'],
+        'port': available_dbs[connection]['port'],
+        'password': available_dbs[connection]['password'],
         'schema': self.schemaCombo.currentText(),
         'table_name': self.nameLineEdit.text()}
 

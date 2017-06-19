@@ -38,7 +38,7 @@ import resources
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
 from DbSettings_dialog import DbSettingsDialog
 from ClSettings_dialog import ClSettingsDialog
-from sGraph.break_tools import *
+from sGraph.break_tools import *  # better give these a name to make it explicit to which module the methods belong
 from sGraph.merge_tools import *
 from sGraph.utilityFunctions import *
 
@@ -87,6 +87,8 @@ class RoadNetworkCleaner:
 
         # Create the dialog (after translation) and keep reference
         self.dlg = RoadNetworkCleanerDialog()
+        self.dbsettings_dlg = DbSettingsDialog()
+        self.clsettings_dlg = ClSettingsDialog()
         self.cleaning = None
 
         # Declare instance attributes
@@ -236,6 +238,8 @@ class RoadNetworkCleaner:
         # remove the toolbar
         del self.toolbar
 
+        # self.unloadGUI()
+
     def getActiveLayers(self, iface):
         layers_list = []
         for layer in iface.legendInterface().layers():
@@ -256,8 +260,8 @@ class RoadNetworkCleaner:
     def popSchemas(self):
         self.dbsettings_dlg.schemaCombo.clear()
         schemas = []
-        selected_db = self.dbsettings_dlg.getSelectedDb(self.iface)
-        if len(self.dbsettings_dlg.getSelectedDb(self.iface)) > 1:
+        selected_db = self.dbsettings_dlg.getSelectedDb()
+        if len(self.dbsettings_dlg.getSelectedDb()) > 1:
             try:
                 print 'tries'
                 uri = QgsDataSourceURI()
@@ -357,20 +361,22 @@ class RoadNetworkCleaner:
             return
 
     def cleaningFinished(self, ret):
-        # clean up  the worker and thread
+        # load the cleaning results layer
         try:
             # report the result
             for layer in ret:
                 if layer:
                     QgsMapLayerRegistry.instance().addMapLayer(layer)
+                    layer.updateExtents()
             self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
+            self.iface.mapCanvas().refresh()
 
         except Exception, e:
             # notify the user that sth went wrong
             self.cleaning.error.emit(e, traceback.format_exc())
             self.giveMessage('Something went wrong! See the message log for more information', QgsMessageBar.CRITICAL)
-
-        self.cleaning.iface.mapCanvas().refresh()
+        # clean up the worker and thread
+        #self.cleaning.iface.mapCanvas().refresh()
         self.cleaning.deleteLater()
         self.thread.quit()
         self.thread.wait()
@@ -572,6 +578,29 @@ class RoadNetworkCleaner:
 
     def run(self):
         """Run method that performs all the real work"""
+        # setup GUI signals
+        self.dlg.cleanButton.clicked.connect(self.startCleaning)
+        self.dlg.cancelButton.clicked.connect(self.killCleaning)
+
+        # settings popup
+        self.dlg.snapCheckBox.stateChanged.connect(self.dlg.set_enabled_tolerance)
+
+        self.dlg.browseCleaned.clicked.connect(self.setOutput)
+        self.dlg.settingsButton.clicked.connect(self.openClSettings)
+        self.dlg.errorsCheckBox.stateChanged.connect(self.dlg.set_enabled_id)
+        self.dlg.inputCombo.currentIndexChanged.connect(self.popIdColumn)
+
+        self.available_dbs = self.dbsettings_dlg.getQGISDbs(self.qs)
+
+        self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.setDbOutput)
+        self.dbsettings_dlg.schemaCombo.currentIndexChanged.connect(self.setDbOutput)
+        self.dbsettings_dlg.nameLineEdit.textChanged.connect(self.setDbOutput)
+
+        self.dlg.memoryRadioButton.clicked.connect(self.setTempOutput)
+        self.dlg.memoryRadioButton.clicked.connect(self.dlg.update_output_text)
+        self.dlg.shpRadioButton.clicked.connect(self.setShpOutput)
+        self.dlg.postgisRadioButton.clicked.connect(self.setDbOutput)
+
         # show the dialog
         self.dlg.show()
         self.dlg.popActiveLayers(self.getActiveLayers(self.iface))
@@ -595,6 +624,25 @@ class RoadNetworkCleaner:
             # substitute with your code.
             pass
 
+    def unloadGUI(self):
+        self.dlg.cleanButton.clicked.disconnect(self.startCleaning)
+        self.dlg.cancelButton.clicked.disconnect(self.killCleaning)
 
+        # settings popup
+        self.dlg.snapCheckBox.stateChanged.disconnect(self.dlg.set_enabled_tolerance)
 
+        self.dlg.browseCleaned.clicked.disconnect(self.setOutput)
+        self.dlg.settingsButton.clicked.disconnect(self.openClSettings)
+        self.dlg.errorsCheckBox.stateChanged.disconnect(self.dlg.set_enabled_id)
+        self.dlg.inputCombo.currentIndexChanged.disconnect(self.popIdColumn)
 
+        self.dbsettings_dlg.dbCombo.currentIndexChanged.disconnect(self.setDbOutput)
+        self.dbsettings_dlg.schemaCombo.currentIndexChanged.disconnect(self.setDbOutput)
+        self.dbsettings_dlg.nameLineEdit.textChanged.disconnect(self.setDbOutput)
+
+        self.dlg.memoryRadioButton.clicked.disconnect(self.setTempOutput)
+        self.dlg.memoryRadioButton.clicked.disconnect(self.dlg.update_output_text)
+        self.dlg.shpRadioButton.clicked.disconnect(self.setShpOutput)
+        self.dlg.postgisRadioButton.clicked.disconnect(self.setDbOutput)
+
+        self.dbsettings_dlg.dbCombo.currentIndexChanged.disconnect(self.popSchemas)
