@@ -284,8 +284,8 @@ class RoadNetworkCleaner:
     def setDbOutput(self):
         self.dlg.disable_browse()
         self.dlg.outputCleaned.clear()
-        self.dbsettings = self.dbsettings_dlg.getDbSettings(self.available_dbs)
         try:
+            self.dbsettings = self.dbsettings_dlg.getDbSettings(self.available_dbs)
             db_layer_name = "%s:%s:%s" % (self.dbsettings['dbname'], self.dbsettings['schema'], self.dbsettings['table_name'])
             self.dlg.outputCleaned.setText(db_layer_name)
         except:
@@ -489,23 +489,23 @@ class RoadNetworkCleaner:
                     if self.settings['errors']:
 
                         errors_list = {
-                                       'breakages': breakages,
-                                       'overlaps': overlaps,
-                                       'orphans': orphans,
-                                       'closed_polylines': closed_polylines,
-                                       'self_intersecting': self_intersecting,
-                                       'duplicates': duplicates,
-                                       'multiparts': [int(i) for i in self.br.multiparts],
-                                       'invalids': self.br.invalids,
-                                       'points': self.br.points,
-                                       'continuous line': self.mrg.fids_to_merge
-                                       }
-                        uf = self.br.uid_to_fid
+                            'breakages': breakages,
+                            'overlaps': overlaps,
+                            'orphans': orphans,
+                            'closed_polylines': closed_polylines,
+                            'self_intersecting': self_intersecting,
+                            'duplicates': duplicates,
+                            'multiparts': [int(i) for i in self.br.multiparts],
+                            'invalids': self.br.invalids,
+                            'points': self.br.points,
+                            'continuous line': self.mrg.fids_to_merge
+                        }
+                        uf = self.br.uid_to_fid_input
                         input_geometries_wkt = self.br.geometries_wkt
 
                         errors = QgsVectorLayer('MultiLineString?crs=' + crs.toWkt(), 'errors', "memory")
                         pr = errors.dataProvider()
-                        pr.addAttributes([QgsField('error_id', QVariant.Int), QgsField('errors', QVariant.String)])
+                        pr.addAttributes([QgsField('id_input', QVariant.String), QgsField('errors', QVariant.String)])
                         new_features = []
                         combined_errors = {}
                         for k, v in errors_list.items():
@@ -516,17 +516,20 @@ class RoadNetworkCleaner:
                                     combined_errors[item] = k
 
                         # TODO: fix why it throws KeyError
-                        e_count = 0
                         for k, v in combined_errors.items():
                             new_feat = QgsFeature()
-                            if v == 'invalids' or v == 'points':
-                                new_geom = QgsGeometry()
-                            else:
-                                new_geom = QgsGeometry.fromWkt(input_geometries_wkt[uf[k]])
-                            new_feat.setAttributes([e_count, v])
-                            new_feat.setGeometry(new_geom)
-                            new_features.append(new_feat)
-                            e_count += 1
+                            try:
+                                if v == 'invalids' or v == 'points':
+                                    new_geom = QgsGeometry()
+                                else:
+                                    new_geom = QgsGeometry.fromWkt(str(input_geometries_wkt[uf[k]]))
+                                new_feat.setAttributes([k, v])
+                                new_feat.setGeometry(QgsGeometry(new_geom))
+                                new_features.append(new_feat)
+                            except KeyError, e:
+                                new_feat.setAttributes(['could not find id', v])
+                                new_feat.setGeometry(QgsGeometry())
+                                new_features.append(new_feat)
 
                         errors.startEditing()
                         pr.addFeatures(new_features)
