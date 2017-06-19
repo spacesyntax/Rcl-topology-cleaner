@@ -295,13 +295,14 @@ class RoadNetworkCleaner:
 
     def setDbOutput(self):
         self.dlg.disable_browse()
-        self.dlg.outputCleaned.clear()
-        try:
-            self.dbsettings = self.dbsettings_dlg.getDbSettings(self.available_dbs)
-            db_layer_name = "%s:%s:%s" % (self.dbsettings['dbname'], self.dbsettings['schema'], self.dbsettings['table_name'])
-            self.dlg.outputCleaned.setText(db_layer_name)
-        except:
+        if self.dlg.postgisRadioButton.isChecked():
             self.dlg.outputCleaned.clear()
+            try:
+                self.dbsettings = self.dbsettings_dlg.getDbSettings(self.available_dbs)
+                db_layer_name = "%s:%s:%s" % (self.dbsettings['dbname'], self.dbsettings['schema'], self.dbsettings['table_name'])
+                self.dlg.outputCleaned.setText(db_layer_name)
+            except:
+                self.dlg.outputCleaned.clear()
 
     def setTempOutput(self):
         self.dlg.disable_browse()
