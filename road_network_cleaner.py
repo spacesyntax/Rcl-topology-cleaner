@@ -309,7 +309,7 @@ class RoadNetworkCleaner:
         # Gives error according to message
         QgsMessageLog.logMessage('Cleaning thread raised an exception: %s' % exception_string, level=QgsMessageLog.CRITICAL)
 
-    def startCleaning(self, settings):
+    def startCleaning(self):
         self.dlg.cleaningProgress.reset()
         settings = self.dlg.get_settings()
         if settings['output_type'] == 'postgis':
@@ -454,7 +454,7 @@ class RoadNetworkCleaner:
                     step = 40/ self.br.feat_count
                     self.br.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
 
-                    broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates = self.br.break_features()
+                    broken_features = self.br.break_features()
 
                     if self.cl_killed is True or self.br.killed is True: return
                     self.cl_progress.emit(45)
@@ -487,52 +487,9 @@ class RoadNetworkCleaner:
 
                     if self.settings['errors']:
 
-                        errors_list = {
-                            'breakages': breakages,
-                            'overlaps': overlaps,
-                            'orphans': orphans,
-                            'closed_polylines': closed_polylines,
-                            'self_intersecting': self_intersecting,
-                            'duplicates': duplicates,
-                            'multiparts': [int(i) for i in self.br.multiparts],
-                            'invalids': self.br.invalids,
-                            'points': self.br.points,
-                            'continuous line': self.mrg.fids_to_merge
-                        }
-                        uf = self.br.uid_to_fid_input
-                        input_geometries_wkt = self.br.geometries_wkt
+                        self.mrg.updateErrors(self.br.errors_features)
+                        errors = to_shp(None, self.mrg.errors_features, [QgsField('id_input', QVariant.Int), QgsField('errors', QVariant.String)], crs, 'errors', encoding, geom_type)
 
-                        errors = QgsVectorLayer('MultiLineString?crs=' + crs.toWkt(), 'errors', "memory")
-                        pr = errors.dataProvider()
-                        pr.addAttributes([QgsField('id_input', QVariant.String), QgsField('errors', QVariant.String)])
-                        new_features = []
-                        combined_errors = {}
-                        for k, v in errors_list.items():
-                            for item in v:
-                                try:
-                                    combined_errors[item] += ', ' + k
-                                except KeyError, e:
-                                    combined_errors[item] = k
-
-                        # TODO: fix why it throws KeyError
-                        for k, v in combined_errors.items():
-                            new_feat = QgsFeature()
-                            try:
-                                if v == 'invalids' or v == 'points':
-                                    new_geom = QgsGeometry()
-                                else:
-                                    new_geom = QgsGeometry.fromWkt(str(input_geometries_wkt[uf[k]]))
-                                new_feat.setAttributes([k, v])
-                                new_feat.setGeometry(QgsGeometry(new_geom))
-                                new_features.append(new_feat)
-                            except KeyError, e:
-                                new_feat.setAttributes(['could not find id', v])
-                                new_feat.setGeometry(QgsGeometry())
-                                new_features.append(new_feat)
-
-                        errors.startEditing()
-                        pr.addFeatures(new_features)
-                        errors.commitChanges()
                     else:
                         errors = None
 

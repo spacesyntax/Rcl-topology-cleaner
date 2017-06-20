@@ -69,7 +69,7 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
             con_settings.append(con)
         settings.endGroup()
         dbs = {}
-        if len(con_settings) > 1:
+        if len(con_settings) > 0:
             for conn in con_settings:
                 dbs[conn['name']]= conn
         return dbs

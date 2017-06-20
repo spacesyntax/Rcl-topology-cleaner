@@ -25,9 +25,11 @@ class breakTool(QObject):
         self.uid = uid
 
         self.errors = errors
-        self.multiparts = []
-        self.points = []
-        self.invalids = []
+        self.errors_features = []
+        self.multiparts = {}
+        self.mlkeys = {}
+        self.points = {}
+        self.invalids = {}
 
         self.features = []
         self.attributes = {}
@@ -38,7 +40,7 @@ class breakTool(QObject):
         self.spIndex = QgsSpatialIndex()
         self.layer_fields = [QgsField(i.name(), i.type()) for i in self.layer.dataProvider().fields()]
         if self.uid is not None:
-            self.uid_index = [index for index,field in enumerate(self.layer_fields) if field.name() == self.uid].pop()
+            self.uid_index = [index for index, field in enumerate(self.layer_fields) if field.name() == self.uid].pop()
         self.fid_to_uid = {}
         self.uid_to_fid = {}
 
@@ -49,13 +51,13 @@ class breakTool(QObject):
 
         for f in self.layer.getFeatures():
 
+            input_info = [f.id(), f.geometry().exportToWkt()]
             self.progress.emit(45 * f_count / self.feat_count)
             f_count += 1
 
             if self.killed is True:
                 break
 
-            attr = f.attributes()
             geom_type = f.geometry().wkbType()
 
             if geom_type not in [5,2,1] and f.geometry().geometry().is3D():
@@ -64,9 +66,8 @@ class breakTool(QObject):
 
             if geom_type == 5:
                 attr = f.attributes()
-                if self.errors and self.uid is not None:
-                    self.multiparts.append(attr[self.uid_index])
-                    self.uid_to_fid[attr[self.uid_index]] = f.id()
+                if self.errors:
+                    self.errors_features.append([f.id(), 'multipart', f.geometry().exportToWkt()])
                 for multipart in f.geometry().asGeometryCollection():
                     new_key_count += 1
                     if self.uid is not None:
@@ -88,12 +89,13 @@ class breakTool(QObject):
                     self.geometries_vertices[new_key_count] = [vertex for vertex in vertices_from_wkt_2(snapped_wkt)]
                     # insert features to index
                     self.spIndex.insertFeature(new_feat)
+                    self.mlkeys[new_key_count] = f.id()
             elif geom_type == 1:
-                if self.errors and self.uid is not None:
-                    self.points.append(attr[self.uid_index])
+                if self.errors:
+                    self.errors_features.append([f.id(), 'point', QgsGeometry().exportToWkt()])
             elif not f.geometry().isGeosValid():
-                if self.errors and self.uid is not None:
-                    self.invalids.append(attr[self.uid_index])
+                if self.errors:
+                    self.errors_features.append([f.id(), 'invalid', QgsGeometry().exportToWkt()])
             elif geom_type == 2:
                 attr = f.attributes()
                 if self.tolerance:
@@ -111,11 +113,6 @@ class breakTool(QObject):
                 self.geometries_vertices[f.id()] = [vertex for vertex in vertices_from_wkt_2(snapped_wkt)]
                 # insert features to index
                 self.spIndex.insertFeature(f)
-                if self.uid is not None:
-                    self.fid_to_uid[f.id()] = attr[self.uid_index]
-                    self.uid_to_fid[attr[self.uid_index]] = f.id()
-
-        self.uid_to_fid_input = dict(self.uid_to_fid)
 
     def break_features(self):
 
@@ -147,19 +144,10 @@ class breakTool(QObject):
             f_errors, vertices = self.find_breakages(fid, gids)
 
             if self.errors is True:
-                if f_errors == ['br', 'ovrlp']:
-                    breakages.append(self.fid_to_uid[fid])
-                    overlaps.append(self.fid_to_uid[fid])
-                elif f_errors == 'br':
-                    breakages.append(self.fid_to_uid[fid])
-                elif f_errors == 'ovrlp':
-                    overlaps.append(self.fid_to_uid[fid])
-                elif f_errors == 'orphan':
-                    orphans.append(self.fid_to_uid[fid])
-                elif f_errors == 'closed polyline':
-                    closed_polylines.append(self.fid_to_uid[fid])
-                elif f_errors == 'duplicate':
-                    duplicates.append(self.fid_to_uid[fid])
+                try:
+                    self.errors_features.append([self.mlkeys[fid], f_errors, self.geometries[fid]])
+                except KeyError:
+                    self.errors_features.append([fid, f_errors, self.geometries[fid]])
 
             if f_errors is None:
                 vertices = [0, len(f_geom.asPolyline()) - 1 ]
@@ -177,7 +165,7 @@ class breakTool(QObject):
                         new_feat = [new_fid, f_attrs, wkt]
                         broken_features.append(new_feat)
 
-        return broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates
+        return broken_features
 
     def kill(self):
         self.br_killed = True
@@ -275,12 +263,12 @@ class breakTool(QObject):
                     return 'orphan', []
             elif is_self_intersersecting:
                 if has_overlaps:
-                    return ['br', 'ovrlp'], vertices
+                    return 'br, ovrlp', vertices
                 else:
                     return 'br', vertices
             elif has_overlaps or must_break:
                 if has_overlaps is True and must_break is True:
-                    return ['br', 'ovrlp'], vertices
+                    return 'br, ovrlp', vertices
                 elif has_overlaps is True and must_break is False:
                     return 'ovrlp', vertices
                 elif has_overlaps is False and must_break is True:
