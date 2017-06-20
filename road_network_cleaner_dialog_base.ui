@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>282</width>
-    <height>333</height>
+    <width>250</width>
+    <height>307</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -25,7 +25,16 @@
      <property name="sizeConstraint">
       <enum>QLayout::SetNoConstraint</enum>
      </property>
-     <property name="margin">
+     <property name="leftMargin">
+      <number>5</number>
+     </property>
+     <property name="topMargin">
+      <number>5</number>
+     </property>
+     <property name="rightMargin">
+      <number>5</number>
+     </property>
+     <property name="bottomMargin">
       <number>5</number>
      </property>
      <item row="16" column="0" colspan="2">
@@ -41,40 +50,10 @@
        </property>
       </widget>
      </item>
-     <item row="16" column="2">
-      <widget class="QComboBox" name="idCombo">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>70</width>
-         <height>16777215</height>
-        </size>
-       </property>
-      </widget>
-     </item>
-     <item row="4" column="0" colspan="3">
-      <widget class="Line" name="line">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-      </widget>
-     </item>
      <item row="8" column="1">
       <widget class="QRadioButton" name="shpRadioButton">
        <property name="text">
         <string>shapefile</string>
-       </property>
-      </widget>
-     </item>
-     <item row="8" column="0">
-      <widget class="QRadioButton" name="memoryRadioButton">
-       <property name="text">
-        <string>memory</string>
        </property>
       </widget>
      </item>
@@ -91,26 +70,17 @@
        </property>
       </widget>
      </item>
-     <item row="1" column="0" colspan="3">
-      <widget class="QComboBox" name="inputCombo">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
+     <item row="8" column="0">
+      <widget class="QRadioButton" name="memoryRadioButton">
+       <property name="text">
+        <string>memory</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="0" colspan="3">
-      <widget class="QCheckBox" name="snapCheckBox">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="text">
-        <string>snap endpoints</string>
+     <item row="4" column="0" colspan="3">
+      <widget class="Line" name="line">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
        </property>
       </widget>
      </item>
@@ -156,6 +126,29 @@
        </property>
       </widget>
      </item>
+     <item row="1" column="0" colspan="3">
+      <widget class="QComboBox" name="inputCombo">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="0" colspan="3">
+      <widget class="QCheckBox" name="snapCheckBox">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="text">
+        <string>snap endpoints</string>
+       </property>
+      </widget>
+     </item>
      <item row="7" column="0" colspan="3">
       <widget class="QLabel" name="label_4">
        <property name="sizePolicy">
@@ -175,16 +168,10 @@
        </property>
       </widget>
      </item>
-     <item row="21" column="0" colspan="3">
-      <widget class="QProgressBar" name="cleaningProgress">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="value">
-        <number>0</number>
+     <item row="8" column="2">
+      <widget class="QRadioButton" name="postgisRadioButton">
+       <property name="text">
+        <string>PostGIS</string>
        </property>
       </widget>
      </item>
@@ -214,10 +201,16 @@
        </property>
       </widget>
      </item>
-     <item row="8" column="2">
-      <widget class="QRadioButton" name="postgisRadioButton">
-       <property name="text">
-        <string>PostGIS</string>
+     <item row="21" column="0" colspan="3">
+      <widget class="QProgressBar" name="cleaningProgress">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="value">
+        <number>0</number>
        </property>
       </widget>
      </item>

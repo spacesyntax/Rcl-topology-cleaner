@@ -54,8 +54,6 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.decimalsSpin.setSingleStep(1)
         self.decimalsSpin.setValue(6)
 
-        self.idCombo.setDisabled(True)
-        self.idCombo.setVisible(False)
         self.decimalsSpin.setDisabled(True)
 
         self.memoryRadioButton.setChecked(True)
@@ -112,12 +110,6 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
             return
 
 
-    def get_user_id(self):
-        if self.errorsCheckBox.isChecked():
-            return self.idCombo.currentText()
-        else:
-            return None
-
     def get_output_type(self):
         if self.shpRadioButton.isChecked():
             return 'shp'
@@ -132,14 +124,8 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         else:
             self.decimalsSpin.setDisabled(True)
 
-    def set_enabled_id(self):
-        if self.errorsCheckBox.isChecked():
-            self.idCombo.setDisabled(False)
-        else:
-            self.idCombo.setDisabled(True)
-
     def get_settings(self):
         settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'tolerance': self.getTolerance(),
-                    'errors': self.get_errors(), 'user_id': self.get_user_id(), 'output_type': self.get_output_type()}
+                    'errors': self.get_errors(), 'user_id': None, 'output_type': self.get_output_type()}
         return settings
 

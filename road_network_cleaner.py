@@ -222,15 +222,6 @@ class RoadNetworkCleaner:
                     layers_list.append(layer.name())
         return layers_list
 
-    def popIdColumn(self):
-        self.dlg.idCombo.clear()
-        cols_list = []
-        #open file
-        if self.dlg.getInput(self.iface):
-            for i in self.dlg.getInput(self.iface).dataProvider().fields():
-                cols_list.append(i.name())
-        self.dlg.idCombo.addItems(cols_list)
-
     def popSchemas(self):
         self.dbsettings_dlg.schemaCombo.clear()
         schemas = []
@@ -514,8 +505,6 @@ class RoadNetworkCleaner:
         self.dlg.snapCheckBox.stateChanged.connect(self.dlg.set_enabled_tolerance)
         self.dlg.browseCleaned.clicked.connect(self.setOutput)
         self.dlg.settingsButton.clicked.connect(self.openClSettings)
-        self.dlg.errorsCheckBox.stateChanged.connect(self.dlg.set_enabled_id)
-        self.dlg.inputCombo.currentIndexChanged.connect(self.popIdColumn)
 
         self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.setDbOutput)
         self.dbsettings_dlg.schemaCombo.currentIndexChanged.connect(self.setDbOutput)
@@ -555,8 +544,6 @@ class RoadNetworkCleaner:
 
         self.dlg.browseCleaned.clicked.disconnect(self.setOutput)
         self.dlg.settingsButton.clicked.disconnect(self.openClSettings)
-        self.dlg.errorsCheckBox.stateChanged.disconnect(self.dlg.set_enabled_id)
-        self.dlg.inputCombo.currentIndexChanged.disconnect(self.popIdColumn)
 
         self.dbsettings_dlg.dbCombo.currentIndexChanged.disconnect(self.setDbOutput)
         self.dbsettings_dlg.schemaCombo.currentIndexChanged.disconnect(self.setDbOutput)
