@@ -5,7 +5,10 @@ from qgis.core import QgsGeometry
 from PyQt4.QtCore import QObject, pyqtSignal
 
 # plugin module imports
-from utilityFunctions import *
+try:
+    from utilityFunctions import *
+except ImportError:
+    pass
 
 
 class mergeTool(QObject):
@@ -22,6 +25,9 @@ class mergeTool(QObject):
         self.last_fid = features[-1][0]
         self.errors = errors
         self.uid = uid
+
+        self.brkeys = {}
+        self.errors_features = {}
 
         self.vertices_occur = {}
         self.edges_occur = {}
@@ -73,19 +79,14 @@ class mergeTool(QObject):
                     f_geom = QgsGeometry.fromWkt(self.f_dict[x[0]][1])
                     g_geom = QgsGeometry.fromWkt(self.f_dict[x[1]][1])
                     if f_geom.isGeosEqual(g_geom):
-                        self.duplicates.append(f_geom)
+                        self.duplicates.append(x[0])
 
         self.all_fids = [i[0] for i in self.features]
         self.fids_to_merge = list(set([fid for k, v in self.con_2.items() for fid in v]))
         self.copy_fids = list(set(self.all_fids) - set(self.fids_to_merge))
         self.feat_to_merge = [[i, self.f_dict[i][0], self.f_dict[i][1]] for i in self.fids_to_merge if i not in self.duplicates]
         self.feat_to_copy =[[i, [[x] for x in self.f_dict[i][0]], self.f_dict[i][1]] for i in self.copy_fids if i not in self.duplicates]
-        self.con_1 = []
-        for k,v in self.all_con.items():
-            if len(v) == 1:
-                self.con_1.append(k)
-
-        self.con_1 = list(set(self.con_1))
+        self.con_1 = list(set([k for k, v in self.all_con.items() if len(v) == 1]))
 
         self.edges_to_start = [[i, self.f_dict[i][0], self.f_dict[i][1]] for i in self.con_1 ]
 
@@ -136,6 +137,11 @@ class mergeTool(QObject):
                 # merge attributes
                 f_attrs_list = [self.f_dict[node][0] for node in tree]
                 f_attrs = []
+
+                if self.errors:
+                    for node in tree:
+                        self.errors_features[node] = ('continuous line', None)
+
                 for i in range(0, len(f_attrs_list[0])):
                     f_attrs += [[f_attr[i] for f_attr in f_attrs_list]]
                 f_attrs = [list(set(item)) for item in f_attrs]
@@ -156,6 +162,8 @@ class mergeTool(QObject):
                     merged_features.append(new_feat)
 
         return merged_features + self.feat_to_copy
+
+
 
 
 

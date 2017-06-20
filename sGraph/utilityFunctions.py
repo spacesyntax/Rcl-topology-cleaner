@@ -40,17 +40,18 @@ def find_vertex_index(points, f_geom):
 
 
 def point_is_vertex(point, line):
-    pl_l = line.asPolyline()
-    try:
-        idx = pl_l.index(point.asPoint())
-        if idx == 0 or idx == (len(pl_l) - 1):
-            return True
-        else:
-            return False
-    except ValueError:
-        return False
-    #if point.asPoint() in line.asPolyline():
-    #    return True
+    #pl_l = line.asPolyline()
+    #try:
+    #    idx = pl_l.index(point.asPoint())
+    #    if idx == 0 or idx == (len(pl_l) - 1):
+    #        return True
+    #    else:
+    #        return False
+    #except ValueError:
+    #    return False
+    if point.asPoint() in line.asPolyline():
+        return True
+
 
 def vertices_from_wkt_2(wkt):
     # the wkt representation may differ in other systems/ QGIS versions

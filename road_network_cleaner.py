@@ -425,7 +425,6 @@ class RoadNetworkCleaner:
                     layer_name = self.settings['input']
                     path = self.settings['output']
                     tolerance = self.settings['tolerance']
-                    user_id = self.settings['user_id']
                     output_type = self.settings['output_type']
 
                     # project settings
@@ -434,13 +433,9 @@ class RoadNetworkCleaner:
                     encoding = layer.dataProvider().encoding()
                     geom_type = layer.dataProvider().geometryType()
 
-                    # if unique id is specified use it as keys
-                    # else create new
-                    # check uid before
-
                     self.cl_progress.emit(2)
 
-                    self.br = breakTool(layer, tolerance, user_id, self.settings['errors'])
+                    self.br = breakTool(layer, tolerance, None, self.settings['errors'])
 
                     if self.cl_killed is True or self.br.killed is True: return
 
@@ -450,23 +445,22 @@ class RoadNetworkCleaner:
 
                     self.cl_progress.emit(5)
                     self.total = 5
-
                     step = 40/ self.br.feat_count
                     self.br.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
 
                     broken_features = self.br.break_features()
 
                     if self.cl_killed is True or self.br.killed is True: return
+
                     self.cl_progress.emit(45)
 
-                    self.mrg = mergeTool(broken_features, user_id, True)
+                    self.mrg = mergeTool(broken_features, None, True)
 
-                    # TODO fix division by zero when features to merge = 0
-                    #try:
-                    step = 40/ len(self.mrg.con_1)
-                    #except ZeroDivisionError:
-                        #step = 45 / 0.00000001
-
+                    # TODO test
+                    try:
+                        step = 40/ len(self.mrg.con_1)
+                    except ZeroDivisionError:
+                        step = 40
                     self.mrg.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
 
                     merged_features = self.mrg.merge()
@@ -482,14 +476,14 @@ class RoadNetworkCleaner:
                         try:
                             # None will be emitted if db layer is not created
                             self.error.emit(final, traceback.format_exc())
-                        except:
+                        except :
                             pass
 
                     if self.settings['errors']:
-
-                        self.mrg.updateErrors(self.br.errors_features)
-                        errors = to_shp(None, self.mrg.errors_features, [QgsField('id_input', QVariant.Int), QgsField('errors', QVariant.String)], crs, 'errors', encoding, geom_type)
-
+                        # TODO
+                        self.br.updateErrors(self.mrg.errors_features)
+                        errors_list = [[k, [[k], [v[0]]], v[1]] for k, v in self.br.errors_features.items()]
+                        errors = to_shp(None, errors_list, [QgsField('id_input', QVariant.Int), QgsField('errors', QVariant.String)], crs, 'errors', encoding, geom_type)
                     else:
                         errors = None
 
