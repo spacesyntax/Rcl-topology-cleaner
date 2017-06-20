@@ -67,8 +67,8 @@ class RoadNetworkCleaner:
         # Save reference to the QGIS interface
         self.iface = iface
 
-        qs = QSettings()
-        self.qs = qs
+        self.legend = self.iface.legendInterface()
+
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
         # initialize locale
@@ -214,13 +214,17 @@ class RoadNetworkCleaner:
 
         # self.unloadGUI()
 
-    def getActiveLayers(self, iface):
+    def getActiveLayers(self):
         layers_list = []
-        for layer in iface.legendInterface().layers():
+        for layer in self.iface.legendInterface().layers():
             if layer.isValid() and layer.type() == QgsMapLayer.VectorLayer:
                 if layer.hasGeometryType() and (layer.geometryType() == 1):
                     layers_list.append(layer.name())
         return layers_list
+
+    def updateLayers(self):
+        layers = self.getActiveLayers()
+        self.dlg.popActiveLayers(layers)
 
     def popSchemas(self):
         self.dbsettings_dlg.schemaCombo.clear()
@@ -272,11 +276,13 @@ class RoadNetworkCleaner:
                 self.dlg.outputCleaned.setText(db_layer_name)
             except:
                 self.dlg.outputCleaned.clear()
+            self.dlg.outputCleaned.setDisabled(True)
 
     def setTempOutput(self):
         self.dlg.disable_browse()
-        temp_name = 'temporary layer'
+        temp_name = 'cleaned'
         self.dlg.outputCleaned.setText(temp_name)
+        self.dlg.outputCleaned.setDisabled(False)
 
     def setShpOutput(self):
         self.dlg.disable_browse()
@@ -284,6 +290,7 @@ class RoadNetworkCleaner:
             self.dlg.outputCleaned.setText(self.file_name)
         except :
             self.dlg.outputCleaned.clear()
+        self.dlg.outputCleaned.setDisabled(True)
 
     def openClSettings(self):
         self.clsettings_dlg.show()
@@ -516,7 +523,7 @@ class RoadNetworkCleaner:
         self.dlg.shpRadioButton.clicked.connect(self.setShpOutput)
         self.dlg.postgisRadioButton.clicked.connect(self.setDbOutput)
 
-        self.dlg.popActiveLayers(self.getActiveLayers(self.iface))
+        self.dlg.popActiveLayers(self.getActiveLayers())
 
         self.dbsettings_dlg.popDbs(self.available_dbs)
 
@@ -527,6 +534,9 @@ class RoadNetworkCleaner:
             self.dlg.outputCleaned.setText('temporary layer')
 
         self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.popSchemas)
+
+        self.legend.itemAdded.connect(self.updateLayers)
+        self.legend.itemRemoved.connect(self.updateLayers)
 
         # Run the dialog event loop
         result = self.dlg.exec_()
