@@ -66,7 +66,6 @@ class RoadNetworkCleaner:
         """
         # Save reference to the QGIS interface
         self.iface = iface
-
         self.legend = self.iface.legendInterface()
 
         # initialize plugin directory
@@ -340,22 +339,26 @@ class RoadNetworkCleaner:
                 if layer:
                     QgsMapLayerRegistry.instance().addMapLayer(layer)
                     layer.updateExtents()
+                    self.iface.mapCanvas().refresh()
+
             self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
-            self.iface.mapCanvas().refresh()
+            for layer in self.iface.mapCanvas().layers():
+                layer.triggerRepaint()
+
+            self.iface.mapCanvas().refreshAllLayers()
 
         except Exception, e:
             # notify the user that sth went wrong
             self.cleaning.error.emit(e, traceback.format_exc())
             self.giveMessage('Something went wrong! See the message log for more information', QgsMessageBar.CRITICAL)
+
         # clean up the worker and thread
-        #self.cleaning.iface.mapCanvas().refresh()
         self.cleaning.deleteLater()
         self.thread.quit()
         self.thread.wait()
         self.thread.deleteLater()
         self.dlg.cleaningProgress.reset()
         self.cleaning = None
-
         self.dlg.close()
 
     def killCleaning(self):
