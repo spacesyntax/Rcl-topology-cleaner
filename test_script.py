@@ -16,6 +16,7 @@ execfile(u'/Users/I.Kolovou/Documents/GitHub/Road-network-cleaner/sGraph/utility
 #layer_name = 'Netwrok_small'
 #layer_name = 'madagascar'
 layer_name = 'Barnsbury_OpenStreetMap'
+layer_name = 'Barnsbury_OSOpenRoads'
 
 dbname = 'nyc'
 user = 'postgres'
@@ -40,10 +41,13 @@ geom_type = layer.dataProvider().geometryType()
 errors = True
 
 # break features
-br = breakTool(layer, tolerance, None, True)
+br = breakTool(layer, tolerance, None, True, True)
 br.add_edges()
 
 broken_features = br.break_features()
+
+unlinks = to_shp(None, br.unlinked_features, [QgsField('id', QVariant.Int), QgsField('line_id1', QVariant.String), QgsField('line_id2', QVariant.String), QgsField('x', QVariant.Double), QgsField('y', QVariant.Double)], crs,'unlinks', encoding, 0)
+QgsMapLayerRegistry.instance().addMapLayer(unlinks)
 
 to_dblayer(dbname, user, host, port, password, schema, table_name, br.layer_fields, broken_features, crs, arrays=False)
 

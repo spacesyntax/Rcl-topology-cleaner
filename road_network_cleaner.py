@@ -426,7 +426,7 @@ class RoadNetworkCleaner:
 
                     self.cl_progress.emit(2)
 
-                    self.br = breakTool(layer, tolerance, None, self.settings['errors'])
+                    self.br = breakTool(layer, tolerance, None, self.settings['errors'], self.settings['unlinks'])
 
                     if self.cl_killed is True or self.br.killed is True: return
 
@@ -470,18 +470,19 @@ class RoadNetworkCleaner:
                         except :
                             pass
 
+                    (errors, unlinks) = (None, None)
                     if self.settings['errors']:
-                        # TODO
                         self.br.updateErrors(self.mrg.errors_features)
                         errors_list = [[k, [[k], [v[0]]], v[1]] for k, v in self.br.errors_features.items()]
                         errors = to_shp(None, errors_list, [QgsField('id_input', QVariant.Int), QgsField('errors', QVariant.String)], crs, 'errors', encoding, geom_type)
-                    else:
-                        errors = None
+
+                    if self.settings['unlinks']:
+                        unlinks = to_shp(None, self.br.unlinked_features, [QgsField('id', QVariant.Int), QgsField('line_id1', QVariant.Int), QgsField('line_id2', QVariant.Int), QgsField('x', QVariant.Double), QgsField('y', QVariant.Double)], crs,'unlinks', encoding, 0)
 
                     print "survived!"
                     self.cl_progress.emit(100)
                     # return cleaned shapefile and errors
-                    ret = (errors, final, )
+                    ret = (errors, final, unlinks)
 
                 except Exception, e:
                     # forward the exception upstream

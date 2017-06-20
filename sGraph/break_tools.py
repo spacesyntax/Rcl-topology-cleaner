@@ -18,7 +18,7 @@ class breakTool(QObject):
     warning = pyqtSignal(str)
     killed = pyqtSignal(bool)
 
-    def __init__(self,layer, tolerance, uid, errors):
+    def __init__(self,layer, tolerance, uid, errors, unlinks):
         QObject.__init__(self)
 
         self.layer = layer
@@ -28,6 +28,9 @@ class breakTool(QObject):
 
         self.errors = errors
         self.errors_features = {}
+        self.unlinks = unlinks
+        self.unlinked_features = []
+        self.unlinks_count = 0
         self.ml_keys = {}
         self.br_keys = {}
 
@@ -60,7 +63,6 @@ class breakTool(QObject):
                 geom_type = f.geometry().wkbType()
 
             if geom_type == 5:
-                attr = f.attributes()
                 if self.errors:
                     self.errors_features[f.id()] = ('multipart', f.geometry().exportToWkt())
                 for multipart in f.geometry().asGeometryCollection():
@@ -192,7 +194,21 @@ class breakTool(QObject):
                 # duplicate geometry
                 if f_geom.isGeosEqual(g_geom):
                     is_duplicate = True
-                    #break
+
+                if self.unlinks:
+                    if f_geom.crosses(g_geom):
+                        crossing_point = f_geom.intersection(g_geom)
+                        if crossing_point.wkbType() == 1:
+                            self.unlinks_count += 1
+                            unlinks_attrs = [[self.unlinks_count], [gid], [fid], [crossing_point.asPoint()[0]],
+                                             [crossing_point.asPoint()[1]]]
+                            self.unlinked_features.append([self.unlinks_count, unlinks_attrs, crossing_point.exportToWkt()])
+                        elif crossing_point.wkbType() == 4:
+                            for cr_point in crossing_point.asGeometryCollection():
+                                self.unlinks_count += 1
+                                unlinks_attrs = [[self.unlinks_count], [gid], [fid], [cr_point.asPoint()[0]],
+                                                 [cr_point.asPoint()[1]]]
+                                self.unlinked_features.append([self.unlinks_count, unlinks_attrs, cr_point.exportToWkt()])
 
             if is_duplicate is False:
                 intersection = f_geom.intersection(g_geom)

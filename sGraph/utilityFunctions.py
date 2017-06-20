@@ -1,5 +1,4 @@
 # general imports
-from os.path import expanduser
 from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsFeature, QgsGeometry,QgsFields, QgsDataSourceURI
 import psycopg2
 from psycopg2.extensions import AsIs
@@ -76,7 +75,10 @@ def make_snapped_wkt(wkt, number_decimals):
 
 def to_shp(path, any_features_list, layer_fields, crs, name, encoding, geom_type):
     if path is None:
-        network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), name, "memory")
+        if geom_type == 0:
+            network = QgsVectorLayer('Point?crs=' + crs.toWkt(), name, "memory")
+        else:
+            network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), name, "memory")
     else:
         fields = QgsFields()
         for field in layer_fields:

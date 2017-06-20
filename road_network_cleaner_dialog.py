@@ -103,12 +103,14 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
     def get_errors(self):
         return self.errorsCheckBox.isChecked()
 
+    def get_unlinks(self):
+        return self.unlinksCheckBox.isChecked()
+
     def update_output_text(self):
         if self.memoryRadioButton.isChecked():
             return "temporary layer"
         else:
             return
-
 
     def get_output_type(self):
         if self.shpRadioButton.isChecked():
@@ -126,6 +128,6 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
     def get_settings(self):
         settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'tolerance': self.getTolerance(),
-                    'errors': self.get_errors(), 'user_id': None, 'output_type': self.get_output_type()}
+                    'errors': self.get_errors(), 'unlinks': self.get_unlinks(),  'user_id': None, 'output_type': self.get_output_type()}
         return settings
 
