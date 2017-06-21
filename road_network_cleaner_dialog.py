@@ -99,7 +99,23 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
     def popActiveLayers(self, layers_list):
         self.inputCombo.clear()
-        self.inputCombo.addItems(layers_list)
+        if layers_list:
+            self.inputCombo.addItems(layers_list)
+            self.lockGUI(False)
+        else:
+            self.lockGUI(True)
+
+    def lockGUI(self, onoff):
+        self.snapCheckBox.setDisabled(onoff)
+        self.set_enabled_tolerance()
+        self.memoryRadioButton.setDisabled(onoff)
+        self.shpRadioButton.setDisabled(onoff)
+        self.postgisRadioButton.setDisabled(onoff)
+        self.outputCleaned.setDisabled(onoff)
+        self.disable_browse()
+        self.unlinksCheckBox.setDisabled(onoff)
+        self.errorsCheckBox.setDisabled(onoff)
+        self.cleanButton.setDisabled(onoff)
 
     def getTolerance(self):
         if self.snapCheckBox.isChecked():
