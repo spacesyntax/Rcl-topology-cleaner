@@ -85,12 +85,15 @@ class RoadNetworkCleaner:
                 QCoreApplication.installTranslator(self.translator)
 
         # Create the dialog (after translation) and keep reference
-        self.dlg = RoadNetworkCleanerDialog()
-        self.dbsettings_dlg = DbSettingsDialog()
-        self.clsettings_dlg = ClSettingsDialog()
-        
+        # load the dialog from the run method otherwise the objects gets created multiple times
+        self.dlg = None
+        self.dbsettings_dlg = None
+        self.clsettings_dlg = None
+
         self.cleaning = None
-        self.available_dbs = self.dbsettings_dlg.getQGISDbs()
+        self.thread = None
+
+        self.available_dbs = None
 
         # Declare instance attributes
         self.actions = []
@@ -212,7 +215,7 @@ class RoadNetworkCleaner:
         # remove the toolbar
         del self.toolbar
 
-        # self.unloadGUI()
+        self.unloadGUI()
 
     def getActiveLayers(self):
         layers_list = []
@@ -306,6 +309,7 @@ class RoadNetworkCleaner:
     def cleaningError(self, e, exception_string):
         # Gives error according to message
         QgsMessageLog.logMessage('Cleaning thread raised an exception: %s' % exception_string, level=QgsMessageLog.CRITICAL)
+        self.dlg.close()
 
     def startCleaning(self):
         self.dlg.cleaningProgress.reset()
@@ -313,10 +317,10 @@ class RoadNetworkCleaner:
         if settings['output_type'] == 'postgis':
             db_settings = self.dbsettings_dlg.getDbSettings(self.available_dbs)
             settings.update(db_settings)
+
         if settings['input']:
 
             cleaning = self.clean(settings, self.iface)
-
             # start the cleaning in a new thread
             thread = QThread()
             cleaning.moveToThread(thread)
@@ -324,23 +328,30 @@ class RoadNetworkCleaner:
             cleaning.error.connect(self.cleaningError)
             cleaning.warning.connect(self.giveMessage)
             cleaning.cl_progress.connect(self.dlg.cleaningProgress.setValue)
+
             thread.started.connect(cleaning.run)
-            thread.start()
+            # thread.finished.connect(self.cleaningFinished)
+
             self.thread = thread
             self.cleaning = cleaning
+
+            self.thread.start()
+
+            print 'started'
         else:
             self.giveMessage('Missing user input!', QgsMessageBar.INFO)
             return
 
     def cleaningFinished(self, ret):
+        print 'trying to finish'
         # load the cleaning results layer
         try:
             # report the result
-            for layer in ret:
-                if layer:
-                    QgsMapLayerRegistry.instance().addMapLayer(layer)
-                    layer.updateExtents()
-                    self.iface.mapCanvas().refresh()
+            #for layer in ret:
+            #    if layer:
+            #        QgsMapLayerRegistry.instance().addMapLayer(layer)
+            #        layer.updateExtents()
+            #        self.iface.mapCanvas().refresh()
 
             self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
 
@@ -350,18 +361,25 @@ class RoadNetworkCleaner:
             self.giveMessage('Something went wrong! See the message log for more information', QgsMessageBar.CRITICAL)
 
         # clean up the worker and thread
-        self.cleaning.deleteLater()
+        #self.cleaning.deleteLater()
         self.thread.quit()
         self.thread.wait()
         self.thread.deleteLater()
-        self.dlg.cleaningProgress.reset()
-        # del self.cleaning
+
+        print 'thread running', self.thread.isRunning()
+        print 'has finished', self.thread.isFinished()
+
+        self.thread = None
         self.cleaning = None
-        self.dlg.close()
+
+        if self.dlg:
+            self.dlg.cleaningProgress.reset()
+            self.dlg.close()
+
 
     def killCleaning(self):
+        print 'trying to cancel'
         # add emit signal to breakTool or mergeTool only to stop the loop
-
         if self.cleaning:
 
             try:
@@ -396,11 +414,12 @@ class RoadNetworkCleaner:
         else:
             self.dlg.close()
 
+
     # SOURCE: https://snorfalorpagus.net/blog/2013/12/07/multithreading-in-qgis-python-plugins/
     class clean(QObject):
 
         # Setup signals
-        finished = pyqtSignal(object)
+        finished = pyqtSignal(bool)
         error = pyqtSignal(Exception, basestring)
         cl_progress = pyqtSignal(float)
         warning = pyqtSignal(str)
@@ -492,11 +511,16 @@ class RoadNetworkCleaner:
                     # return cleaned shapefile and errors
                     ret = (errors, final, unlinks)
 
+                    for l in ret:
+                        if l:
+                            print "adding layer"
+                            QgsMapLayerRegistry.instance().addMapLayer(l)
+
                 except Exception, e:
                     # forward the exception upstream
                     self.error.emit(e, traceback.format_exc())
 
-            self.finished.emit(ret)
+            self.finished.emit(True)
 
         def kill(self):
             self.cl_killed = True
@@ -504,8 +528,16 @@ class RoadNetworkCleaner:
     def run(self):
         """Run method that performs all the real work"""
 
+        self.dlg = RoadNetworkCleanerDialog()
+        self.dbsettings_dlg = DbSettingsDialog()
+        self.clsettings_dlg = ClSettingsDialog()
+        self.available_dbs = self.dbsettings_dlg.getQGISDbs()
+
         # show the dialog
         self.dlg.show()
+        print 'clicked'
+
+        self.dlg.closingPlugin.connect(self.unloadGUI)
 
         # setup GUI signals
         self.dlg.cleanButton.clicked.connect(self.startCleaning)
@@ -548,6 +580,9 @@ class RoadNetworkCleaner:
             pass
 
     def unloadGUI(self):
+
+        self.dlg.closingPlugin.disconnect(self.unloadGUI)
+
         self.dlg.cleanButton.clicked.disconnect(self.startCleaning)
         self.dlg.cancelButton.clicked.disconnect(self.killCleaning)
 
@@ -570,3 +605,5 @@ class RoadNetworkCleaner:
 
         self.legend.itemAdded.disconnect(self.updateLayers)
         self.legend.itemRemoved.disconnect(self.updateLayers)
+
+        self.dlg = None
