@@ -62,8 +62,6 @@ class NetworkCleanerTool(QObject):
 
         # load the dialog from the run method otherwise the objects gets created multiple times
         self.dlg = None
-        #self.dbsettings_dlg = None
-        #self.clsettings_dlg = None
 
         # some globals
         self.cleaning = None
@@ -85,6 +83,8 @@ class NetworkCleanerTool(QObject):
         self.legend.itemAdded.connect(self.updateLayers)
         self.legend.itemRemoved.connect(self.updateLayers)
 
+        self.settings = None
+
         # show the dialog
         self.dlg.show()
         # Run the dialog event loop
@@ -95,7 +95,7 @@ class NetworkCleanerTool(QObject):
             self.dlg.closingPlugin.disconnect(self.unloadGUI)
             self.dlg.cleanButton.clicked.disconnect(self.startCleaning)
             self.dlg.cancelButton.clicked.disconnect(self.killCleaning)
-
+            self.settings = None
         try:
             self.legend.itemAdded.disconnect(self.updateLayers)
             self.legend.itemRemoved.disconnect(self.updateLayers)
@@ -130,14 +130,14 @@ class NetworkCleanerTool(QObject):
 
     def startCleaning(self):
         self.dlg.cleaningProgress.reset()
-        settings = self.dlg.get_settings()
-        if settings['output_type'] == 'postgis':
+        self.settings = self.dlg.get_settings()
+        if self.settings['output_type'] == 'postgis':
             db_settings = self.dlg.get_dbsettings()
-            settings.update(db_settings)
+            self.settings.update(db_settings)
 
-        if settings['input']:
+        if self.settings['input']:
 
-            cleaning = self.clean(settings, self.iface)
+            cleaning = self.clean(self.settings, self.iface)
             # start the cleaning in a new thread
             thread = QThread()
             cleaning.moveToThread(thread)
@@ -161,14 +161,41 @@ class NetworkCleanerTool(QObject):
 
     def cleaningFinished(self, ret):
         if is_debug: print 'trying to finish'
-        # load the cleaning results layer
+        # get cleaning settings
+        layer_name = self.settings['input']
+        path = self.settings['output']
+        output_type = self.settings['output_type']
+        #  get settings from layer
+        layer = getLayerByName(layer_name)
+        crs = layer.dataProvider().crs()
+        encoding = layer.dataProvider().encoding()
+        geom_type = layer.dataProvider().geometryType()
+        # create the cleaning results layers
         try:
-            # report the result
-            for layer in ret:
-                if layer:
-                    QgsMapLayerRegistry.instance().addMapLayer(layer)
-                    layer.updateExtents()
-                    self.iface.mapCanvas().refresh()
+            # create clean layer
+            if output_type in ['shp', 'memory']:
+                final = to_shp(path, ret[0][0], ret[0][1], crs, 'cleaned', encoding, geom_type)
+            else:
+                final = to_dblayer(self.settings['dbname'], self.settings['user'], self.settings['host'],
+                                   self.settings['port'], self.settings['password'], self.settings['schema'],
+                                   self.settings['table_name'], ret[0][1], ret[0][0], crs)
+            if final:
+                QgsMapLayerRegistry.instance().addMapLayer(final)
+                final.updateExtents()
+            # create errors layer
+            if self.settings['errors']:
+                errors = to_shp(None, ret[1][0], ret[1][1], crs, 'errors', encoding, geom_type)
+                if errors:
+                    QgsMapLayerRegistry.instance().addMapLayer(errors)
+                    errors.updateExtents()
+            # create unlinks layer
+            if self.settings['unlinks']:
+                unlinks = to_shp(None, ret[2][0], ret[2][1], crs, 'unlinks', encoding, 0)
+                if unlinks:
+                    QgsMapLayerRegistry.instance().addMapLayer(unlinks)
+                    unlinks.updateExtents()
+
+            self.iface.mapCanvas().refresh()
 
             self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
 
@@ -256,15 +283,9 @@ class NetworkCleanerTool(QObject):
                 try:
                     # cleaning settings
                     layer_name = self.settings['input']
-                    path = self.settings['output']
                     tolerance = self.settings['tolerance']
-                    output_type = self.settings['output_type']
-
                     # project settings
                     layer = getLayerByName(layer_name)
-                    crs = layer.dataProvider().crs()
-                    encoding = layer.dataProvider().encoding()
-                    geom_type = layer.dataProvider().geometryType()
 
                     self.cl_progress.emit(2)
 
@@ -302,29 +323,21 @@ class NetworkCleanerTool(QObject):
 
                     fields = self.br.layer_fields
 
-                    (final, errors, unlinks) = (None, None, None)
-                    if output_type in ['shp', 'memory']:
-                        final = to_shp(path, merged_features, fields, crs, 'cleaned', encoding, geom_type)
-                    else:
-                        final = to_dblayer(self.settings['dbname'], self.settings['user'], self.settings['host'], self.settings['port'],self.settings['password'], self.settings['schema'], self.settings['table_name'], fields, merged_features, crs)
-                        try:
-                            # None will be emitted if db layer is not created
-                            self.error.emit(final, traceback.format_exc())
-                        except :
-                            pass
-
+                    # prepare other output data
+                    ((errors_list, errors_fields), (unlinks_list, unlinks_fields)) = ((None, None), (None, None))
                     if self.settings['errors']:
                         self.br.updateErrors(self.mrg.errors_features)
                         errors_list = [[k, [[k], [v[0]]], v[1]] for k, v in self.br.errors_features.items()]
-                        errors = to_shp(None, errors_list, [QgsField('id_input', QVariant.Int), QgsField('errors', QVariant.String)], crs, 'errors', encoding, geom_type)
+                        errors_fields = [QgsField('id_input', QVariant.Int), QgsField('errors', QVariant.String)]
 
                     if self.settings['unlinks']:
-                        unlinks = to_shp(None, self.br.unlinked_features, [QgsField('id', QVariant.Int), QgsField('line_id1', QVariant.Int), QgsField('line_id2', QVariant.Int), QgsField('x', QVariant.Double), QgsField('y', QVariant.Double)], crs,'unlinks', encoding, 0)
+                        unlinks_list = self.br.unlinked_features
+                        unlinks_fields = [QgsField('id', QVariant.Int), QgsField('line_id1', QVariant.Int), QgsField('line_id2', QVariant.Int), QgsField('x', QVariant.Double), QgsField('y', QVariant.Double)]
 
                     if is_debug: print "survived!"
                     self.cl_progress.emit(100)
-                    # return cleaned shapefile and errors
-                    ret = (errors, final, unlinks)
+                    # return cleaned data, errors and unlinks
+                    ret = ((merged_features, fields), (errors_list, errors_fields), (unlinks_list, unlinks_fields))
 
                 except Exception, e:
                     # forward the exception upstream
