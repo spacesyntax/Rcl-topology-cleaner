@@ -1,7 +1,4 @@
 .DS_Store
 .idea
 *.xml
-*.pyc
-help/
-.idea/misc.xml
-.idea/Rcl-topology-validation.iml
+/help/
