@@ -50,7 +50,7 @@ class breakTool(QObject):
 
         for f in self.layer.getFeatures():
 
-            self.progress.emit(45 * f_count / self.feat_count)
+            self.progress.emit(3 * f_count / self.feat_count)
             f_count += 1
 
             if self.killed is True:
@@ -135,7 +135,7 @@ class breakTool(QObject):
                 original_id = self.ml_keys[fid]
                 try:
                     updated_errors = self.errors_features[original_id][0] + f_errors
-                    self.errors_features[original_id] = (updated_errors, self.errors[original_id][1])
+                    self.errors_features[original_id] = (updated_errors, self.errors_features[original_id][1])
                 except KeyError:
                     self.errors_features[original_id] = (f_errors, self.geometries[fid].exportToWkt())
 

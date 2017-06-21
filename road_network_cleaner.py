@@ -345,8 +345,6 @@ class RoadNetworkCleaner:
             for layer in self.iface.mapCanvas().layers():
                 layer.triggerRepaint()
 
-            self.iface.mapCanvas().refreshAllLayers()
-
         except Exception, e:
             # notify the user that sth went wrong
             self.cleaning.error.emit(e, traceback.format_exc())
@@ -460,9 +458,9 @@ class RoadNetworkCleaner:
                     # TODO test
                     try:
                         step = 40/ len(self.mrg.con_1)
+                        self.mrg.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
                     except ZeroDivisionError:
-                        step = 40
-                    self.mrg.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
+                        pass
 
                     merged_features = self.mrg.merge()
 
@@ -470,6 +468,7 @@ class RoadNetworkCleaner:
 
                     fields = self.br.layer_fields
 
+                    (final, errors, unlinks) = (None, None, None)
                     if output_type in ['shp', 'memory']:
                         final = to_shp(path, merged_features, fields, crs, 'cleaned', encoding, geom_type)
                     else:
@@ -480,7 +479,6 @@ class RoadNetworkCleaner:
                         except :
                             pass
 
-                    (errors, unlinks) = (None, None)
                     if self.settings['errors']:
                         self.br.updateErrors(self.mrg.errors_features)
                         errors_list = [[k, [[k], [v[0]]], v[1]] for k, v in self.br.errors_features.items()]
