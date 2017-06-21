@@ -401,9 +401,6 @@ class RoadNetworkCleaner:
             self.cleaning.cl_progress.disconnect(self.dlg.cleaningProgress.setValue)
             # Clean up thread and analysis
             self.cleaning.kill()
-            # kill process of breaking if it is running
-            # kill process of merging if it is running
-
             self.cleaning.deleteLater()
             self.thread.quit()
             self.thread.wait()
@@ -511,11 +508,6 @@ class RoadNetworkCleaner:
                     # return cleaned shapefile and errors
                     ret = (errors, final, unlinks)
 
-                    for l in ret:
-                        if l:
-                            print "adding layer"
-                            QgsMapLayerRegistry.instance().addMapLayer(l)
-
                 except Exception, e:
                     # forward the exception upstream
                     self.error.emit(e, traceback.format_exc())
@@ -564,7 +556,7 @@ class RoadNetworkCleaner:
             self.popSchemas()
 
         if self.dlg.memoryRadioButton.isChecked():
-            self.dlg.outputCleaned.setText('temporary layer')
+            self.dlg.outputCleaned.setText('cleaned')
 
         self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.popSchemas)
 

@@ -44,7 +44,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
-        self.outputCleaned.setText("temporary layer")
+        self.outputCleaned.setText("cleaned")
 
         # Setup the progress bar
         self.cleaningProgress.setMinimum(0)
@@ -71,7 +71,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         return self.inputCombo.currentText()
 
     def getOutput(self):
-        if self.outputCleaned.text() != 'temporary layer':
+        if self.outputCleaned.text() != 'cleaned':
             return self.outputCleaned.text()
         else:
             return None
@@ -108,7 +108,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
     def update_output_text(self):
         if self.memoryRadioButton.isChecked():
-            return "temporary layer"
+            return "cleaned"
         else:
             return
 
