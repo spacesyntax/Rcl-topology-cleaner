@@ -581,29 +581,34 @@ class RoadNetworkCleaner:
 
     def unloadGUI(self):
 
-        self.dlg.closingPlugin.disconnect(self.unloadGUI)
+        if self.dlg:
+            self.dlg.closingPlugin.disconnect(self.unloadGUI)
 
-        self.dlg.cleanButton.clicked.disconnect(self.startCleaning)
-        self.dlg.cancelButton.clicked.disconnect(self.killCleaning)
+            self.dlg.cleanButton.clicked.disconnect(self.startCleaning)
+            self.dlg.cancelButton.clicked.disconnect(self.killCleaning)
 
-        # settings popup
-        self.dlg.snapCheckBox.stateChanged.disconnect(self.dlg.set_enabled_tolerance)
+            # settings popup
+            self.dlg.snapCheckBox.stateChanged.disconnect(self.dlg.set_enabled_tolerance)
 
-        self.dlg.browseCleaned.clicked.disconnect(self.setOutput)
-        self.dlg.settingsButton.clicked.disconnect(self.openClSettings)
+            self.dlg.browseCleaned.clicked.disconnect(self.setOutput)
+            self.dlg.settingsButton.clicked.disconnect(self.openClSettings)
 
-        self.dbsettings_dlg.dbCombo.currentIndexChanged.disconnect(self.setDbOutput)
-        self.dbsettings_dlg.schemaCombo.currentIndexChanged.disconnect(self.setDbOutput)
-        self.dbsettings_dlg.nameLineEdit.textChanged.disconnect(self.setDbOutput)
+            self.dlg.memoryRadioButton.clicked.disconnect(self.setTempOutput)
+            self.dlg.memoryRadioButton.clicked.disconnect(self.dlg.update_output_text)
+            self.dlg.shpRadioButton.clicked.disconnect(self.setShpOutput)
+            self.dlg.postgisRadioButton.clicked.disconnect(self.setDbOutput)
 
-        self.dlg.memoryRadioButton.clicked.disconnect(self.setTempOutput)
-        self.dlg.memoryRadioButton.clicked.disconnect(self.dlg.update_output_text)
-        self.dlg.shpRadioButton.clicked.disconnect(self.setShpOutput)
-        self.dlg.postgisRadioButton.clicked.disconnect(self.setDbOutput)
+        if self.dbsettings_dlg:
+            self.dbsettings_dlg.dbCombo.currentIndexChanged.disconnect(self.setDbOutput)
+            self.dbsettings_dlg.schemaCombo.currentIndexChanged.disconnect(self.setDbOutput)
+            self.dbsettings_dlg.nameLineEdit.textChanged.disconnect(self.setDbOutput)
 
-        self.dbsettings_dlg.dbCombo.currentIndexChanged.disconnect(self.popSchemas)
+            self.dbsettings_dlg.dbCombo.currentIndexChanged.disconnect(self.popSchemas)
 
-        self.legend.itemAdded.disconnect(self.updateLayers)
-        self.legend.itemRemoved.disconnect(self.updateLayers)
+        try:
+            self.legend.itemAdded.disconnect(self.updateLayers)
+            self.legend.itemRemoved.disconnect(self.updateLayers)
+        except TypeError:
+            pass
 
         self.dlg = None
