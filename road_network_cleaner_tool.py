@@ -34,12 +34,21 @@ import traceback
 import resources
 # the dialog modules
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
-from DbSettings_dialog import DbSettingsDialog
-from ClSettings_dialog import ClSettingsDialog
+
 # additional modules
 from sGraph.break_tools import *  # better give these a name to make it explicit to which module the methods belong
 from sGraph.merge_tools import *
 from sGraph.utilityFunctions import *
+
+# Import the debug library - required for the cleaning class in separate thread
+# set is_debug to False in release version
+is_debug = True
+try:
+    import pydevd
+    has_pydevd = True
+except ImportError, e:
+    has_pydevd = False
+    is_debug = False
 
 
 class NetworkCleanerTool(QObject):
@@ -53,52 +62,26 @@ class NetworkCleanerTool(QObject):
 
         # load the dialog from the run method otherwise the objects gets created multiple times
         self.dlg = None
-        self.dbsettings_dlg = None
-        self.clsettings_dlg = None
+        #self.dbsettings_dlg = None
+        #self.clsettings_dlg = None
 
         # some globals
         self.cleaning = None
         self.thread = None
-        self.available_dbs = None
 
     def loadGUI(self):
         # create the dialog objects
         self.dlg = RoadNetworkCleanerDialog()
-        self.dbsettings_dlg = DbSettingsDialog()
-        self.clsettings_dlg = ClSettingsDialog()
-        self.available_dbs = self.dbsettings_dlg.getQGISDbs()
 
         # setup GUI signals
         self.dlg.closingPlugin.connect(self.unloadGUI)
-
         self.dlg.cleanButton.clicked.connect(self.startCleaning)
         self.dlg.cancelButton.clicked.connect(self.killCleaning)
 
-        self.dlg.snapCheckBox.stateChanged.connect(self.dlg.set_enabled_tolerance)
-        self.dlg.browseCleaned.clicked.connect(self.setOutput)
-        self.dlg.settingsButton.clicked.connect(self.openClSettings)
+        # add layers to dialog
+        self.updateLayers()
 
-        self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.setDbOutput)
-        self.dbsettings_dlg.schemaCombo.currentIndexChanged.connect(self.setDbOutput)
-        self.dbsettings_dlg.nameLineEdit.textChanged.connect(self.setDbOutput)
-
-        self.dlg.memoryRadioButton.clicked.connect(self.setTempOutput)
-        self.dlg.memoryRadioButton.clicked.connect(self.dlg.update_output_text)
-        self.dlg.shpRadioButton.clicked.connect(self.setShpOutput)
-        self.dlg.postgisRadioButton.clicked.connect(self.setDbOutput)
-
-        self.dlg.popActiveLayers(self.getActiveLayers())
-
-        self.dbsettings_dlg.popDbs(self.available_dbs)
-
-        self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.popSchemas)
-
-        if self.dbsettings_dlg.dbCombo.currentText() in self.available_dbs.keys():
-            self.popSchemas()
-
-        if self.dlg.memoryRadioButton.isChecked():
-            self.dlg.outputCleaned.setText('cleaned')
-
+        # setup legend interface signals
         self.legend.itemAdded.connect(self.updateLayers)
         self.legend.itemRemoved.connect(self.updateLayers)
 
@@ -110,27 +93,8 @@ class NetworkCleanerTool(QObject):
     def unloadGUI(self):
         if self.dlg:
             self.dlg.closingPlugin.disconnect(self.unloadGUI)
-
             self.dlg.cleanButton.clicked.disconnect(self.startCleaning)
             self.dlg.cancelButton.clicked.disconnect(self.killCleaning)
-
-            # settings popup
-            self.dlg.snapCheckBox.stateChanged.disconnect(self.dlg.set_enabled_tolerance)
-
-            self.dlg.browseCleaned.clicked.disconnect(self.setOutput)
-            self.dlg.settingsButton.clicked.disconnect(self.openClSettings)
-
-            self.dlg.memoryRadioButton.clicked.disconnect(self.setTempOutput)
-            self.dlg.memoryRadioButton.clicked.disconnect(self.dlg.update_output_text)
-            self.dlg.shpRadioButton.clicked.disconnect(self.setShpOutput)
-            self.dlg.postgisRadioButton.clicked.disconnect(self.setDbOutput)
-
-        if self.dbsettings_dlg:
-            self.dbsettings_dlg.dbCombo.currentIndexChanged.disconnect(self.setDbOutput)
-            self.dbsettings_dlg.schemaCombo.currentIndexChanged.disconnect(self.setDbOutput)
-            self.dbsettings_dlg.nameLineEdit.textChanged.disconnect(self.setDbOutput)
-
-            self.dbsettings_dlg.dbCombo.currentIndexChanged.disconnect(self.popSchemas)
 
         try:
             self.legend.itemAdded.disconnect(self.updateLayers)
@@ -139,8 +103,6 @@ class NetworkCleanerTool(QObject):
             pass
 
         self.dlg = None
-        self.dbsettings_dlg = None
-        self.clsettings_dlg = None
 
     def getActiveLayers(self):
         layers_list = []
@@ -153,76 +115,6 @@ class NetworkCleanerTool(QObject):
     def updateLayers(self):
         layers = self.getActiveLayers()
         self.dlg.popActiveLayers(layers)
-
-    def popSchemas(self):
-        self.dbsettings_dlg.schemaCombo.clear()
-        schemas = []
-        selected_db = self.dbsettings_dlg.getSelectedDb()
-        if len(self.dbsettings_dlg.getSelectedDb()) > 1:
-            try:
-                print 'tries'
-                uri = QgsDataSourceURI()
-                db_info = self.available_dbs[selected_db]
-                print db_info, selected_db
-                conname = selected_db
-                dbname = db_info['database']
-                user = db_info['username']
-                host = db_info['host']
-                port = db_info['port']
-                password = db_info['password']
-                uri.setConnection(host, port, dbname, user, password)
-                #c = con.PostGisDBConnector(uri)
-                #schemas = sorted(list(set([i[2] for i in c.getTables()])))
-                connstring = "dbname=%s user=%s host=%s port=%s password=%s" % (dbname, user, host, port, password)
-                schemas = getPostgisSchemas(connstring)
-            except:
-                print 'error'
-                pass
-        self.dbsettings_dlg.schemaCombo.addItems(schemas)
-
-    def setOutput(self):
-        if self.dlg.shpRadioButton.isChecked():
-            self.file_name = QtGui.QFileDialog.getSaveFileName(self.dlg, "Save output file ", "cleaned_network", '*.shp')
-            if self.file_name:
-                self.dlg.outputCleaned.setText(self.file_name)
-            else:
-                self.dlg.outputCleaned.clear()
-        elif self.dlg.postgisRadioButton.isChecked():
-            self.dbsettings_dlg.show()
-            # Run the dialog event loop
-            result2 = self.dbsettings_dlg.exec_()
-            self.dbsettings = self.dbsettings_dlg.getDbSettings(self.available_dbs)
-        return
-
-    def setDbOutput(self):
-        self.dlg.disable_browse()
-        if self.dlg.postgisRadioButton.isChecked():
-            self.dlg.outputCleaned.clear()
-            try:
-                self.dbsettings = self.dbsettings_dlg.getDbSettings(self.available_dbs)
-                db_layer_name = "%s:%s:%s" % (self.dbsettings['dbname'], self.dbsettings['schema'], self.dbsettings['table_name'])
-                self.dlg.outputCleaned.setText(db_layer_name)
-            except:
-                self.dlg.outputCleaned.clear()
-            self.dlg.outputCleaned.setDisabled(True)
-
-    def setTempOutput(self):
-        self.dlg.disable_browse()
-        temp_name = 'cleaned'
-        self.dlg.outputCleaned.setText(temp_name)
-        self.dlg.outputCleaned.setDisabled(False)
-
-    def setShpOutput(self):
-        self.dlg.disable_browse()
-        try:
-            self.dlg.outputCleaned.setText(self.file_name)
-        except :
-            self.dlg.outputCleaned.clear()
-        self.dlg.outputCleaned.setDisabled(True)
-
-    def openClSettings(self):
-        self.clsettings_dlg.show()
-        result1 = self.clsettings_dlg.exec_()
 
     # SOURCE: Network Segmenter https://github.com/OpenDigitalWorks/NetworkSegmenter
     # SOURCE: https://snorfalorpagus.net/blog/2013/12/07/multithreading-in-qgis-python-plugins/
@@ -240,7 +132,7 @@ class NetworkCleanerTool(QObject):
         self.dlg.cleaningProgress.reset()
         settings = self.dlg.get_settings()
         if settings['output_type'] == 'postgis':
-            db_settings = self.dbsettings_dlg.getDbSettings(self.available_dbs)
+            db_settings = self.dlg.get_dbsettings()
             settings.update(db_settings)
 
         if settings['input']:
@@ -262,13 +154,13 @@ class NetworkCleanerTool(QObject):
 
             self.thread.start()
 
-            print 'started'
+            if is_debug: print 'started'
         else:
             self.giveMessage('Missing user input!', QgsMessageBar.INFO)
             return
 
     def cleaningFinished(self, ret):
-        print 'trying to finish'
+        if is_debug: print 'trying to finish'
         # load the cleaning results layer
         try:
             # report the result
@@ -291,8 +183,8 @@ class NetworkCleanerTool(QObject):
         self.thread.wait()
         self.thread.deleteLater()
 
-        print 'thread running', self.thread.isRunning()
-        print 'has finished', self.thread.isFinished()
+        if is_debug: print 'thread running ', self.thread.isRunning()
+        if is_debug: print 'has finished ', self.thread.isFinished()
 
         self.thread = None
         self.cleaning = None
@@ -302,7 +194,7 @@ class NetworkCleanerTool(QObject):
             self.dlg.close()
 
     def killCleaning(self):
-        print 'trying to cancel'
+        if is_debug: print 'trying to cancel'
         # add emit signal to breakTool or mergeTool only to stop the loop
         if self.cleaning:
 
@@ -357,6 +249,8 @@ class NetworkCleanerTool(QObject):
             return self.total
 
         def run(self):
+            if has_pydevd and is_debug:
+                pydevd.settrace('localhost', port=53100, stdoutToServer=True, stderrToServer=True, suspend=False)
             ret = None
             if self.settings:
                 try:
@@ -427,7 +321,7 @@ class NetworkCleanerTool(QObject):
                     if self.settings['unlinks']:
                         unlinks = to_shp(None, self.br.unlinked_features, [QgsField('id', QVariant.Int), QgsField('line_id1', QVariant.Int), QgsField('line_id2', QVariant.Int), QgsField('x', QVariant.Double), QgsField('y', QVariant.Double)], crs,'unlinks', encoding, 0)
 
-                    print "survived!"
+                    if is_debug: print "survived!"
                     self.cl_progress.emit(100)
                     # return cleaned shapefile and errors
                     ret = (errors, final, unlinks)
