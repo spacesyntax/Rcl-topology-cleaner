@@ -2,8 +2,7 @@
 
 # Form implementation generated from reading ui file 'ClSettings_dialog_base.ui'
 #
-# Created: Mon Jun 19 12:33:49 2017
-#      by: PyQt4 UI code generator 4.10.2
+# Created by: PyQt4 UI code generator 4.11.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -31,7 +30,6 @@ class Ui_Dialog(object):
         self.layoutWidget.setGeometry(QtCore.QRect(10, 10, 181, 259))
         self.layoutWidget.setObjectName(_fromUtf8("layoutWidget"))
         self.verticalLayout_2 = QtGui.QVBoxLayout(self.layoutWidget)
-        self.verticalLayout_2.setMargin(0)
         self.verticalLayout_2.setObjectName(_fromUtf8("verticalLayout_2"))
         self.verticalLayout = QtGui.QVBoxLayout()
         self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))

@@ -2,8 +2,7 @@
 
 # Form implementation generated from reading ui file 'DbSettings_dialog_base.ui'
 #
-# Created: Mon Jun 19 12:33:49 2017
-#      by: PyQt4 UI code generator 4.10.2
+# Created by: PyQt4 UI code generator 4.11.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -31,7 +30,6 @@ class Ui_DbSettingsDialogBase(object):
         self.layoutWidget.setGeometry(QtCore.QRect(10, 10, 261, 141))
         self.layoutWidget.setObjectName(_fromUtf8("layoutWidget"))
         self.verticalLayout = QtGui.QVBoxLayout(self.layoutWidget)
-        self.verticalLayout.setMargin(0)
         self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
         self.gridLayout = QtGui.QGridLayout()
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))

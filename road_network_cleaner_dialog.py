@@ -20,11 +20,11 @@
  *                                                                         *
  ***************************************************************************/
 """
-
-import os
-
 from PyQt4 import QtGui, uic
 from PyQt4.QtCore import pyqtSignal, Qt
+
+import os.path
+import resources
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'road_network_cleaner_dialog_base.ui'))
@@ -49,11 +49,10 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         # Setup the progress bar
         self.cleaningProgress.setMinimum(0)
         self.cleaningProgress.setMaximum(100)
-
+        # Setup some defaults
         self.decimalsSpin.setRange(1, 16)
         self.decimalsSpin.setSingleStep(1)
         self.decimalsSpin.setValue(6)
-
         self.decimalsSpin.setDisabled(True)
 
         self.memoryRadioButton.setChecked(True)
@@ -62,6 +61,10 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.browseCleaned.setDisabled(True)
 
         self.outputCleaned.setDisabled(False)
+
+        # add GUI signals
+
+
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
