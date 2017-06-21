@@ -88,6 +88,7 @@ class RoadNetworkCleaner:
         self.dlg = RoadNetworkCleanerDialog()
         self.dbsettings_dlg = DbSettingsDialog()
         self.clsettings_dlg = ClSettingsDialog()
+        
         self.cleaning = None
         self.available_dbs = self.dbsettings_dlg.getQGISDbs()
 
@@ -342,8 +343,6 @@ class RoadNetworkCleaner:
                     self.iface.mapCanvas().refresh()
 
             self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
-            for layer in self.iface.mapCanvas().layers():
-                layer.triggerRepaint()
 
         except Exception, e:
             # notify the user that sth went wrong
@@ -356,6 +355,7 @@ class RoadNetworkCleaner:
         self.thread.wait()
         self.thread.deleteLater()
         self.dlg.cleaningProgress.reset()
+        # del self.cleaning
         self.cleaning = None
         self.dlg.close()
 
@@ -496,7 +496,7 @@ class RoadNetworkCleaner:
                     # forward the exception upstream
                     self.error.emit(e, traceback.format_exc())
 
-                self.finished.emit(ret)
+            self.finished.emit(ret)
 
         def kill(self):
             self.cl_killed = True
