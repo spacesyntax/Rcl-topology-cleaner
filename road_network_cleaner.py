@@ -347,11 +347,11 @@ class RoadNetworkCleaner:
         # load the cleaning results layer
         try:
             # report the result
-            #for layer in ret:
-            #    if layer:
-            #        QgsMapLayerRegistry.instance().addMapLayer(layer)
-            #        layer.updateExtents()
-            #        self.iface.mapCanvas().refresh()
+            for layer in ret:
+                if layer:
+                    QgsMapLayerRegistry.instance().addMapLayer(layer)
+                    layer.updateExtents()
+                    self.iface.mapCanvas().refresh()
 
             self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
 
@@ -416,7 +416,7 @@ class RoadNetworkCleaner:
     class clean(QObject):
 
         # Setup signals
-        finished = pyqtSignal(bool)
+        finished = pyqtSignal(object)
         error = pyqtSignal(Exception, basestring)
         cl_progress = pyqtSignal(float)
         warning = pyqtSignal(str)
@@ -512,7 +512,7 @@ class RoadNetworkCleaner:
                     # forward the exception upstream
                     self.error.emit(e, traceback.format_exc())
 
-            self.finished.emit(True)
+            self.finished.emit(ret)
 
         def kill(self):
             self.cl_killed = True

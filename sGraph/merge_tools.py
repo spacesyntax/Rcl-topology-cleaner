@@ -161,7 +161,42 @@ class mergeTool(QObject):
                     new_feat = [self.last_fid, f_attrs, new_geom.exportToWkt()]
                     merged_features.append(new_feat)
 
-        return merged_features + self.feat_to_copy
+        return self.exclude_orphans(merged_features + self.feat_to_copy)
+
+    def exclude_orphans(self, all_features):
+
+        merged_features_w_o_orphans = []
+        ends_occur = {}
+        for (fid, attrs, wkt) in all_features:
+            end0, end1 = None, None
+
+            for i in vertices_from_wkt_2(wkt):
+                end0 = i
+                break
+            for i in vertices_from_wkt_2(wkt):
+                pass
+            end1 = i
+            if end0 and end1:
+                try: ends_occur[end0] += 1
+                except KeyError: ends_occur[end0] = 1
+                try: ends_occur[end1] += 1
+                except KeyError: ends_occur[end1] = 1
+
+        for (fid, attrs, wkt) in all_features:
+            for i in vertices_from_wkt_2(wkt):
+                end0 = i
+                break
+            for i in vertices_from_wkt_2(wkt):
+                pass
+            end1 = i
+            if ends_occur[end0]==1 and ends_occur[end1]==1:
+                pass
+            else:
+                merged_features_w_o_orphans.append([fid, attrs, wkt])
+
+        return merged_features_w_o_orphans
+
+
 
 
 
