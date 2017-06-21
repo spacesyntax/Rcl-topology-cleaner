@@ -3,6 +3,10 @@ execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/break_tools.py'.encode('utf-8'
 execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/merge_tools.py'.encode('utf-8'))
 execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/utilityFunctions.py'.encode('utf-8'))
 
+execfile(u'/Users/I.Kolovou/Documents/GitHub/Road-network-cleaner/sGraph/break_tools.py'.encode('utf-8'))
+execfile(u'/Users/I.Kolovou/Documents/GitHub/Road-network-cleaner/sGraph/merge_tools.py'.encode('utf-8'))
+execfile(u'/Users/I.Kolovou/Documents/GitHub/Road-network-cleaner/sGraph/utilityFunctions.py'.encode('utf-8'))
+
 # _________________________ TRANSFORMATIONS ______________________________
 
 # transform shapefile to primal graph
@@ -11,7 +15,17 @@ execfile(u'/Users/joe/Rcl-topology-cleaner/sGraph/utilityFunctions.py'.encode('u
 #layer_name = 'New scratch layer'
 #layer_name = 'Netwrok_small'
 #layer_name = 'madagascar'
-layer_name = 'nyc_streets'
+layer_name = 'Barnsbury_OpenStreetMap'
+layer_name = 'Barnsbury_OSOpenRoads'
+
+dbname = 'nyc'
+user = 'postgres'
+host = 'localhost'
+port = 5432
+password = 'spaces01'
+schema = '"public"'
+table_name = '"1 test"'
+connstring = "dbname=%s user=%s host=%s port=%s password=%s" % (dbname, user, host, port, password)
 
 # cleaning settings
 
@@ -23,21 +37,24 @@ layer = getLayerByName(layer_name)
 crs = layer.dataProvider().crs()
 encoding = layer.dataProvider().encoding()
 geom_type = layer.dataProvider().geometryType()
-user_id = 'id'
+
 errors = True
 
 # break features
-br = breakTool(layer, tolerance, user_id, True)
-input_geometries = br.geometries
-input_fid_to_id = br.fid_to_uid
+br = breakTool(layer, tolerance, None, True, True)
+br.add_edges()
 
-broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates = br.break_features()
+broken_features = br.break_features()
+
+unlinks = to_shp(None, br.unlinked_features, [QgsField('id', QVariant.Int), QgsField('line_id1', QVariant.String), QgsField('line_id2', QVariant.String), QgsField('x', QVariant.Double), QgsField('y', QVariant.Double)], crs,'unlinks', encoding, 0)
+QgsMapLayerRegistry.instance().addMapLayer(unlinks)
+
+to_dblayer(dbname, user, host, port, password, schema, table_name, br.layer_fields, broken_features, crs, arrays=False)
 
 #broken_network = br.to_shp(broken_features, crs, 'broken')
 #QgsMapLayerRegistry.instance().addMapLayer(broken_network)
 
-mrg = mergeTool(broken_features, user_id, True)
-all_con, con_1, f_dict, feat_to_copy, feat_to_merge, edges_to_start = mrg.prepare()
+mrg = mergeTool(broken_features, None, True)
 
 #fields = br.layer_fields
 #to_merge = to_shp(feat_to_merge, fields, crs, 'to_merge')
@@ -48,9 +65,17 @@ all_con, con_1, f_dict, feat_to_copy, feat_to_merge, edges_to_start = mrg.prepar
 
 result = mrg.merge()
 
+to_dblayer(dbname, user, host, port, password, schema, table_name, br.layer_fields, result, crs, arrays=True)
+
+
 fields = br.layer_fields
-final = to_shp(result, fields, crs, 'f' )
+final = to_shp(path, result, fields, crs, 'f', encoding, geom_type )
 QgsMapLayerRegistry.instance().addMapLayer(final)
+
+
+layer = iface.mapCanvas().currentLayer()
+qgs_flds = [QgsField(i.name(), i.type()) for i in layer.dataProvider().fields()]
+postgis_flds = qgs_to_postgis_fields(qgs_flds, arrays = False)
 
 
 

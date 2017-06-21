@@ -5,7 +5,10 @@ from qgis.core import QgsGeometry
 from PyQt4.QtCore import QObject, pyqtSignal
 
 # plugin module imports
-from utilityFunctions import *
+try:
+    from utilityFunctions import *
+except ImportError:
+    pass
 
 
 class mergeTool(QObject):
@@ -14,6 +17,7 @@ class mergeTool(QObject):
     error = pyqtSignal(Exception, basestring)
     progress = pyqtSignal(float)
     warning = pyqtSignal(str)
+    killed = pyqtSignal(bool)
 
     def __init__(self, features, uid, errors):
         QObject.__init__(self)
@@ -21,6 +25,9 @@ class mergeTool(QObject):
         self.last_fid = features[-1][0]
         self.errors = errors
         self.uid = uid
+
+        self.brkeys = {}
+        self.errors_features = {}
 
         self.vertices_occur = {}
         self.edges_occur = {}
@@ -72,20 +79,14 @@ class mergeTool(QObject):
                     f_geom = QgsGeometry.fromWkt(self.f_dict[x[0]][1])
                     g_geom = QgsGeometry.fromWkt(self.f_dict[x[1]][1])
                     if f_geom.isGeosEqual(g_geom):
-                        self.duplicates.append(f_geom)
+                        self.duplicates.append(x[0])
 
         self.all_fids = [i[0] for i in self.features]
         self.fids_to_merge = list(set([fid for k, v in self.con_2.items() for fid in v]))
         self.copy_fids = list(set(self.all_fids) - set(self.fids_to_merge))
         self.feat_to_merge = [[i, self.f_dict[i][0], self.f_dict[i][1]] for i in self.fids_to_merge if i not in self.duplicates]
-        self.feat_to_copy =[[i, self.f_dict[i][0], self.f_dict[i][1]] for i in self.copy_fids if i not in self.duplicates]
-
-        self.con_1 = []
-        for k,v in self.all_con.items():
-            if len(v) == 1:
-                self.con_1.append(k)
-
-        self.con_1 = list(set(self.con_1))
+        self.feat_to_copy =[[i, [[x] for x in self.f_dict[i][0]], self.f_dict[i][1]] for i in self.copy_fids if i not in self.duplicates]
+        self.con_1 = list(set([k for k, v in self.all_con.items() if len(v) == 1]))
 
         self.edges_to_start = [[i, self.f_dict[i][0], self.f_dict[i][1]] for i in self.con_1 ]
 
@@ -99,6 +100,9 @@ class mergeTool(QObject):
         edges_passed = []
         all_trees = []
         for edge in self.con_1:
+
+            if self.killed is True:
+                break
 
             self.progress.emit((45 * f_count / akra_count) + 45)
             f_count += 1
@@ -115,7 +119,6 @@ class mergeTool(QObject):
                     # TODO in con_1 or is self loop
                     if last in self.con_1 and n_iter != 1:
                         edges_passed.append(last)
-                        #print "no other line connected"
                         n_iter = 0
                         break
                     else:
@@ -130,8 +133,18 @@ class mergeTool(QObject):
                         print "infinite"
                         break
                 all_trees.append(tree)
-                f_attrs = self.f_dict[tree[0]][0]
-                # new_geom = geom_dict[set_to_merge[0]]
+
+                # merge attributes
+                f_attrs_list = [self.f_dict[node][0] for node in tree]
+                f_attrs = []
+
+                if self.errors:
+                    for node in tree:
+                        self.errors_features[node] = ('continuous line', None)
+
+                for i in range(0, len(f_attrs_list[0])):
+                    f_attrs += [[f_attr[i] for f_attr in f_attrs_list]]
+                f_attrs = [list(set(item)) for item in f_attrs]
                 geom_to_merge = [QgsGeometry.fromWkt(self.f_dict[node][1]) for node in tree]
                 for ind, line in enumerate(geom_to_merge[1:], start=1):
                     second_geom = line
@@ -148,7 +161,44 @@ class mergeTool(QObject):
                     new_feat = [self.last_fid, f_attrs, new_geom.exportToWkt()]
                     merged_features.append(new_feat)
 
-        return merged_features + self.feat_to_copy
+        return self.exclude_orphans(merged_features + self.feat_to_copy)
+
+    def exclude_orphans(self, all_features):
+
+        merged_features_w_o_orphans = []
+        ends_occur = {}
+        for (fid, attrs, wkt) in all_features:
+            end0, end1 = None, None
+
+            for i in vertices_from_wkt_2(wkt):
+                end0 = i
+                break
+            for i in vertices_from_wkt_2(wkt):
+                pass
+            end1 = i
+            if end0 and end1:
+                try: ends_occur[end0] += 1
+                except KeyError: ends_occur[end0] = 1
+                try: ends_occur[end1] += 1
+                except KeyError: ends_occur[end1] = 1
+
+        for (fid, attrs, wkt) in all_features:
+            for i in vertices_from_wkt_2(wkt):
+                end0 = i
+                break
+            for i in vertices_from_wkt_2(wkt):
+                pass
+            end1 = i
+            if ends_occur[end0]==1 and ends_occur[end1]==1:
+                pass
+            else:
+                merged_features_w_o_orphans.append([fid, attrs, wkt])
+
+        return merged_features_w_o_orphans
+
+
+
+
 
 
 

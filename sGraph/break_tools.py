@@ -5,7 +5,10 @@ from PyQt4.QtCore import QObject, pyqtSignal, QVariant
 
 
 # plugin module imports
-from utilityFunctions import *
+try:
+    from utilityFunctions import *
+except ImportError:
+    pass
 
 class breakTool(QObject):
 
@@ -13,18 +16,23 @@ class breakTool(QObject):
     error = pyqtSignal(Exception, basestring)
     progress = pyqtSignal(float)
     warning = pyqtSignal(str)
+    killed = pyqtSignal(bool)
 
-    def __init__(self,layer, tolerance, uid, errors):
+    def __init__(self,layer, tolerance, uid, errors, unlinks):
         QObject.__init__(self)
+
         self.layer = layer
         self.feat_count = self.layer.featureCount()
         self.tolerance = tolerance
         self.uid = uid
 
         self.errors = errors
-        self.multiparts = []
-        self.points = []
-        self.invalids = []
+        self.errors_features = {}
+        self.unlinks = unlinks
+        self.unlinked_features = []
+        self.unlinks_count = 0
+        self.ml_keys = {}
+        self.br_keys = {}
 
         self.features = []
         self.attributes = {}
@@ -34,18 +42,20 @@ class breakTool(QObject):
         # create spatial index object
         self.spIndex = QgsSpatialIndex()
         self.layer_fields = [QgsField(i.name(), i.type()) for i in self.layer.dataProvider().fields()]
-        if self.uid is not None:
-            self.uid_index = [index for index,field in enumerate(self.layer_fields) if field.name() == self.uid].pop()
-        self.fid_to_uid = {}
-        self.uid_to_fid = {}
+
+    def add_edges(self):
+
         new_key_count = 0
         f_count = 1
+
         for f in self.layer.getFeatures():
 
-            self.progress.emit(45 * f_count / self.feat_count)
+            self.progress.emit(3 * f_count / self.feat_count)
             f_count += 1
 
-            attr = f.attributes()
+            if self.killed is True:
+                break
+
             geom_type = f.geometry().wkbType()
 
             if geom_type not in [5,2,1] and f.geometry().geometry().is3D():
@@ -53,14 +63,10 @@ class breakTool(QObject):
                 geom_type = f.geometry().wkbType()
 
             if geom_type == 5:
-                attr = f.attributes()
-                if self.errors and self.uid is not None:
-                    self.multiparts.append(attr[self.uid_index])
-                    self.uid_to_fid[attr[self.uid_index]] = f.id()
+                if self.errors:
+                    self.errors_features[f.id()] = ('multipart', f.geometry().exportToWkt())
                 for multipart in f.geometry().asGeometryCollection():
                     new_key_count += 1
-                    if self.uid is not None:
-                        self.fid_to_uid[new_key_count] = attr[self.uid_index]
                     attr = f.attributes()
                     new_feat = QgsFeature()
                     new_feat.setAttributes(attr)
@@ -78,12 +84,13 @@ class breakTool(QObject):
                     self.geometries_vertices[new_key_count] = [vertex for vertex in vertices_from_wkt_2(snapped_wkt)]
                     # insert features to index
                     self.spIndex.insertFeature(new_feat)
+                    self.ml_keys[new_key_count] = f.id()
             elif geom_type == 1:
-                if self.errors and self.uid is not None:
-                    self.points.append(attr[self.uid_index])
+                if self.errors:
+                    self.errors_features[f.id()] = ('point', QgsGeometry().exportToWkt())
             elif not f.geometry().isGeosValid():
-                if self.errors and self.uid is not None:
-                    self.invalids.append(attr[self.uid_index])
+                if self.errors:
+                    self.errors_features[f.id()] = ('invalid', QgsGeometry().exportToWkt())
             elif geom_type == 2:
                 attr = f.attributes()
                 if self.tolerance:
@@ -101,24 +108,17 @@ class breakTool(QObject):
                 self.geometries_vertices[f.id()] = [vertex for vertex in vertices_from_wkt_2(snapped_wkt)]
                 # insert features to index
                 self.spIndex.insertFeature(f)
-                if self.uid is not None:
-                    self.fid_to_uid[f.id()] = attr[self.uid_index]
-                    self.uid_to_fid[attr[self.uid_index]] = f.id()
+                self.ml_keys[new_key_count] = f.id()
 
     def break_features(self):
 
         broken_features = []
-
         f_count = 1
 
-        breakages = []
-        overlaps = []
-        orphans = []
-        closed_polylines = []
-        self_intersecting = []
-        duplicates = []
-
         for fid in self.geometries.keys():
+
+            if self.killed is True:
+                break
 
             f_geom = self.geometries[fid]
             f_attrs = self.attributes[fid]
@@ -131,25 +131,18 @@ class breakTool(QObject):
 
             f_errors, vertices = self.find_breakages(fid, gids)
 
-            if self.errors is True:
-                if f_errors == ['br', 'ovrlp']:
-                    breakages.append(self.fid_to_uid[fid])
-                    overlaps.append(self.fid_to_uid[fid])
-                elif f_errors == 'br':
-                    breakages.append(self.fid_to_uid[fid])
-                elif f_errors == 'ovrlp':
-                    overlaps.append(self.fid_to_uid[fid])
-                elif f_errors == 'orphan':
-                    orphans.append(self.fid_to_uid[fid])
-                elif f_errors == 'closed polyline':
-                    closed_polylines.append(self.fid_to_uid[fid])
-                elif f_errors == 'duplicate':
-                    duplicates.append(self.fid_to_uid[fid])
+            if self.errors and f_errors:
+                original_id = self.ml_keys[fid]
+                try:
+                    updated_errors = self.errors_features[original_id][0] + f_errors
+                    self.errors_features[original_id] = (updated_errors, self.errors_features[original_id][1])
+                except KeyError:
+                    self.errors_features[original_id] = (f_errors, self.geometries[fid].exportToWkt())
 
             if f_errors is None:
                 vertices = [0, len(f_geom.asPolyline()) - 1 ]
 
-            if f_errors in [['br', 'ovrlp'], 'br', 'ovrlp', None]:
+            if f_errors in ['br, ovrlp', 'br', 'ovrlp', None]:
                 for ind, index in enumerate(vertices):
                     if ind != len(vertices) - 1:
                         points = [self.geometries_vertices[fid][i] for i in range(index, vertices[ind + 1] + 1)]
@@ -161,8 +154,12 @@ class breakTool(QObject):
                         new_fid = self.feat_count
                         new_feat = [new_fid, f_attrs, wkt]
                         broken_features.append(new_feat)
+                        self.br_keys[new_fid] = fid
 
-        return broken_features, breakages, overlaps, orphans, closed_polylines, self_intersecting, duplicates
+        return broken_features
+
+    def kill(self):
+        self.br_killed = True
 
     def find_breakages(self, fid, gids):
 
@@ -197,7 +194,21 @@ class breakTool(QObject):
                 # duplicate geometry
                 if f_geom.isGeosEqual(g_geom):
                     is_duplicate = True
-                    #break
+
+                if self.unlinks:
+                    if f_geom.crosses(g_geom):
+                        crossing_point = f_geom.intersection(g_geom)
+                        if crossing_point.wkbType() == 1:
+                            self.unlinks_count += 1
+                            unlinks_attrs = [[self.unlinks_count], [gid], [fid], [crossing_point.asPoint()[0]],
+                                             [crossing_point.asPoint()[1]]]
+                            self.unlinked_features.append([self.unlinks_count, unlinks_attrs, crossing_point.exportToWkt()])
+                        elif crossing_point.wkbType() == 4:
+                            for cr_point in crossing_point.asGeometryCollection():
+                                self.unlinks_count += 1
+                                unlinks_attrs = [[self.unlinks_count], [gid], [fid], [cr_point.asPoint()[0]],
+                                                 [cr_point.asPoint()[1]]]
+                                self.unlinked_features.append([self.unlinks_count, unlinks_attrs, cr_point.exportToWkt()])
 
             if is_duplicate is False:
                 intersection = f_geom.intersection(g_geom)
@@ -250,19 +261,22 @@ class breakTool(QObject):
             vertices = list(vertices) + [0] + [len(f_geom.asPolyline()) - 1]
             vertices = list(set(vertices))
             vertices.sort()
+
             if is_orphan:
                 if is_closed is True:
                     return 'closed polyline', []
                 else:
                     return 'orphan', []
+
             elif is_self_intersersecting:
                 if has_overlaps:
-                    return ['br', 'ovrlp'], vertices
+                    return 'br, ovrlp', vertices
                 else:
                     return 'br', vertices
+
             elif has_overlaps or must_break:
                 if has_overlaps is True and must_break is True:
-                    return ['br', 'ovrlp'], vertices
+                    return 'br, ovrlp', vertices
                 elif has_overlaps is True and must_break is False:
                     return 'ovrlp', vertices
                 elif has_overlaps is False and must_break is True:
@@ -270,30 +284,27 @@ class breakTool(QObject):
                         return 'br', vertices
                     else:
                         return None, []
-                else:
-                    return None, []
             else:
                 return None, []
 
+    def updateErrors(self, errors_dict):
 
+        for k, v in errors_dict.items():
 
-    def to_shp(self, any_features_list, crs, name ):
-        network = QgsVectorLayer('LineString?crs=' + crs.toWkt(), name, "memory")
-        pr = network.dataProvider()
+            try:
+                original_id = self.br_keys[k]
+                try:
+                    original_id = self.ml_keys[k]
+                except KeyError:
+                    pass
+            except KeyError:
+                original_id = None
 
-        pr.addAttributes(self.layer_fields)
-
-        new_features = []
-
-        for i in any_features_list:
-            new_feat = QgsFeature()
-            new_feat.setFeatureId(i[0])
-            new_feat.setAttributes(i[1])
-            new_feat.setGeometry(QgsGeometry.fromWkt(i[2]))
-            new_features.append(new_feat)
-
-        network.startEditing()
-        pr.addFeatures(new_features)
-        network.commitChanges()
-        return network
-
+            if original_id:
+                try:
+                    updated_errors = self.errors_features[original_id][0]
+                    if ', continuous line' not in self.errors_features[original_id][0]:
+                        updated_errors += ', continuous line'
+                    self.errors_features[original_id] = (updated_errors, self.errors_features[original_id][1])
+                except KeyError:
+                    self.errors_features[original_id] = ('continuous line', self.geometries[original_id].exportToWkt())

@@ -44,8 +44,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
-        self.outputCleaned.setPlaceholderText("Save as temporary layer...")
-        self.browseCleaned.clicked.connect(self.setOutput)
+        self.outputCleaned.setText("cleaned")
 
         # Setup the progress bar
         self.cleaningProgress.setMinimum(0)
@@ -55,8 +54,14 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.decimalsSpin.setSingleStep(1)
         self.decimalsSpin.setValue(6)
 
-        self.idCombo.setDisabled(True)
         self.decimalsSpin.setDisabled(True)
+
+        self.memoryRadioButton.setChecked(True)
+        self.shpRadioButton.setChecked(False)
+        self.postgisRadioButton.setChecked(False)
+        self.browseCleaned.setDisabled(True)
+
+        self.outputCleaned.setDisabled(False)
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
@@ -65,14 +70,8 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
     def getNetwork(self):
         return self.inputCombo.currentText()
 
-    def setOutput(self):
-        file_name = QtGui.QFileDialog.getSaveFileName(self, "Save output file ", "cleaned_network", '*.shp')
-        if file_name:
-            self.outputCleaned.setText(file_name)
-
     def getOutput(self):
-        print len(self.outputCleaned.text()) > 0
-        if len(self.outputCleaned.text()) > 0:
+        if self.outputCleaned.text() != 'cleaned':
             return self.outputCleaned.text()
         else:
             return None
@@ -95,14 +94,31 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         else:
             return None
 
+    def disable_browse(self):
+        if self.memoryRadioButton.isChecked():
+            self.browseCleaned.setDisabled(True)
+        else:
+            self.browseCleaned.setDisabled(False)
+
     def get_errors(self):
         return self.errorsCheckBox.isChecked()
 
-    def get_user_id(self):
-        if self.errorsCheckBox.isChecked():
-            return self.idCombo.currentText()
+    def get_unlinks(self):
+        return self.unlinksCheckBox.isChecked()
+
+    def update_output_text(self):
+        if self.memoryRadioButton.isChecked():
+            return "cleaned"
         else:
-            return None
+            return
+
+    def get_output_type(self):
+        if self.shpRadioButton.isChecked():
+            return 'shp'
+        elif self.postgisRadioButton.isChecked():
+            return 'postgis'
+        else:
+            return 'memory'
 
     def set_enabled_tolerance(self):
         if self.snapCheckBox.isChecked():
@@ -110,14 +126,8 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         else:
             self.decimalsSpin.setDisabled(True)
 
-    def set_enabled_id(self):
-        if self.errorsCheckBox.isChecked():
-            self.idCombo.setDisabled(False)
-        else:
-            self.idCombo.setDisabled(True)
-
     def get_settings(self):
         settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'tolerance': self.getTolerance(),
-                    'errors': self.get_errors(), 'user_id': self.get_user_id()}
+                    'errors': self.get_errors(), 'unlinks': self.get_unlinks(),  'user_id': None, 'output_type': self.get_output_type()}
         return settings
 
