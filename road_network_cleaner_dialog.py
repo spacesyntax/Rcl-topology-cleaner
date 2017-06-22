@@ -37,7 +37,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
     closingPlugin = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, available_dbs, parent=None):
         """Constructor."""
         super(RoadNetworkCleanerDialog, self).__init__(parent)
         # Set up the user interface from Designer.
@@ -64,8 +64,14 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.browseCleaned.setDisabled(True)
 
         self.outputCleaned.setDisabled(False)
+        if available_dbs:
+            self.postgisRadioButton.setDisabled(False)
+            self.dbsettings_dlg = DbSettingsDialog(available_dbs)
+            self.dbsettings_dlg.setDbOutput.connect(self.setDbOutput)
+            self.postgisRadioButton.clicked.connect(self.setDbOutput)
+        else:
+            self.postgisRadioButton.setDisabled(True)
 
-        self.dbsettings_dlg = DbSettingsDialog()
         self.clsettings_dlg = ClSettingsDialog()
 
         # add GUI signals
@@ -75,9 +81,6 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.memoryRadioButton.clicked.connect(self.setTempOutput)
         self.memoryRadioButton.clicked.connect(self.update_output_text)
         self.shpRadioButton.clicked.connect(self.setShpOutput)
-        self.postgisRadioButton.clicked.connect(self.setDbOutput)
-
-        self.dbsettings_dlg.setDbOutput.connect(self.setDbOutput)
 
         self.settingsButton.clicked.connect(self.openClSettings)
 

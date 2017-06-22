@@ -20,8 +20,7 @@
  *                                                                         *
  ***************************************************************************/
 """
-from PyQt4.QtCore import Qt, QThread
-from PyQt4 import QtGui
+from PyQt4.QtCore import Qt, QThread, QSettings
 
 from qgis.core import *
 from qgis.gui import *
@@ -69,7 +68,7 @@ class NetworkCleanerTool(QObject):
 
     def loadGUI(self):
         # create the dialog objects
-        self.dlg = RoadNetworkCleanerDialog()
+        self.dlg = RoadNetworkCleanerDialog(self.getQGISDbs())
 
         # setup GUI signals
         self.dlg.closingPlugin.connect(self.unloadGUI)
@@ -103,6 +102,29 @@ class NetworkCleanerTool(QObject):
             pass
 
         self.dlg = None
+
+    def getQGISDbs(self):
+        """Return all PostGIS connection settings stored in QGIS
+        :return: connection dict() with name and other settings
+        """
+        con_settings = []
+        settings = QSettings()
+        settings.beginGroup('/PostgreSQL/connections')
+        for item in settings.childGroups():
+            con = dict()
+            con['name'] = unicode(item)
+            con['host'] = unicode(settings.value(u'%s/host' % unicode(item)))
+            con['port'] = unicode(settings.value(u'%s/port' % unicode(item)))
+            con['database'] = unicode(settings.value(u'%s/database' % unicode(item)))
+            con['username'] = unicode(settings.value(u'%s/username' % unicode(item)))
+            con['password'] = unicode(settings.value(u'%s/password' % unicode(item)))
+            con_settings.append(con)
+        settings.endGroup()
+        dbs = {}
+        if len(con_settings) > 0:
+            for conn in con_settings:
+                dbs[conn['name']]= conn
+        return dbs
 
     def getActiveLayers(self):
         layers_list = []

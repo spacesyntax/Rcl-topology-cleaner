@@ -23,7 +23,7 @@
 
 import os
 
-from PyQt4.QtCore import pyqtSignal, QSettings
+from PyQt4.QtCore import pyqtSignal
 from PyQt4 import QtGui, uic
 
 from qgis.core import QgsDataSourceURI
@@ -38,7 +38,7 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
     closingPlugin = pyqtSignal()
     setDbOutput = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, available_dbs, parent=None):
         """Constructor."""
         super(DbSettingsDialog, self).__init__(parent)
         # Set up the user interface from Designer.
@@ -49,7 +49,7 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
         self.setupUi(self)
 
         self.nameLineEdit.setText("cleaned")
-        self.available_dbs = self.getQGISDbs()
+        self.available_dbs = available_dbs
 
         self.okButton.clicked.connect(self.close)
         self.dbCombo.currentIndexChanged.connect(self.popSchemas)
@@ -57,34 +57,10 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
         self.schemaCombo.currentIndexChanged.connect(self.setDbOutput)
         self.nameLineEdit.textChanged.connect(self.setDbOutput)
 
+
         self.popDbs()
         if self.dbCombo.currentText() in self.available_dbs.keys():
             self.popSchemas()
-
-
-
-    def getQGISDbs(self):
-        """Return all PostGIS connection settings stored in QGIS
-        :return: connection dict() with name and other settings
-        """
-        con_settings = []
-        settings = QSettings()
-        settings.beginGroup('/PostgreSQL/connections')
-        for item in settings.childGroups():
-            con = dict()
-            con['name'] = unicode(item)
-            con['host'] = unicode(settings.value(u'%s/host' % unicode(item)))
-            con['port'] = unicode(settings.value(u'%s/port' % unicode(item)))
-            con['database'] = unicode(settings.value(u'%s/database' % unicode(item)))
-            con['username'] = unicode(settings.value(u'%s/username' % unicode(item)))
-            con['password'] = unicode(settings.value(u'%s/password' % unicode(item)))
-            con_settings.append(con)
-        settings.endGroup()
-        dbs = {}
-        if len(con_settings) > 0:
-            for conn in con_settings:
-                dbs[conn['name']]= conn
-        return dbs
 
     def popDbs(self):
         self.dbCombo.clear()
@@ -124,8 +100,6 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
                 port = db_info['port']
                 password = db_info['password']
                 uri.setConnection(host, port, dbname, user, password)
-                #c = con.PostGisDBConnector(uri)
-                #schemas = sorted(list(set([i[2] for i in c.getTables()])))
                 connstring = "dbname=%s user=%s host=%s port=%s password=%s" % (dbname, user, host, port, password)
                 schemas = getPostgisSchemas(connstring)
             except:
