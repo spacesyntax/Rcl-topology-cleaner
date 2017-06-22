@@ -42,7 +42,7 @@ from sGraph.utilityFunctions import *
 
 # Import the debug library - required for the cleaning class in separate thread
 # set is_debug to False in release version
-is_debug = True
+is_debug = False
 try:
     import pydevd
     has_pydevd = True

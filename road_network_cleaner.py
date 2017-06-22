@@ -32,7 +32,7 @@ import road_network_cleaner_tool
 
 # Import the debug library
 # set is_debug to False in release version
-is_debug = True
+is_debug = False
 try:
     import pydevd
     has_pydevd = True
