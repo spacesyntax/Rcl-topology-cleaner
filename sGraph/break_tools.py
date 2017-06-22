@@ -142,7 +142,7 @@ class breakTool(QObject):
             if f_errors is None:
                 vertices = [0, len(f_geom.asPolyline()) - 1 ]
 
-            if f_errors in ['br, ovrlp', 'br', 'ovrlp', None]:
+            if f_errors in ['breakage, overlap', 'breakage', 'overlap', None]:
                 for ind, index in enumerate(vertices):
                     if ind != len(vertices) - 1:
                         points = [self.geometries_vertices[fid][i] for i in range(index, vertices[ind + 1] + 1)]
@@ -270,18 +270,18 @@ class breakTool(QObject):
 
             elif is_self_intersersecting:
                 if has_overlaps:
-                    return 'br, ovrlp', vertices
+                    return 'breakage, overlap', vertices
                 else:
-                    return 'br', vertices
+                    return 'breakage', vertices
 
             elif has_overlaps or must_break:
                 if has_overlaps is True and must_break is True:
-                    return 'br, ovrlp', vertices
+                    return 'breakage, overlap', vertices
                 elif has_overlaps is True and must_break is False:
-                    return 'ovrlp', vertices
+                    return 'overlap', vertices
                 elif has_overlaps is False and must_break is True:
                     if len(vertices) > 2:
-                        return 'br', vertices
+                        return 'breakage', vertices
                     else:
                         return None, []
             else:
