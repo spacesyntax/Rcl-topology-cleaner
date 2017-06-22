@@ -131,7 +131,12 @@ def to_dblayer(dbname, user, host, port, password, schema, table_name, qgs_flds,
 
         for (fid, attrs, wkt) in any_features_list:
             for idx, l_attrs in enumerate(attrs):
-                attrs[idx] = [i if i else None for i in l_attrs]
+                if l_attrs:
+                    attrs[idx] = [i if i else None for i in l_attrs]
+                    if attrs[idx] == [None]:
+                        attrs[idx] = None
+                    else:
+                        attrs[idx] = [a for a in attrs[idx] if a]
             data.append(tuple((attrs, wkt)))
 
         args_str = ','.join(

@@ -20,11 +20,14 @@
  *                                                                         *
  ***************************************************************************/
 """
-
-import os
-
 from PyQt4 import QtGui, uic
 from PyQt4.QtCore import pyqtSignal, Qt
+
+import os.path
+import resources
+
+from DbSettings_dialog import DbSettingsDialog
+from ClSettings_dialog import ClSettingsDialog
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'road_network_cleaner_dialog_base.ui'))
@@ -34,7 +37,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
     closingPlugin = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, available_dbs, parent=None):
         """Constructor."""
         super(RoadNetworkCleanerDialog, self).__init__(parent)
         # Set up the user interface from Designer.
@@ -44,16 +47,15 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
-        self.outputCleaned.setText("cleaned")
+        #self.outputCleaned.setText("cleaned")
 
         # Setup the progress bar
         self.cleaningProgress.setMinimum(0)
         self.cleaningProgress.setMaximum(100)
-
+        # Setup some defaults
         self.decimalsSpin.setRange(1, 16)
         self.decimalsSpin.setSingleStep(1)
         self.decimalsSpin.setValue(6)
-
         self.decimalsSpin.setDisabled(True)
 
         self.memoryRadioButton.setChecked(True)
@@ -62,6 +64,28 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.browseCleaned.setDisabled(True)
 
         self.outputCleaned.setDisabled(False)
+        if available_dbs:
+            self.postgisRadioButton.setDisabled(False)
+            self.dbsettings_dlg = DbSettingsDialog(available_dbs)
+            self.dbsettings_dlg.setDbOutput.connect(self.setDbOutput)
+            self.postgisRadioButton.clicked.connect(self.setDbOutput)
+        else:
+            self.postgisRadioButton.setDisabled(True)
+
+        self.clsettings_dlg = ClSettingsDialog()
+
+        # add GUI signals
+        self.snapCheckBox.stateChanged.connect(self.set_enabled_tolerance)
+        self.browseCleaned.clicked.connect(self.setOutput)
+
+        self.memoryRadioButton.clicked.connect(self.setTempOutput)
+        self.memoryRadioButton.clicked.connect(self.update_output_text)
+        self.shpRadioButton.clicked.connect(self.setShpOutput)
+
+        self.settingsButton.clicked.connect(self.openClSettings)
+
+        if self.memoryRadioButton.isChecked():
+            self.outputCleaned.setText('cleaned')
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
@@ -76,17 +100,25 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         else:
             return None
 
-    def getInput(self,iface):
-        name = self.getNetwork()
-        layer = None
-        for i in iface.legendInterface().layers():
-            if i.name() == name:
-                layer = i
-        return layer
-
     def popActiveLayers(self, layers_list):
         self.inputCombo.clear()
-        self.inputCombo.addItems(layers_list)
+        if layers_list:
+            self.inputCombo.addItems(layers_list)
+            self.lockGUI(False)
+        else:
+            self.lockGUI(True)
+
+    def lockGUI(self, onoff):
+        self.snapCheckBox.setDisabled(onoff)
+        self.set_enabled_tolerance()
+        self.memoryRadioButton.setDisabled(onoff)
+        self.shpRadioButton.setDisabled(onoff)
+        self.postgisRadioButton.setDisabled(onoff)
+        self.outputCleaned.setDisabled(onoff)
+        self.disable_browse()
+        self.unlinksCheckBox.setDisabled(onoff)
+        self.errorsCheckBox.setDisabled(onoff)
+        self.cleanButton.setDisabled(onoff)
 
     def getTolerance(self):
         if self.snapCheckBox.isChecked():
@@ -131,3 +163,50 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
                     'errors': self.get_errors(), 'unlinks': self.get_unlinks(),  'user_id': None, 'output_type': self.get_output_type()}
         return settings
 
+    def get_dbsettings(self):
+        settings = self.dbsettings_dlg.getDbSettings()
+        return settings
+
+    def setOutput(self):
+        if self.shpRadioButton.isChecked():
+            self.file_name = QtGui.QFileDialog.getSaveFileName(self, "Save output file ", "cleaned_network", '*.shp')
+            if self.file_name:
+                self.outputCleaned.setText(self.file_name)
+            else:
+                self.outputCleaned.clear()
+        elif self.postgisRadioButton.isChecked():
+            self.dbsettings_dlg.show()
+            # Run the dialog event loop
+            result2 = self.dbsettings_dlg.exec_()
+            self.dbsettings = self.dbsettings_dlg.getDbSettings()
+        return
+
+    def setDbOutput(self):
+        self.disable_browse()
+        if self.postgisRadioButton.isChecked():
+            self.outputCleaned.clear()
+            try:
+                self.dbsettings = self.dbsettings_dlg.getDbSettings()
+                db_layer_name = "%s:%s:%s" % (self.dbsettings['dbname'], self.dbsettings['schema'], self.dbsettings['table_name'])
+                self.outputCleaned.setText(db_layer_name)
+            except:
+                self.outputCleaned.clear()
+            self.outputCleaned.setDisabled(True)
+
+    def setTempOutput(self):
+        self.disable_browse()
+        temp_name = 'cleaned'
+        self.outputCleaned.setText(temp_name)
+        self.outputCleaned.setDisabled(False)
+
+    def setShpOutput(self):
+        self.disable_browse()
+        try:
+            self.outputCleaned.setText(self.file_name)
+        except :
+            self.outputCleaned.clear()
+        self.outputCleaned.setDisabled(True)
+
+    def openClSettings(self):
+        self.clsettings_dlg.show()
+        result1 = self.clsettings_dlg.exec_()
