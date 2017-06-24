@@ -14,9 +14,7 @@ version=0.1.0
 author=Space Syntax Ltd Open Digital Works
 email=I.Kolovou@spacesyntax.com
 
-about=RCL Topology Cleaner is a QGIS plugin, designed to clean topological errors of road centre line maps.
-The plugin has been designed within the ODW Space Syntax team for the purposes of cleaning RCL before any Space Syntax analysis is performed to ensure the accuracy of the results and the standardisation of methods.
-The cleaning processes suggested by the plugin aims to open to the open geospatial community and be used prior to network graph analysis.
+about=RCL Topology Cleaner is a QGIS plugin, designed to clean topological errors of road centre line maps. The plugin has been designed within the ODW Space Syntax team for the purposes of cleaning RCL before any Space Syntax analysis is performed to ensure the accuracy of the results and the standardisation of methods. The cleaning processes suggested by the plugin aims to open to the open geospatial community and be used prior to network graph analysis.
 
 tracker=https://github.com/OpenDigitalWorks/Rcl-topology-cleaner/issues
 repository=https://github.com/OpenDigitalWorks/Rcl-topology-cleaner
