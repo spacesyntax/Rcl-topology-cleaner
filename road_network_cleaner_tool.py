@@ -153,6 +153,7 @@ class NetworkCleanerTool(QObject):
     def startCleaning(self):
         self.dlg.cleaningProgress.reset()
         self.settings = self.dlg.get_settings()
+        print self.settings
         if self.settings['output_type'] == 'postgis':
             db_settings = self.dlg.get_dbsettings()
             self.settings.update(db_settings)
@@ -183,6 +184,7 @@ class NetworkCleanerTool(QObject):
 
     def cleaningFinished(self, ret):
         if is_debug: print 'trying to finish'
+        print 'finishing'
         # get cleaning settings
         layer_name = self.settings['input']
         path = self.settings['output']

@@ -133,7 +133,7 @@ def to_dblayer(dbname, user, host, port, password, schema, table_name, qgs_flds,
             for idx, l_attrs in enumerate(attrs):
                 if l_attrs:
                     attrs[idx] = [i if i else None for i in l_attrs]
-                    if attrs[idx] == [None]:
+                    if attrs[idx] == [None] or attrs[idx] == []:
                         attrs[idx] = None
                     else:
                         attrs[idx] = [a for a in attrs[idx] if a]

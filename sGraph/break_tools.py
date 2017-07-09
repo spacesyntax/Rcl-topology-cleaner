@@ -129,7 +129,7 @@ class breakTool(QObject):
             self.progress.emit((45 * f_count / self.feat_count) + 5)
             f_count += 1
 
-            f_errors, vertices = self.find_breakages(fid, gids)
+            f_errors, vertices, crossing_points_filter = self.find_breakages(fid, gids)
 
             if self.errors and f_errors:
                 original_id = self.ml_keys[fid]
@@ -143,9 +143,10 @@ class breakTool(QObject):
                 vertices = [0, len(f_geom.asPolyline()) - 1 ]
 
             if f_errors in ['breakage, overlap', 'breakage', 'overlap', None]:
+                vertices = [d for d in vertices  if d not in crossing_points_filter]
                 for ind, index in enumerate(vertices):
                     if ind != len(vertices) - 1:
-                        points = [self.geometries_vertices[fid][i] for i in range(index, vertices[ind + 1] + 1)]
+                        points = [self.geometries_vertices[fid][i] for i in range(index, vertices[ind + 1] + 1) if i not in crossing_points_filter]
                         p = ''
                         for point in points:
                             p += point[0] + ' ' + point[1] + ', '
@@ -186,6 +187,8 @@ class breakTool(QObject):
                 is_self_intersersecting = True
                 must_break = True
 
+        crossing_points = []
+        crossing_points_filter = []
         for gid in gids:
 
             g_geom = self.geometries[gid]
@@ -195,20 +198,28 @@ class breakTool(QObject):
                 if f_geom.isGeosEqual(g_geom):
                     is_duplicate = True
 
-                if self.unlinks:
-                    if f_geom.crosses(g_geom):
-                        crossing_point = f_geom.intersection(g_geom)
-                        if crossing_point.wkbType() == 1:
+            if self.unlinks and is_duplicate is False:
+                if f_geom.crosses(g_geom):
+                    crossing_point = f_geom.intersection(g_geom)
+                    if crossing_point.wkbType() == 1:
+                        if point_is_vertex(crossing_point, f_geom):
+                            crossing_points.append(crossing_point)
+                        if gid < fid:
                             self.unlinks_count += 1
                             unlinks_attrs = [[self.unlinks_count], [gid], [fid], [crossing_point.asPoint()[0]],
                                              [crossing_point.asPoint()[1]]]
                             self.unlinked_features.append([self.unlinks_count, unlinks_attrs, crossing_point.exportToWkt()])
-                        elif crossing_point.wkbType() == 4:
-                            for cr_point in crossing_point.asGeometryCollection():
+                    elif crossing_point.wkbType() == 4:
+                        for cr_point in crossing_point.asGeometryCollection():
+                            if point_is_vertex(crossing_point, f_geom):
+                                crossing_points.append(cr_point)
+                            if gid < fid:
                                 self.unlinks_count += 1
                                 unlinks_attrs = [[self.unlinks_count], [gid], [fid], [cr_point.asPoint()[0]],
                                                  [cr_point.asPoint()[1]]]
                                 self.unlinked_features.append([self.unlinks_count, unlinks_attrs, cr_point.exportToWkt()])
+
+            crossing_points_filter = [x for x in find_vertex_index(crossing_points, f_geom)]
 
             if is_duplicate is False:
                 intersection = f_geom.intersection(g_geom)
@@ -254,7 +265,7 @@ class breakTool(QObject):
                         breakages.append(point2)
 
         if is_duplicate is True:
-            return 'duplicate', []
+            return 'duplicate', [], []
         else:
             # add first and last vertex
             vertices = set([vertex for vertex in find_vertex_index(breakages, f_geom)])
@@ -264,28 +275,28 @@ class breakTool(QObject):
 
             if is_orphan:
                 if is_closed is True:
-                    return 'closed polyline', []
+                    return 'closed polyline', [],[]
                 else:
-                    return 'orphan', []
+                    return 'orphan', [],[]
 
             elif is_self_intersersecting:
                 if has_overlaps:
-                    return 'breakage, overlap', vertices
+                    return 'breakage, overlap', vertices, crossing_points_filter
                 else:
-                    return 'breakage', vertices
+                    return 'breakage', vertices, crossing_points_filter
 
             elif has_overlaps or must_break:
                 if has_overlaps is True and must_break is True:
-                    return 'breakage, overlap', vertices
+                    return 'breakage, overlap', vertices, crossing_points_filter
                 elif has_overlaps is True and must_break is False:
-                    return 'overlap', vertices
+                    return 'overlap', vertices, crossing_points_filter
                 elif has_overlaps is False and must_break is True:
                     if len(vertices) > 2:
-                        return 'breakage', vertices
+                        return 'breakage', vertices, crossing_points_filter
                     else:
-                        return None, []
+                        return None, [], []
             else:
-                return None, []
+                return None, [], []
 
     def updateErrors(self, errors_dict):
 
