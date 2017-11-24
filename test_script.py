@@ -15,22 +15,11 @@ execfile(u'/Users/I.Kolovou/Documents/GitHub/Road-network-cleaner/sGraph/utility
 #layer_name = 'New scratch layer'
 #layer_name = 'Netwrok_small'
 #layer_name = 'madagascar'
-layer_name = 'Barnsbury_OpenStreetMap'
-layer_name = 'Barnsbury_OSOpenRoads'
-
-dbname = 'nyc'
-user = 'postgres'
-host = 'localhost'
-port = 5432
-password = 'spaces01'
-schema = '"public"'
-table_name = '"1 test"'
-connstring = "dbname=%s user=%s host=%s port=%s password=%s" % (dbname, user, host, port, password)
+layer_name = 'comp_model_cr_cl_simpl10'
 
 # cleaning settings
-
 path = None
-tolerance = 6
+tolerance = None
 
 # project settings
 layer = getLayerByName(layer_name)
@@ -43,13 +32,12 @@ errors = True
 # break features
 br = breakTool(layer, tolerance, None, True, True)
 br.add_edges()
+fields = br.layer_fields
 
 broken_features = br.break_features()
 
 unlinks = to_shp(None, br.unlinked_features, [QgsField('id', QVariant.Int), QgsField('line_id1', QVariant.String), QgsField('line_id2', QVariant.String), QgsField('x', QVariant.Double), QgsField('y', QVariant.Double)], crs,'unlinks', encoding, 0)
 QgsMapLayerRegistry.instance().addMapLayer(unlinks)
-
-to_dblayer(dbname, user, host, port, password, schema, table_name, br.layer_fields, broken_features, crs, arrays=False)
 
 #broken_network = br.to_shp(broken_features, crs, 'broken')
 #QgsMapLayerRegistry.instance().addMapLayer(broken_network)
@@ -65,10 +53,8 @@ mrg = mergeTool(broken_features, None, True)
 
 result = mrg.merge()
 
-to_dblayer(dbname, user, host, port, password, schema, table_name, br.layer_fields, result, crs, arrays=True)
+to_dblayer('geodb', 'postgres', '192.168.1.10', '5432', 'spaces2017', 'gbr_exeter', 'cleaned',  br.layer_fields, result, crs)
 
-
-fields = br.layer_fields
 final = to_shp(path, result, fields, crs, 'f', encoding, geom_type )
 QgsMapLayerRegistry.instance().addMapLayer(final)
 

@@ -2,6 +2,7 @@
 from qgis.core import QgsMapLayerRegistry, QgsVectorFileWriter, QgsVectorLayer, QgsFeature, QgsGeometry,QgsFields, QgsDataSourceURI
 import psycopg2
 from psycopg2.extensions import AsIs
+import math
 
 # source: ess utility functions
 
@@ -193,6 +194,24 @@ def getPostgisSchemas(connstring, commit=False):
             schemas.append(schema[0])
     #return the result even if empty
     return sorted(schemas)
+
+def angle_3_points(inter_point, vertex1, vertex2):
+    inter_vertex1 = math.hypot(abs(float(inter_point[0]) - float(vertex1[0])),
+                               abs(float(inter_point[1]) - float(vertex1[1])))
+    inter_vertex2 = math.hypot(abs(float(inter_point[0]) - float(vertex2[0])),
+                               abs(float(inter_point[1]) - float(vertex2[1])))
+    vertex1_2 = math.hypot(abs(float(vertex1[0]) - float(vertex2[0])), abs(float(vertex1[1]) - float(vertex2[1])))
+    A = ((inter_vertex1 ** 2) + (inter_vertex2 ** 2) - (vertex1_2 ** 2))
+    B = (2 * inter_vertex1 * inter_vertex2)
+    if B != 0:
+        cos_angle = A / B
+    else:
+        cos_angle = NULL
+    if cos_angle < -1:
+        cos_angle = int(-1)
+    if cos_angle > 1:
+        cos_angle = int(1)
+    return math.degrees(math.acos(cos_angle))
 
 
 

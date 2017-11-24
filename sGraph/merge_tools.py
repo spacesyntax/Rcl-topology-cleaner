@@ -10,7 +10,6 @@ try:
 except ImportError:
     pass
 
-
 class mergeTool(QObject):
 
     finished = pyqtSignal(object)
@@ -60,6 +59,32 @@ class mergeTool(QObject):
                 self.edges_occur[pair] = [i[0]]
 
         self.con_2 = {k: v for k, v in self.vertices_occur.items() if len(v) == 2}
+        # TODO: filter where also the angular change is 0 degrees
+        keys_to_del = []
+        for k, v in self.con_2.items():
+            all_vertices = []
+            for vertex in vertices_from_wkt_2(self.f_dict[v[0]][1]):
+                break
+            if vertex != k:
+                all_vertices.append(vertex)
+            for vertex in vertices_from_wkt_2(self.f_dict[v[0]][1]):
+                pass
+            if vertex != k:
+                all_vertices.append(vertex)
+            for vertex in vertices_from_wkt_2(self.f_dict[v[1]][1]):
+                break
+            if vertex != k:
+                all_vertices.append(vertex)
+            for vertex in vertices_from_wkt_2(self.f_dict[v[1]][1]):
+                pass
+            if vertex != k:
+                all_vertices.append(vertex)
+            if 180 - angle_3_points(k, all_vertices[0], all_vertices[1]) > 5:
+                keys_to_del.append(k)
+
+        for _k in keys_to_del:
+            del self.con_2[_k]
+
         self.all_con = {}
         for k, v in self.con_2.items():
             try:
