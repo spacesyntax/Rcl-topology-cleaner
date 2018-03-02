@@ -177,6 +177,9 @@ class breakTool(QObject):
         # get breaking points
         breakages = []
 
+        # TODO: only self loops that need to break at any other point that its endpoints
+        # they get reported as errors in second iteration
+
         # is self intersecting
         is_self_intersersecting = False
         for i in f_geom.asPolyline():
@@ -195,6 +198,7 @@ class breakTool(QObject):
                 if f_geom.isGeosEqual(g_geom):
                     is_duplicate = True
 
+                # TODO: on output
                 if self.unlinks:
                     if f_geom.crosses(g_geom):
                         crossing_point = f_geom.intersection(g_geom)

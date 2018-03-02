@@ -188,6 +188,8 @@ class mergeTool(QObject):
 
         return self.exclude_orphans(merged_features + self.feat_to_copy)
 
+    # TODO: this is were lines disappear from the map when snapping is used.
+
     def exclude_orphans(self, all_features):
 
         merged_features_w_o_orphans = []
