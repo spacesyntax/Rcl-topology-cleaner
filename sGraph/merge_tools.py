@@ -18,8 +18,37 @@ class mergeTool(QObject):
     warning = pyqtSignal(str)
     killed = pyqtSignal(bool)
 
-    def __init__(self, features, uid, errors):
+    def __init__(self, fields):
         QObject.__init__(self)
+        self.fields = fields + [QgsField('merged_id', QVariant.Int)]
+
+        self.links = {}
+        self.nodes = {}
+
+        self.linksMemory = {}
+        self.nodesMemory = {}
+
+        # unlinks
+        self.unlinks = {}
+
+    def find_con_comp(self):
+        pass
+
+    def collapse_short_links(self, snap_threshold):
+
+        self.sublinks = {k : v for k, v in self.links if v.length() <= snap_threshold}
+
+        for con_comp in self.sublinks.find_con_comp():
+
+            new_node
+            update_con_edges
+
+        pass
+
+    def merge(self, only_colinear=False):
+        pass
+
+
         self.features = features
         self.last_fid = features[-1][0]
         self.errors = errors
