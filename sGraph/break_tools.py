@@ -227,28 +227,30 @@ class breakTool(QObject):
 
         # intersecting short lines
 
-        #gids = self.shortSpIndex.intersects(link_geom.boundingBox())
-        #for gid in gids:
-        #    g_geom = self.shortLinks[gid].geometry()
-        #    intersection = link_geom.intersection(g_geom)
-        #    if intersection.wkbType() == 1:
-        #        nd = intersection.asPoint()
-        #        # add vertex to link geom
-        #        # check if point is vertex
-        #        if point_is_vertex(nd, link_geom):
-        #            intersecting_vertices.append(nd)
-        #        else:
-        #            (closest_point, atVertex, befVertex, afterVertex, dist) = link_geom.closestVertex(nd)
-        #            if befVertex == -1:
-        #                befVertex = len(link_geom_pl) - 1
-        #            bool = link_geom.insertVertex(nd.x(), nd.y(), befVertex)
-        #            #print bool, link_id
-        #            del closest_point, atVertex, afterVertex, dist
-        #            intersecting_vertices.append(nd)
-        #            # update link and copy geom otherwise C++ error object has been deleted
-        #            link_geom = QgsGeometry(link_geom)
-        #            link_geom_pl = link_geom.asPolyline()
-        #            self.links[link_id].setGeometry(link_geom)
+        gids = self.shortSpIndex.intersects(link_geom.boundingBox())
+        for gid in gids:
+            g_geom = self.shortLinks[gid].geometry()
+            intersection = link_geom.intersection(g_geom)
+            try:
+                nd = intersection.asPoint()
+                # add vertex to link geom
+                # check if point is vertex
+                if point_is_vertex(nd, link_geom):
+                    intersecting_vertices.append(nd)
+                else:
+                    (closest_point, atVertex, befVertex, afterVertex, dist) = link_geom.closestVertex(nd)
+                    if befVertex == -1:
+                        befVertex = len(link_geom_pl) - 1
+                    bool = link_geom.insertVertex(nd.x(), nd.y(), befVertex)
+                    #print bool, link_id
+                    del closest_point, atVertex, afterVertex, dist
+                    intersecting_vertices.append(nd)
+                    # update link and copy geom otherwise C++ error object has been deleted
+                    link_geom = QgsGeometry(link_geom)
+                    link_geom_pl = link_geom.asPolyline()
+                    self.links[link_id].setGeometry(link_geom)
+            except AttributeError:
+                pass
 
         # filter only sharing vertices
         for point in candidate_points:
@@ -289,7 +291,9 @@ class breakTool(QObject):
             if len(intersecting_vertices) == 2:  # and len(self_intersections) == 0
 
                 # copy feature
+
                 broken_counter += 1
+
                 link_copy = QgsFeature(link)
                 link_copy.setFields(self.linksFields)
                 link_copy['broken_id'] = broken_counter
@@ -303,12 +307,14 @@ class breakTool(QObject):
                     new_geom = QgsGeometry.fromPolyline(link_geom_pl[intersecting_vertices[i]:vrtx_idx])
                     # new_feat
                     broken_counter += 1
+
                     broken_feat = QgsFeature(link)
                     broken_feat.setGeometry(new_geom)
                     broken_feat.setFeatureId(broken_counter)
                     broken_feat.setFields(self.linksFields)
                     broken_feat['broken_id'] = broken_counter
                     broken_features.append(broken_feat)
+
         return broken_features
 
     def kill(self):
