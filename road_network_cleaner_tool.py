@@ -313,6 +313,12 @@ class NetworkCleanerTool(QObject):
 
                     self.cl_progress.emit(2)
 
+                    self.sGraph = sGraph(flds)
+
+
+
+
+
                     self.br = breakTool(layer, tolerance, None, self.settings['errors'], self.settings['unlinks'])
 
                     if self.cl_killed is True or self.br.killed is True: return

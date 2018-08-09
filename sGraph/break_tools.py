@@ -18,8 +18,20 @@ class breakTool(QObject):
     killed = pyqtSignal(bool)
 
     #TODO:
-    def __init__(self, linksFields):
+    def __init__(self):
         QObject.__init__(self)
+        self.sEdges = {}
+        self.sNodes = {}
+        self.sNodeNode = {}
+
+
+
+
+
+
+
+
+        ###############################################
         self.links = {} # id: feat
         self.nodes = {} # id: feat
         self.nodesMemory = {} # xy: id
@@ -48,6 +60,78 @@ class breakTool(QObject):
         self.breakages = set([])
         self.orphans = {}
         self.overlaps = {}
+
+    # create feature iterator from layer to break multiparts
+    # exclude anything other than line or multiline (NULL, points, invalids)
+    def feat_iter(self, layer):
+        maxid = max(map(lambda f: f.id(), layer.getFeatures())) + 1
+        for f in layer.getFeatures():
+            if f.geometry().wkbType() == 5:
+                for i in f.geometry().asMultiPolyline():
+                    single_part_feat = QgsFeature(f)
+                    single_part_feat.setGeometry(i)
+                    single_part_feat.setFeatureId(maxid)
+                    maxid += 1
+                    yield single_part_feat
+            elif f.geometry().wkbType() == 2:
+                yield f
+
+    # create topology
+    def create_topology(self, layer):
+        # TODO add f.id to populate adj_lines
+        all_nodes = map(lambda f: [f.geometry().asPolyline(0), f.geometry().asPolyline(-1)], self.feat_iter(layer))
+        import itertools
+        unique_nodes = list(set(itertools.chain.from_iterable(all_nodes)))
+        nodes_identifier = dict(zip(unique_nodes,range(0, len(unique_nodes))))
+        unique_nodes = map(lambda coords: {'geom': QgsGeometry.fromPoint(coords[0], coords[1]), 'adj_lines':[], 'adj_nodes': []}, unique_nodes)
+        self.sNodes = dict(zip(range(0, len(unique_nodes)), unique_nodes))
+        return
+
+    def addedge(self, feat):
+        # self.progress.emit((60 * f_count / max(self.explodedFeatures.keys())) + 30)
+
+        # sp Index
+        self.spIndex.insertFeature(feat)
+
+        pl_geom = feat.geometry().asPolyline()
+        start_coords = pl_geom[0]
+        end_coords = pl_geom[-1]
+        startnode = nodes_identifier[start_coords]
+        endnode = nodes_identifier[end_coords]
+        self.sNodes[startnode]['adj_nodes'].append(endnode)
+        self.sNodes[endnode]['adj_nodes'].append(startnode)
+        try:
+            self.sNodeNode[frozenset({startnode, endnode})].append(feat.id)
+        except KeyError:
+            self.sNodeNode[frozenset({startnode, endnode})] = feat.id
+        # startnode id, endnode id
+        self.sEdges[feat.id] = sEdge(feat, startnode, endnode)
+        return True
+
+    # add edges from any_iter
+    # use feat_iter to break multiparts
+
+    def addedges(self, any_iter):
+        res = map(lambda f: self.addedge(f), any_iter)
+        del res
+        return
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def add_nodes(self, f_nodes):
         node_ids = []
