@@ -1,12 +1,11 @@
 
 # general imports
-from qgis.core import QgsFeature, QgsGeometry, QgsSpatialIndex, QgsPoint, QgsVectorFileWriter, QgsField
-from PyQt4.QtCore import QObject, pyqtSignal, QVariant
-
+from PyQt4.QtCore import QObject, pyqtSignal
+from qgis.core import QgsFeature, QgsGeometry, QgsSpatialIndex, QgsPoint, QgsField
 
 # plugin module imports
 try:
-    from utilityFunctions import *
+    from sGraph.ss.utilityFunctions import *
 except ImportError:
     pass
 
@@ -177,14 +176,6 @@ class breakTool(QObject):
         # get breaking points
         breakages = []
 
-        # is self intersecting
-        is_self_intersersecting = False
-        for i in f_geom.asPolyline():
-            if f_geom.asPolyline().count(i) > 1:
-                point = QgsGeometry().fromPoint(QgsPoint(i[0], i[1]))
-                breakages.append(point)
-                is_self_intersersecting = True
-                must_break = True
 
         for gid in gids:
 

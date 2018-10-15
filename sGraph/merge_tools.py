@@ -1,12 +1,13 @@
 
 # general imports
 import itertools
-from qgis.core import QgsGeometry
+
 from PyQt4.QtCore import QObject, pyqtSignal
+from qgis.core import QgsGeometry
 
 # plugin module imports
 try:
-    from utilityFunctions import *
+    from sGraph.ss.utilityFunctions import *
 except ImportError:
     pass
 

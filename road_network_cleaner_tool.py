@@ -20,24 +20,16 @@
  *                                                                         *
  ***************************************************************************/
 """
-from PyQt4.QtCore import Qt, QThread, QSettings
-
+import traceback
+from PyQt4.QtCore import QThread, QSettings
 from qgis.core import *
 from qgis.gui import *
 from qgis.utils import *
 
-#import db_manager.db_plugins.postgis.connector as con
-import traceback
-
-# Initialize Qt resources from file resources.py
-import resources
-# the dialog modules
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
-
-# additional modules
-from sGraph.break_tools import *  # better give these a name to make it explicit to which module the methods belong
 from sGraph.merge_tools import *
-from sGraph.utilityFunctions import *
+from sGraph.ss.break_tools import *  # better give these a name to make it explicit to which module the methods belong
+from sGraph.ss.utilityFunctions import *
 
 # Import the debug library - required for the cleaning class in separate thread
 # set is_debug to False in release version
