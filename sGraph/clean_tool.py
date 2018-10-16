@@ -71,9 +71,8 @@ class cleanTool(QObject):
         res = map(lambda (edgeid, qgspoint): self.createTopology(qgspoint, edgeid), self.endpointsIter())
 
         if self.Snap != -1:
-            # group based on distance
-            self.combined = []
-            # todo subgraph
+            # group based on distance - create subgraph
+            # todo subgraph with new sNodes
             grouped_nodes = map(lambda i: self.con_comp(i), self.nodes_closest_iter())
             # for every group create sNode, del sNodes, update sEdges
             res = map(lambda nodes: self.mergeNodes(nodes), subgraph.con_comp_iter())
@@ -241,7 +240,11 @@ class cleanTool(QObject):
             closest_nodes = set(
                 filter(lambda id: nd_geom.distance(self.sNodes[id].geometry) <= self.Snap,
                        closest_nodes))
-            yield closest_nodes - comb
+
+            # create sNodes
+            for comb in itertools.combinations(closest_nodes, 2):
+                yield comb
+                yield comb[::-1]
 
     def con_comp(self):
         components_passed = set([])
