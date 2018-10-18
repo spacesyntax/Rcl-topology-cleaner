@@ -11,28 +11,27 @@ class sEdge(QObject):
 
     # function because nodes might change
     def getStartNode(self):
-        return self.nodes[-1]
-
-    def getEndNode(self):
         return self.nodes[0]
 
+    def getEndNode(self):
+        return self.nodes[-1]
+
     def setStartNode(self, node_id):
-        self.nodes[-1] = node_id
-
-
-    def setEndNode(self, node_id):
         self.nodes[0] = node_id
 
+    def setEndNode(self, node_id):
+        self.nodes[-1] = node_id
+
     def replaceNodes(self, candidate_nodes, newSNode):
-        if {self.getStartNode}.intersection(set(candidate_nodes)) == {self.getStartNode}:
-            self.setStartNode(newSNode.id)
-            polyline = self.feature.geometry().asPolyline()[:-2] + [newSNode.point]
+        if {self.getEndNode()}.intersection(set(candidate_nodes)) == {self.getEndNode()}:
+            self.setEndNode(newSNode.id)
+            polyline = self.feature.geometry().asPolyline()[:-1] + [newSNode.point]
             self.feature.setGeometry(QgsGeometry.fromPolyline(polyline))
-        if {self.getEndNode}.intersection(set(candidate_nodes)) == {self.getEndNode}:
+        if {self.getStartNode()}.intersection(set(candidate_nodes)) == {self.getStartNode()}:
             polyline = [newSNode.point] + self.feature.geometry().asPolyline()[1:]
             self.feature.setGeometry(QgsGeometry.fromPolyline(polyline))
-            self.setEndNode(newSNode.id)
-        return
+            self.setStartNode(newSNode.id)
+        return True
 
 
 

@@ -18,10 +18,13 @@ class sNode(QObject):
         self.geometry = QgsGeometry.fromPoint(self.point)
         self.closest_nodes = [id]
 
+    def getConnectivity(self):
+        return len(set(self.topology))
+
     def getFeature(self):
         f = QgsFeature()
         f.setFeatureId(self.id)
         f.setGeometry(self.geometry)
         f.setFields(prototype_fields)
-        f.setAttributes([self.id, self.connectivity])
+        f.setAttributes([self.id, self.getConnectivity()])
         return f

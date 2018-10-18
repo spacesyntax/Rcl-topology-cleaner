@@ -11,7 +11,7 @@ import time
 start_time = time.time()
 
 # input settings
-layer_name = 'road_small'
+layer_name = 'road_small2'
 #layer_name = 'madagascar'
 #layer_name = 'comp_model_cr_cl_simpl10'
 layer = getLayerByName(layer_name)
@@ -34,17 +34,50 @@ clean_tool = cleanTool(Snap, Break, Merge, Errors, Unlinks)
 res = map(lambda f:clean_tool.sEdgesSpIndex.insertFeature(f), clean_tool.features_iter(layer))
 
 """1.BREAK"""
+# TODO: speed up
 broken_edges = map(lambda (sedge, vertices): clean_tool.breakAtVertices(sedge, vertices), clean_tool.breakFeaturesIter())
-res = map(lambda edge_id: clean_tool.sEdges[edge_id], filter(lambda edge_id: edge_id is not None, broken_edges))
+res = map(lambda edge_id: clean_tool.del_edge(edge_id), filter(lambda edge_id: edge_id is not None, broken_edges))
 
 # create topology
 res = map(lambda (edgeid, qgspoint): clean_tool.createTopology(qgspoint, edgeid), clean_tool.endpointsIter())
 
-clean_tool.combined = []
-res = map(lambda i: clean_tool.con_comp(i), clean_tool.nodes_closest_iter())
+subgraph_nodes = clean_tool.subgraph_nodes()
+subgraph_nodes_layer = to_layer([clean_tool.sNodes[n].getFeature() for n in subgraph_nodes], layer.crs(), layer.dataProvider().encoding(), 1, 'memory', None, 'closest_nodes')
+QgsMapLayerRegistry.instance().addMapLayer(subgraph_nodes_layer)
 
-# for every group create sNode, del sNodes, update sEdges
-res = map(lambda nodes: clean_tool.mergeNodes(nodes), clean_tool.combined)
+res = map(lambda nodes: clean_tool.mergeNodes(nodes), clean_tool.con_comp_iter(clean_tool.subgraph_nodes()))
+
+edges_layer = to_layer([sedge.feature for sedge in clean_tool.sEdges.values()], layer.crs(), layer.dataProvider().encoding(), 2, 'memory', None, 'edges')
+QgsMapLayerRegistry.instance().addMapLayer(edges_layer)
+
+nodes_layer = to_layer([n.getFeature() for n in clean_tool.sNodes.values()], layer.crs(), layer.dataProvider().encoding(), 1, 'memory', None, 'closest_nodes')
+QgsMapLayerRegistry.instance().addMapLayer(nodes_layer)
+
+
+all_pairs = map(lambda sedge: [frozenset([sedge.getStartNode(), sedge.getEndNode()]), sedge.id], clean_tool.sEdges.values())
+clean_tool.sNodeNode = dict(map(lambda (k, g): (k, [x[1] for x in g]), itertools.groupby(sorted(all_pairs), operator.itemgetter(0))))
+res = map(lambda group_edges: clean_tool.merge_edges(group_edges), clean_tool.con_comp_con_2_iter())
+
+
+components_passed = set([])
+for (ndid, node) in filter(lambda (_id, _node): _node.getConnectivity() != 2, clean_tool.sNodes.items()):
+    break
+
+for id in node.topology:
+    startnode = ndid
+    endnode = [i for i in clean_tool.sEdges[id].nodes if i !=ndid].pop()
+    if {endnode}.isdisjoint(components_passed):
+        group = [startnode, [endnode]]
+        candidates = ['dummy']
+        while len(candidates) == 1:
+            flat_group = group[:-1] + group[-1]
+            last_visited = group[-1][0]
+            candidates = itertools.chain.from_iterable(
+                map(lambda edge: clean_tool.sEdges[edge].nodes, clean_tool.sNodes[last_visited].topology))
+            group = flat_group + [list(set(candidates).difference(set(flat_group)))]
+        components_passed.update(set(group[1:-1]))
+
+        yield group[:-1]
 
 print 'process time', time.time() - start_time
 print 'finished'
