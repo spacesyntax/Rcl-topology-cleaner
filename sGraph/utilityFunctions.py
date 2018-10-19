@@ -19,11 +19,19 @@ def merge_features(feature_list, new_id):
     geometries = [f.geometry() for f in feature_list]
     lengths = [geom.length() for geom in geometries]
     new_feat = QgsFeature(feature_list[lengths.index(max(lengths))])
-    new_geom = QgsGeometry()
-    res = map(lambda geom_to_merge: new_geom.combine(geom_to_merge), geometries)
+    new_geom = geometries[0]
+    for i in geometries[1:]:
+        new_geom = new_geom.combine(i)
     new_feat.setGeometry(new_geom)
     new_feat.setFeatureId(new_id)
     return new_feat
+
+def duplicates(lst, item):
+    return [i for i, x in enumerate(lst) if x == item]
+
+def angle_3_points(p1, p2, p3):
+    
+    return
 
 # -------------------------- LAYER BUILD
 
@@ -49,7 +57,6 @@ def to_layer(features, crs, encoding, geom_type, layer_type, path, name):
         if file_writer.hasError() != QgsVectorFileWriter.NoError:
             print "Error when creating shapefile: ", file_writer.errorMessage()
         del file_writer
-        name = ntpath.basename(path)
         # TODO: get name from path
         layer = QgsVectorLayer(path, name, "ogr")
         pr = layer.dataProvider()

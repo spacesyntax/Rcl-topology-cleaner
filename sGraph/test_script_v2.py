@@ -41,46 +41,97 @@ res = map(lambda edge_id: clean_tool.del_edge(edge_id), filter(lambda edge_id: e
 # create topology
 res = map(lambda (edgeid, qgspoint): clean_tool.createTopology(qgspoint, edgeid), clean_tool.endpointsIter())
 
+"""2.SNAP"""
+
 subgraph_nodes = clean_tool.subgraph_nodes()
 subgraph_nodes_layer = to_layer([clean_tool.sNodes[n].getFeature() for n in subgraph_nodes], layer.crs(), layer.dataProvider().encoding(), 1, 'memory', None, 'closest_nodes')
 QgsMapLayerRegistry.instance().addMapLayer(subgraph_nodes_layer)
 
 res = map(lambda nodes: clean_tool.mergeNodes(nodes), clean_tool.con_comp_iter(clean_tool.subgraph_nodes()))
 
-edges_layer = to_layer([sedge.feature for sedge in clean_tool.sEdges.values()], layer.crs(), layer.dataProvider().encoding(), 2, 'memory', None, 'edges')
+edges_layer = to_layer([sedge.feature for sedge in clean_tool.sEdges.values()], layer.crs(), layer.dataProvider().encoding(), 2, 'shapefile', '/Users/joe/Downloads/sedges.shp', 'edges')
 QgsMapLayerRegistry.instance().addMapLayer(edges_layer)
 
-nodes_layer = to_layer([n.getFeature() for n in clean_tool.sNodes.values()], layer.crs(), layer.dataProvider().encoding(), 1, 'memory', None, 'closest_nodes')
+nodes_layer = to_layer([n.getFeature() for n in clean_tool.sNodes.values()], layer.crs(), layer.dataProvider().encoding(), 1, 'shapefile', '/Users/joe/Downloads/snodes.shp', 'closest_nodes')
 QgsMapLayerRegistry.instance().addMapLayer(nodes_layer)
 
 
-all_pairs = map(lambda sedge: [frozenset([sedge.getStartNode(), sedge.getEndNode()]), sedge.id], clean_tool.sEdges.values())
-clean_tool.sNodeNode = dict(map(lambda (k, g): (k, [x[1] for x in g]), itertools.groupby(sorted(all_pairs), operator.itemgetter(0))))
-res = map(lambda group_edges: clean_tool.merge_edges(group_edges), clean_tool.con_comp_con_2_iter())
+"""3.MERGE"""
+
+edges_to_rem = map(lambda (group_edges, group_nodes): clean_tool.merge_edges(group_edges, group_nodes), clean_tool.con_comp_con_2_iter())
+res = map(lambda edge_id: clean_tool.del_edge(edge_id), itertools.chain.from_itearble(edges_to_rem))
+
+edges_layer = to_layer([sedge.feature for sedge in clean_tool.sEdges.values()], layer.crs(), layer.dataProvider().encoding(), 2, 'shapefile', '/Users/joe/Downloads/sedges.shp', 'edges')
+QgsMapLayerRegistry.instance().addMapLayer(edges_layer)
+
+
+
+
+
+for (group_edges, group_nodes) in clean_tool.con_comp_con_2_iter():
+    res = clean_tool.merge_edges(group_edges, group_nodes)
+
 
 
 components_passed = set([])
-for (ndid, node) in filter(lambda (_id, _node): _node.getConnectivity() != 2, clean_tool.sNodes.items()):
-    break
+for (edge_id, edge) in filter(lambda (_id, _edge): clean_tool.getConnectivity(_edge) != 2 and len(set(_edge.nodes)) != 1,
+                              clean_tool.sEdges.items()):
+    # statedge should not be a selfloop
+    if {edge_id}.isdisjoint(components_passed):
+        startnode, endnode = edge.nodes
+        if clean_tool.sNodes[endnode].getConnectivity() != 2:
+            startnode, endnode = edge.nodes[::-1]
+        #if startnode > endnode:  # prevent 2 ways
+        group_nodes = [startnode, endnode]
+        group_edges = [edge_id]
+        if clean_tool.sNodes[endnode].getConnectivity() == 2:
+            edge_id
 
-for id in node.topology:
-    startnode = ndid
-    endnode = [i for i in clean_tool.sEdges[id].nodes if i !=ndid].pop()
-    if {endnode}.isdisjoint(components_passed):
-        group = [startnode, [endnode]]
-        candidates = ['dummy']
-        while len(candidates) == 1:
-            flat_group = group[:-1] + group[-1]
-            last_visited = group[-1][0]
-            candidates = itertools.chain.from_iterable(
-                map(lambda edge: clean_tool.sEdges[edge].nodes, clean_tool.sNodes[last_visited].topology))
-            group = flat_group + [list(set(candidates).difference(set(flat_group)))]
-        components_passed.update(set(group[1:-1]))
 
-        yield group[:-1]
+        while clean_tool.sNodes[endnode].getConnectivity() == 2:
+            candidates = [edge for edge in clean_tool.sNodes[endnode].topology if edge not in group_edges]
+            group_edges += candidates  # selfloop/ parallels disregarded
+            endnode = (set(clean_tool.sEdges[candidates[0]].nodes).difference({endnode})).pop()
+            group_nodes += [endnode]
+        components_passed.update(set(group_edges))
+        if len(group_edges) > 1:
+            yield group_edges, group_nodes
 
-print 'process time', time.time() - start_time
-print 'finished'
+
+
+
+
+
+
+
+
+pseudo_edges = []
+for i in clean_tool.con_comp_con_2_iter():
+    pseudo_edges+= [i[0]]
+
+
+pseudo_edges = [clean_tool.sEdges[e].feature  for edg in pseudo_edges for e in edg]
+
+pseudo_edges_layer = to_layer(pseudo_edges, layer.crs(), layer.dataProvider().encoding(), 2, 'shapefile', '/Users/joe/Downloads/pseudoedges.shp', 'pseudo_edges_layer')
+QgsMapLayerRegistry.instance().addMapLayer(pseudo_edges_layer)
+
+
+
+
+pseudo_nodes = {}
+for nid, node in clean_tool.sNodes.items():
+    if node.getConnectivity() == 2:
+        bool = True
+        for i in node.topology:
+            if len(set(clean_tool.sEdges[i].nodes)) == 1:
+                bool = False
+        if bool:
+            pseudo_nodes[nid] = node
+
+pseudo_nodes_layer = to_layer([n.getFeature() for n in pseudo_nodes.values()], layer.crs(),
+                                layer.dataProvider().encoding(), 1, 'shapefile', '/Users/joe/Downloads/pseudo.shp', 'pseudo_nodes')
+QgsMapLayerRegistry.instance().addMapLayer(pseudo_nodes_layer)
+
 
 
 

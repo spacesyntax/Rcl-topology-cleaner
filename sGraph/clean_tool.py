@@ -58,6 +58,12 @@ class cleanTool(QObject):
         del self.sEdges[edge_id]
         return True
 
+    def del_edge_w_nodes(self, edge_id, start, end):
+        del self.sEdges[edge_id]
+        del self.sNodes[start]
+        del self.sNodes[end]
+        return True
+
     def run(self, layer):
 
         # 0. LOAD GRAPH
@@ -85,26 +91,21 @@ class cleanTool(QObject):
             # snap
             res = map(lambda nodes: self.mergeNodes(nodes), self.con_comp_iter(self.subgraph_nodes()))
 
+        if self.Orphans:
+            # TODO: errors
+            # orphans, closed polylines
+            res = map(lambda edge_id: self.del_edge_w_nodes(edge_id, self.sEdges[edge_id].getStartNode(),  self.sEdges[edge_id].getEndNode(),),
+                      filter(lambda edge: self.sNodes[self.sEdges[edge].getStartNode()].getConnectivity() ==
+                            self.sNodes[self.sEdges[edge].getStartNode()].getConnectivity() == 1, self.sEdges.values()))
         # 3. MERGE
         if self.Merge:
             # TODO: errors
-            # pseudo nodes
-            all_pairs = map(lambda sedge: [frozenset([sedge.getStartNode(), sedge.getEndNode()]), sedge.id], self.sEdges.values())
-            self.sNodeNode = dict(map(lambda (k, g): (k, [x[1] for x in g]), itertools.groupby(sorted(all_pairs), operator.itemgetter(0))))
+            # pseudo nodes, orphans
             if self.Merge == 'between_intersections':
                 res = map(lambda group_edges: self.merge_edges(group_edges), self.con_comp_con_2_iter())
             elif self.Merge[0] == 'collinear':
                 angle_threshold = self.Merge[1]
                 res = map(lambda group_edges: self.merge_edges(group_edges), self.con_comp_con_collinear_iter(angle_threshold))
-
-        if self.Orphans:
-            # TODO: errors
-            # orphans
-            #self.orphans # from sNodes
-            #self.closed polylines
-            res = map(lambda edge_id: self.del_edge(edge_id),
-                      filter(lambda edge: self.sNodes[self.sEdges[edge].getStartNode()].getConnectivity() ==
-                            self.sNodes[self.sEdges[edge].getStartNode()].getConnectivity() == 1, self.sEdges.values()))
 
         return
 
@@ -175,7 +176,7 @@ class cleanTool(QObject):
             f = edge.feature
             pl = f.geometry().asPolyline()
             for end in (pl[0], pl[-1]): # keep order nodes = [startpoint, endpoint]
-                yield f.id(), end
+                yield edge.id, end
 
     # 1. BREAK AT COMMON VERTICES---------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
@@ -207,14 +208,17 @@ class cleanTool(QObject):
             f_geom = sedge.feature.geometry()
             f_pl = f_geom.asPolyline()
             f_pl_indices = dict(zip(f_pl, range(0, len(f_pl))))
-            vertices = []
-            common_points = set([p for p, count in Counter(f_pl).items() if count> 1]) # self intersections
+            vertices = [0, len(f_pl)-1]
+
+            for k, v in dict((x, duplicates(f_pl, x)) for x in set(f_pl) if f_pl.count(x) > 1).items():
+                if len(v) > 1:
+                    vertices += v
 
             intersecting_edges = filter(lambda inter_edge: self.sEdges[inter_edge].id != id
                                                    and f_geom.distance(self.sEdges[inter_edge].feature.geometry()) <= 0,
                                         self.sEdgesSpIndex.intersects(f_geom.boundingBox()))
             # check for common vertices
-
+            common_points = set([])
             for unq_inter_id in intersecting_edges:
                 g_geom = self.sEdges[unq_inter_id].feature.geometry()
 
@@ -236,7 +240,6 @@ class cleanTool(QObject):
                     # TODO if self.Errors check for overlaps
                     vertices += [f_pl_indices[p] for p in common_points]
 
-            vertices += [0, len(f_pl)-1]
             vertices = sorted(set(vertices))
 
             point_series = map(lambda (index_start, index_end): f_pl[index_start: index_end + 1], zip(vertices[:-1], vertices[1:]))
@@ -299,44 +302,71 @@ class cleanTool(QObject):
 
     # 3. MERGE BETWEEN INTERSECTIONS -----------------------------------------------------------------------------------
     #    MERGE COLLINEAR SEGMENTS --------------------------------------------------------------------------------------
+    def getConnectivity(self, edge):
+        con_edges = filter(lambda _edge: _edge != edge.id, self.sNodes[edge.nodes[0]].topology + self.sNodes[edge.nodes[1]].topology)
+        return len(con_edges)
+
+    def hasPseudo(self, edge):
+        if len(self.sNodes[edge.nodes[0]].topology) == 2 or len(self.sNodes[edge.nodes[1]].topology) == 2:
+            return True
 
     def con_comp_con_2_iter(self):
         components_passed = set([])
-        # TODO edges
-        for (ndid, node) in filter(lambda (_id, _node): _node.getConnectivity() != 2, self.sNodes.items()):
-            for id in node.topology:
-                startnode = ndid
-                try:
-                    endnode = [i for i in self.sEdges[id].nodes if i != ndid].pop()
-                    if {endnode}.isdisjoint(components_passed):
-                        group = [startnode, [endnode]]
-                        candidates = ['dummy']
-                        while len(candidates) == 1:
-                            flat_group = group[:-1] + group[-1]
-                            last_visited = group[-1][0]
-                            candidates = list(itertools.chain.from_iterable(
-                                map(lambda edge: self.sEdges[edge].nodes, self.sNodes[last_visited].topology)))
-                            group = flat_group + [list(set(candidates).difference(set(flat_group)))]
-                        components_passed.update(set(group[1:-1]))
-                        yield group[:-1]
-                except IndexError: # self loop
-                    pass
+        # dead end with connectivity 2 are excluded
+        for (edge_id, edge) in filter(lambda (_id, _edge): self.getConnectivity(_edge) != 2 and len(set(_edge.nodes))!= 1, self.sEdges.items()):
+            # statedge should not be a selfloop
+            if {edge_id}.isdisjoint(components_passed): # prevent 2 ways
+                startnode, endnode = edge.nodes
+                if self.sNodes[endnode].getConnectivity() != 2:
+                    startnode, endnode = edge.nodes[::-1]
+                group_nodes = [startnode, endnode]
+                group_edges = [edge_id]
+                while self.sNodes[endnode].getConnectivity() == 2:
+                    candidates = [e for e in self.sNodes[endnode].topology if e not in group_edges]
+                    if len(set(self.sEdges[candidates[0]].nodes)) == 1:
+                        break
+                    else:
+                        group_edges += candidates # selfloop/ parallels disregarded
+                        endnode = (set(self.sEdges[candidates[0]].nodes).difference({endnode})).pop()
+                        group_nodes += [endnode]
+                components_passed.update(set(group_edges))
+                if len(group_edges) > 1:
+                    if self.Orphans and self.sNodes[startnode].getConnectivity() == self.sNodes[endnode].getConnectivity() == 1:
+                        pass
+                    else:
+                        yield group_edges, group_nodes
 
-    def merge_edges(self, group_nodes):
-        group_edges = [self.sNodeNode[frozenset(s)][0] for s in zip(group_nodes[:-1], group_nodes[1:])] # if parallel selects random
-        # new merged edge
-        # update topology
-        self.sNodes[group_nodes[0]].topology.remove(group_edges[0])
-        self.sNodes[group_nodes[0]].topology.append(self.sEdgesId)
-        self.sNodes[group_nodes[-1]].topology.remove(group_edges[-1])
-        self.sNodes[group_nodes[-1]].topology.append(self.sEdgesId)
+    def con_comp_collinear_iter(self):
+        components_passed = set([])
+        # dead end with connectivity 2 are excluded
+        for (edge_id, edge) in filter(lambda (_id, _edge): self.hasPseudo(_edge) and len(set(_edge.nodes))!= 1, self.sEdges.items()):
+            # statedge should not be a selfloop
+            if {edge_id}.isdisjoint(components_passed): # prevent 2 ways
+                startnode, endnode = edge.nodes
+                if self.sNodes[endnode].getConnectivity() != 2:
+                    startnode, endnode = edge.nodes[::-1]
+                group_nodes = [startnode, endnode]
+                group_edges = [edge_id]
+                while self.sNodes[endnode].getConnectivity() == 2:
+                    candidates = [e for e in self.sNodes[endnode].topology if e not in group_edges]
+                    endnode = (set(self.sEdges[candidates[0]].nodes).difference({endnode})).pop()
+                    if len(set(self.sEdges[candidates[0]].nodes)) == 1 or \
+                        angle_3_points(self.sNodes[group_nodes[-3]].point, self.sNodes[group_nodes[-2]].point, self.sNodes[group_nodes[-1]].point):
+                        break
+                    else:
+                        group_edges += candidates # selfloop/ parallels disregarded
+                        group_nodes += [endnode]
+                components_passed.update(set(group_edges))
+                if len(group_edges) > 1:
+                    if self.Orphans and self.sNodes[startnode].getConnectivity() == self.sNodes[endnode].getConnectivity() == 1:
+                        pass
+                    else:
+                        yield group_edges, group_nodes
+
+    def merge_edges(self, group_edges, group_nodes):
         merged_feat = merge_features([self.sEdges[edge].feature for edge in group_edges], self.sEdgesId)
-        merged_sedge = sEdge(self.sEdgesId, merged_feat, [group_edges[0], group_edges[-1]])
+        merged_sedge = sEdge(self.sEdgesId, merged_feat, [group_nodes[0], group_nodes[-1]])
         self.sEdges[self.sEdgesId] = merged_sedge
         self.sEdgesId += 1
-        # del
-        for node_to_del in group_nodes[1:-1]:
-            del self.sNodes[node_to_del]
-        for edge_to_del in group_edges:
-            del self.sEdges[edge_to_del]
-        return True
+        # topology not updated !
+        return group_edges
