@@ -33,6 +33,35 @@ def angle_3_points(p1, p2, p3):
     
     return
 
+
+def con_comp_con_2_iter(self):
+    components_passed = set([])
+    # dead end with connectivity 2 are excluded
+    for (edge_id, edge) in filter(lambda (_id, _edge): self.getConnectivity(_edge) != 2 and len(set(_edge.nodes)) != 1,
+                                  self.sEdges.items()):
+        # statedge should not be a selfloop
+        if {edge_id}.isdisjoint(components_passed):  # prevent 2 ways
+            startnode, endnode = edge.nodes
+            if self.sNodes[endnode].getConnectivity() != 2:
+                startnode, endnode = edge.nodes[::-1]
+            group_nodes = [startnode, endnode]
+            group_edges = [edge_id]
+            while self.sNodes[endnode].getConnectivity() == 2:
+                candidates = [e for e in self.sNodes[endnode].topology if e not in group_edges]
+                if len(set(self.sEdges[candidates[0]].nodes)) == 1:
+                    break
+                else:
+                    group_edges += candidates  # selfloop/ parallels disregarded
+                    endnode = (set(self.sEdges[candidates[0]].nodes).difference({endnode})).pop()
+                    group_nodes += [endnode]
+            components_passed.update(set(group_edges))
+            if len(group_edges) > 1:
+                if self.Orphans and self.sNodes[startnode].getConnectivity() == self.sNodes[
+                    endnode].getConnectivity() == 1:
+                    pass
+                else:
+                    yield group_edges, group_nodes
+
 # -------------------------- LAYER BUILD
 
 

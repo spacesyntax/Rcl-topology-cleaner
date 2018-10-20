@@ -57,12 +57,28 @@ QgsMapLayerRegistry.instance().addMapLayer(nodes_layer)
 
 
 """3.MERGE"""
+#pseudo_nodes = clean_tool.subgraph_con2_nodes()
+#pseudo_nodes_layer = to_layer([clean_tool.sEdges[e].feature for e in pseudo_nodes], layer.crs(), layer.dataProvider().encoding(), 2, 'memory', None, 'pseudo nodes')
+#QgsMapLayerRegistry.instance().addMapLayer(pseudo_nodes_layer)
+#pseudo_nodes_layer = to_layer([snode.getFeature() for n, snode in pseudo_nodes.items()], layer.crs(), layer.dataProvider().encoding(), 1, 'memory', None, 'pseudo nodes')
+#QgsMapLayerRegistry.instance().addMapLayer(pseudo_nodes_layer)
 
-edges_to_rem = map(lambda (group_edges, group_nodes): clean_tool.merge_edges(group_edges, group_nodes), clean_tool.con_comp_con_2_iter())
+edges_to_rem = map(lambda (group_edges): clean_tool.merge_edges(group_edges), clean_tool.con_comp_iter(clean_tool.subgraph_con2_nodes()))
 res = map(lambda edge_id: clean_tool.del_edge(edge_id), itertools.chain.from_itearble(edges_to_rem))
 
 edges_layer = to_layer([sedge.feature for sedge in clean_tool.sEdges.values()], layer.crs(), layer.dataProvider().encoding(), 2, 'shapefile', '/Users/joe/Downloads/sedges.shp', 'edges')
 QgsMapLayerRegistry.instance().addMapLayer(edges_layer)
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -104,8 +104,7 @@ class cleanTool(QObject):
             if self.Merge == 'between_intersections':
                 res = map(lambda group_edges: self.merge_edges(group_edges), self.con_comp_con_2_iter())
             elif self.Merge[0] == 'collinear':
-                angle_threshold = self.Merge[1]
-                res = map(lambda group_edges: self.merge_edges(group_edges), self.con_comp_con_collinear_iter(angle_threshold))
+                res = map(lambda group_edges: self.merge_edges(group_edges), self.con_comp_collinear_iter())
 
         return
 
@@ -196,7 +195,6 @@ class cleanTool(QObject):
                 # TODO
                 pass
             # del after adding all
-            #del self.sEdges[]
             return sedge_feat.id()
         else:
             return None
@@ -222,14 +220,13 @@ class cleanTool(QObject):
             for unq_inter_id in intersecting_edges:
                 g_geom = self.sEdges[unq_inter_id].feature.geometry()
 
-                if self.Unlinks:
-                    if f_geom.crosses(g_geom):
-                        crossing_point = f_geom.intersection(g_geom)
-                        if crossing_point.wkbType() == 1:
-                            self.unlinks.append(crossing_point.asPoint())
-                        elif crossing_point.wkbType() == 4:
-                            for cr_point in crossing_point.asMultiPoint():
-                                self.unlinks.append(cr_point)
+                if self.Unlinks and f_geom.crosses(g_geom):
+                    crossing_point = f_geom.intersection(g_geom)
+                    if crossing_point.wkbType() == 1:
+                        self.unlinks.append(crossing_point.asPoint())
+                    elif crossing_point.wkbType() == 4:
+                        for cr_point in crossing_point.asMultiPoint():
+                            self.unlinks.append(cr_point)
                     # TODO: unlink should not be a vertex in f_geom/g_geom what if OS? remove/move vertex??
 
                 if f_geom.isGeosEqual(g_geom):
@@ -251,19 +248,15 @@ class cleanTool(QObject):
 
     def subgraph_nodes(self):
 
-        # TODO: create separate class for sGraph - subgraph
         closestNodes = {}
         for id, snode in self.sNodes.items():
             # emit signal
             nd_geom = snode.geometry
             nd_buffer = nd_geom.buffer(self.Snap, 29)
             closest_nodes = self.sNodesSpIndex.intersects(nd_buffer.boundingBox())
-            closest_nodes = set(
-                filter(lambda id: nd_geom.distance(self.sNodes[id].geometry) <= self.Snap,
-                       closest_nodes))
+            closest_nodes = set(filter(lambda id: nd_geom.distance(self.sNodes[id].geometry) <= self.Snap, closest_nodes))
             if len(closest_nodes) > 1:
-                # create sNodes
-                # incl. itself (snode)
+                # create sNodes, incl. itself (snode)
                 for node in closest_nodes:
                     topology = set(closest_nodes)
                     topology.remove(node)
@@ -306,67 +299,62 @@ class cleanTool(QObject):
         con_edges = filter(lambda _edge: _edge != edge.id, self.sNodes[edge.nodes[0]].topology + self.sNodes[edge.nodes[1]].topology)
         return len(con_edges)
 
-    def hasPseudo(self, edge):
-        if len(self.sNodes[edge.nodes[0]].topology) == 2 or len(self.sNodes[edge.nodes[1]].topology) == 2:
-            return True
+    def subgraph_con2_nodes(self):
+        subgraph_nodes = {}
+        for id, snode in self.sNodes.items():
+            con_edges = [e for e in snode.topology if len(self.sEdges[e].nodes) != 1]
+            if len(con_edges) == 2:
+                try:
+                    subgraph_nodes[con_edges[0]].topology.append(con_edges[1])
+                except KeyError:
+                    centroid = self.sEdges[con_edges[0]].feature.geometry().centroid().asPoint()
+                    subgraph_nodes[con_edges[0]] = sNode(con_edges[0], [con_edges[1]], centroid)
+                try:
+                    subgraph_nodes[con_edges[1]].topology.append(con_edges[0])
+                except KeyError:
+                    centroid = self.sEdges[con_edges[1]].feature.geometry().centroid().asPoint()
+                    subgraph_nodes[con_edges[1]] = sNode(con_edges[1], [con_edges[0]], centroid)
+        return subgraph_nodes
 
-    def con_comp_con_2_iter(self):
-        components_passed = set([])
-        # dead end with connectivity 2 are excluded
-        for (edge_id, edge) in filter(lambda (_id, _edge): self.getConnectivity(_edge) != 2 and len(set(_edge.nodes))!= 1, self.sEdges.items()):
-            # statedge should not be a selfloop
-            if {edge_id}.isdisjoint(components_passed): # prevent 2 ways
-                startnode, endnode = edge.nodes
-                if self.sNodes[endnode].getConnectivity() != 2:
-                    startnode, endnode = edge.nodes[::-1]
-                group_nodes = [startnode, endnode]
-                group_edges = [edge_id]
-                while self.sNodes[endnode].getConnectivity() == 2:
-                    candidates = [e for e in self.sNodes[endnode].topology if e not in group_edges]
-                    if len(set(self.sEdges[candidates[0]].nodes)) == 1:
-                        break
-                    else:
-                        group_edges += candidates # selfloop/ parallels disregarded
-                        endnode = (set(self.sEdges[candidates[0]].nodes).difference({endnode})).pop()
-                        group_nodes += [endnode]
-                components_passed.update(set(group_edges))
-                if len(group_edges) > 1:
-                    if self.Orphans and self.sNodes[startnode].getConnectivity() == self.sNodes[endnode].getConnectivity() == 1:
-                        pass
-                    else:
-                        yield group_edges, group_nodes
+    def subgraph_collinear_nodes(self):
+        subgraph_nodes = {}
+        for id, snode in self.sNodes.items():
+            con_edges = [e for e in snode.topology if len(self.sEdges[e].nodes) != 1]
+            if len(con_edges) == 2:
+                sedge1 = self.sEdges[con_edges[0]]
+                sedge2 = self.sEdges[con_edges[1]]
+                nodes1 = sedge1.nodes
+                nodes2 = sedge2.nodes
+                p2 = self.sNodes[[n for n in nodes1 if n in nodes2].pop()].point
+                p1 = self.sNodes[[n for n in nodes1 in n != p2].pop()].point
+                p3 = self.sNodes[[n for n in nodes2 in n != p2].pop()].point
+                if angle_3_points(p1, p2, p3) <= self.Merge[1]:
+                    try:
+                        subgraph_nodes[con_edges[0]].topology.append(con_edges[1])
+                    except KeyError:
+                        centroid = sedge1.feature.geometry().centroid().asPoint()
+                        subgraph_nodes[con_edges[0]] = sNode(con_edges[0], [con_edges[1]], centroid)
+                    try:
+                        subgraph_nodes[con_edges[1]].topology.append(con_edges[0])
+                    except KeyError:
+                        centroid = sedge2.feature.geometry().centroid().asPoint()
+                        subgraph_nodes[con_edges[1]] = sNode(con_edges[1], [con_edges[0]], centroid)
+        return subgraph_nodes
 
-    def con_comp_collinear_iter(self):
-        components_passed = set([])
-        # dead end with connectivity 2 are excluded
-        for (edge_id, edge) in filter(lambda (_id, _edge): self.hasPseudo(_edge) and len(set(_edge.nodes))!= 1, self.sEdges.items()):
-            # statedge should not be a selfloop
-            if {edge_id}.isdisjoint(components_passed): # prevent 2 ways
-                startnode, endnode = edge.nodes
-                if self.sNodes[endnode].getConnectivity() != 2:
-                    startnode, endnode = edge.nodes[::-1]
-                group_nodes = [startnode, endnode]
-                group_edges = [edge_id]
-                while self.sNodes[endnode].getConnectivity() == 2:
-                    candidates = [e for e in self.sNodes[endnode].topology if e not in group_edges]
-                    endnode = (set(self.sEdges[candidates[0]].nodes).difference({endnode})).pop()
-                    if len(set(self.sEdges[candidates[0]].nodes)) == 1 or \
-                        angle_3_points(self.sNodes[group_nodes[-3]].point, self.sNodes[group_nodes[-2]].point, self.sNodes[group_nodes[-1]].point):
-                        break
-                    else:
-                        group_edges += candidates # selfloop/ parallels disregarded
-                        group_nodes += [endnode]
-                components_passed.update(set(group_edges))
-                if len(group_edges) > 1:
-                    if self.Orphans and self.sNodes[startnode].getConnectivity() == self.sNodes[endnode].getConnectivity() == 1:
-                        pass
-                    else:
-                        yield group_edges, group_nodes
-
-    def merge_edges(self, group_edges, group_nodes):
-        merged_feat = merge_features([self.sEdges[edge].feature for edge in group_edges], self.sEdgesId)
-        merged_sedge = sEdge(self.sEdgesId, merged_feat, [group_nodes[0], group_nodes[-1]])
-        self.sEdges[self.sEdgesId] = merged_sedge
-        self.sEdgesId += 1
-        # topology not updated !
-        return group_edges
+    def merge_edges(self, group_edges):
+        start, end = None, None
+        if self.Orphans:
+            group_nodes = [self.sEdges[e].nodes for e in group_edges]
+            second_start = set(group_nodes[0]).intersection(set(group_nodes[1]))
+            second_end = set(group_nodes[-2]).intersection(set(group_nodes - 1))
+            start = [n for n in group_nodes[0] if n != second_start].pop()
+            end = [n for n in group_nodes[-1] if n != second_end].pop()
+            if self.sNodes[start].getConnectivity() == self.sNodes[end].getConnectivity() == 1:
+                return []
+        else:
+            merged_feat = merge_features([self.sEdges[edge].feature for edge in group_edges], self.sEdgesId)
+            merged_sedge = sEdge(self.sEdgesId, merged_feat, [start, end])
+            self.sEdges[self.sEdgesId] = merged_sedge
+            self.sEdgesId += 1
+            # topology not updated !
+            return group_edges
