@@ -263,6 +263,7 @@ class cleanTool(QObject):
         else:
             return None
 
+
     def breakFeaturesIter(self):
 
         for id, sedge in self.sEdges.items():
@@ -297,12 +298,12 @@ class cleanTool(QObject):
                     crossing_point = f_geom.intersection(g_geom)
                     if crossing_point.wkbType() == 1:
                         p = crossing_point.asPoint()
-                        if p not in f_pl:
-                            self.unlinks.append(p)
+                        #if p not in f_pl:
+                        self.unlinks.append(p)
                     elif crossing_point.wkbType() == 4:
-                        for cr_point in crossing_point.asMultiPoint():
-                            if cr_point not in f_pl:
-                                self.unlinks.append(cr_point)
+                        for cr_point in crossing_point.asMultiPoint(): #TODO if not end one or other 
+                            #if cr_point not in f_pl:
+                            self.unlinks.append(cr_point)
                     # TODO: unlink should not be a vertex in f_geom/g_geom what if OS? remove/move vertex?? if unlink not added in common _points
 
                 common_points.update(set(f_pl[1:-1]).intersection(set(g_geom.asPolyline())))
@@ -369,16 +370,18 @@ class cleanTool(QObject):
         qgspoints = [self.sNodes[node].point for node in nodes]
         mergedSNode = sNode(self.sNodesId, connected_edges, QgsGeometry.fromMultiPoint(qgspoints).centroid().asPoint())
         self.sNodes[self.sNodesId] = mergedSNode
-        for edge in  connected_edges:
-            # update edge
-            #if len(set(self.sEdges[edge].nodes).intersection(set(nodes))) == 2:
-            #    del self.sEdges[edge]
-            #else:
-            self.sEdges[edge].replaceNodes(nodes, mergedSNode)
+        edges_to_rem = []
+        for edge in connected_edges:
+            # update edge #TODO
+            if len((set(self.sEdges[edge].nodes)).intersection(set(nodes))) == 2:
+                edges_to_rem.append(edge)
+            else:
+                self.sEdges[edge].replaceNodes(nodes, mergedSNode)
+        self.sNodes[self.sNodesId].topology = [x for x in self.sNodes[self.sNodesId].topology if x not in edges_to_rem]
         for node in nodes:
             del self.sNodes[node]
         self.sNodesId += 1
-        return True
+        return edges_to_rem
 
     # 3. MERGE BETWEEN INTERSECTIONS -----------------------------------------------------------------------------------
     #    MERGE COLLINEAR SEGMENTS --------------------------------------------------------------------------------------

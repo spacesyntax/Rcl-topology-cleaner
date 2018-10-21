@@ -44,40 +44,38 @@ res = map(lambda edge_id: clean_tool.del_edge(edge_id), filter(lambda edge_id: e
 # create topology
 res = map(lambda (edgeid, qgspoint): clean_tool.createTopology(qgspoint, edgeid), clean_tool.endpointsIter())
 
-"""2.SNAP"""
-
+# 2. SNAP # errors: snapped
+res = map(lambda (edgeid, qgspoint): clean_tool.createTopology(qgspoint, edgeid), clean_tool.endpointsIter())
+# group based on distance - create subgraph
 subgraph_nodes = clean_tool.subgraph_nodes()
-subgraph_nodes_layer = to_layer([clean_tool.sNodes[n].getFeature() for n in subgraph_nodes], layer.crs(), layer.dataProvider().encoding(), 1, 'memory', None, 'closest_nodes')
-QgsMapLayerRegistry.instance().addMapLayer(subgraph_nodes_layer)
+collapsed_edges = map(lambda nodes: clean_tool.mergeNodes(nodes),
+                      clean_tool.con_comp_iter(subgraph_nodes))
+res = map(lambda edge_id: clean_tool.del_edge(edge_id),
+          set(list(itertools.chain.from_iterable(collapsed_edges))))
 
-res = map(lambda nodes: clean_tool.mergeNodes(nodes), clean_tool.con_comp_iter(clean_tool.subgraph_nodes()))
+# 3. MERGE # errors merged
 
-edges_layer = to_layer([sedge.feature for sedge in clean_tool.sEdges.values()], layer.crs(), layer.dataProvider().encoding(), 2, 'shapefile', '/Users/joe/Downloads/sedges.shp', 'edges')
-QgsMapLayerRegistry.instance().addMapLayer(edges_layer)
-
-nodes_layer = to_layer([n.getFeature() for n in clean_tool.sNodes.values()], layer.crs(), layer.dataProvider().encoding(), 1, 'shapefile', '/Users/joe/Downloads/snodes.shp', 'closest_nodes')
-QgsMapLayerRegistry.instance().addMapLayer(nodes_layer)
-
-
-"""3.MERGE"""
-pseudo_nodes = clean_tool.subgraph_collinear_nodes()
-pseudo_nodes_layer = to_layer([clean_tool.sEdges[e].feature for e in pseudo_nodes], layer.crs(), layer.dataProvider().encoding(), 2, 'memory', None, 'pseudo nodes')
-QgsMapLayerRegistry.instance().addMapLayer(pseudo_nodes_layer)
-#pseudo_nodes_layer = to_layer([snode.getFeature() for n, snode in pseudo_nodes.items()], layer.crs(), layer.dataProvider().encoding(), 1, 'memory', None, 'pseudo nodes')
-#QgsMapLayerRegistry.instance().addMapLayer(pseudo_nodes_layer)
+subgraph_nodes = clean_tool.subgraph_con2_nodes()
+res = map(lambda group_edges: clean_tool.merge_edges(group_edges),
+          clean_tool.con_comp_iter(subgraph_nodes))
 
 
-res = map(lambda (group_edges): clean_tool.merge_edges(group_edges), clean_tool.con_comp_iter(clean_tool.subgraph_collinear_nodes()))
+# 4. ORPHANS
+# errors orphans, closed polylines
+res = map(
+lambda sedge: clean_tool.del_edge_w_nodes(sedge.id, sedge.getStartNode(), sedge.getEndNode()),
+filter(lambda edge: clean_tool.sNodes[edge.getStartNode()].getConnectivity() ==
+                    clean_tool.sNodes[edge.getEndNode()].getConnectivity() == 1,
+       clean_tool.sEdges.values()))
 
 
-res = map(lambda (group_edges): clean_tool.merge_edges(group_edges), clean_tool.con_comp_iter(clean_tool.subgraph_con2_nodes()))
 
-edges_layer = to_layer([sedge.feature for sedge in clean_tool.sEdges.values()], layer.crs(), layer.dataProvider().encoding(), 2, 'shapefile', '/Users/joe/Downloads/sedges.shp', 'edges')
-QgsMapLayerRegistry.instance().addMapLayer(edges_layer)
 
-res = map(lambda sedge: clean_tool.del_edge_w_nodes(sedge.id, sedge.getStartNode(), sedge.getEndNode()),
-                      filter(lambda edge: clean_tool.sNodes[edge.getStartNode()].getConnectivity() ==
-                                          clean_tool.sNodes[edge.getEndNode()].getConnectivity() == 1, clean_tool.sEdges.values()))
+
+
+
+
+
 
 all_errors = []
 

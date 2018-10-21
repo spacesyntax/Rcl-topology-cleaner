@@ -318,7 +318,8 @@ class NetworkCleanerTool(QObject):
                         self.clean_tool.step = (self.clean_tool.range/ float(len(self.clean_tool.sNodes))) / float(2)
                         subgraph_nodes = self.clean_tool.subgraph_nodes()
                         self.clean_tool.step = (self.clean_tool.range/ float(len(subgraph_nodes))) / float(2)
-                        res = map(lambda nodes: self.clean_tool.mergeNodes(nodes), self.clean_tool.con_comp_iter(subgraph_nodes))
+                        collapsed_edges = map(lambda nodes: self.clean_tool.mergeNodes(nodes), self.clean_tool.con_comp_iter(subgraph_nodes))
+                        res = map(lambda edge_id: self.clean_tool.del_edge(edge_id), set(list(itertools.chain.from_iterable(collapsed_edges))))
 
                     # 3. MERGE # errors merged
                     if self.clean_tool.Merge:
