@@ -1,17 +1,22 @@
-from qgis.core import QgsFeature, QgsMapLayerRegistry
+from qgis.core import QgsFeature, QgsMapLayerRegistry, QgsVectorLayer, QgsVectorFileWriter
+import math
+import psycopg2
+from psycopg2.extensions import AsIs
+
+
+# GENERAL _______________________________________________________________
+
+def duplicates(lst, item):
+    return [i for i, x in enumerate(lst) if x == item]
+
+# QGSFEATURES _______________________________________________________________
+
 
 def copy_feature(prototype_feat, geom, id):
     f = QgsFeature(prototype_feat)
     f.setFeatureId(id)
     f.setGeometry(geom)
     return f
-
-def getLayerByName(name):
-    layer = None
-    for i in QgsMapLayerRegistry.instance().mapLayers().values():
-        if i.name() == name:
-            layer = i
-    return layer
 
 
 def merge_features(feature_list, new_id):
@@ -26,44 +31,34 @@ def merge_features(feature_list, new_id):
     new_feat.setFeatureId(new_id)
     return new_feat
 
-def duplicates(lst, item):
-    return [i for i, x in enumerate(lst) if x == item]
+# ANGLES _______________________________________________________________
+
 
 def angle_3_points(p1, p2, p3):
-    
-    return
+    inter_vertex1 = math.hypot(abs(float(p2.x()) - float(p1.x())), abs(float(p2.y()) - float(p1.y())))
+    inter_vertex2 = math.hypot(abs(float(p2.x()) - float(p3.x())), abs(float(p2.y()) - float(p3.y())))
+    vertex1_2 = math.hypot(abs(float(p1.x()) - float(p3.x())), abs(float(p1.y()) - float(p3.y())))
+    A = ((inter_vertex1 ** 2) + (inter_vertex2 ** 2) - (vertex1_2 ** 2))
+    B = (2 * inter_vertex1 * inter_vertex2)
+    if B != 0:
+        cos_angle = A / B
+    else:
+        cos_angle = NULL
+    if cos_angle < -1:
+        cos_angle = int(-1)
+    if cos_angle > 1:
+        cos_angle = int(1)
+    return 180 - math.degrees(math.acos(cos_angle))
 
 
-def con_comp_con_2_iter(self):
-    components_passed = set([])
-    # dead end with connectivity 2 are excluded
-    for (edge_id, edge) in filter(lambda (_id, _edge): self.getConnectivity(_edge) != 2 and len(set(_edge.nodes)) != 1,
-                                  self.sEdges.items()):
-        # statedge should not be a selfloop
-        if {edge_id}.isdisjoint(components_passed):  # prevent 2 ways
-            startnode, endnode = edge.nodes
-            if self.sNodes[endnode].getConnectivity() != 2:
-                startnode, endnode = edge.nodes[::-1]
-            group_nodes = [startnode, endnode]
-            group_edges = [edge_id]
-            while self.sNodes[endnode].getConnectivity() == 2:
-                candidates = [e for e in self.sNodes[endnode].topology if e not in group_edges]
-                if len(set(self.sEdges[candidates[0]].nodes)) == 1:
-                    break
-                else:
-                    group_edges += candidates  # selfloop/ parallels disregarded
-                    endnode = (set(self.sEdges[candidates[0]].nodes).difference({endnode})).pop()
-                    group_nodes += [endnode]
-            components_passed.update(set(group_edges))
-            if len(group_edges) > 1:
-                if self.Orphans and self.sNodes[startnode].getConnectivity() == self.sNodes[
-                    endnode].getConnectivity() == 1:
-                    pass
-                else:
-                    yield group_edges, group_nodes
+# LAYER _______________________________________________________________
 
-# -------------------------- LAYER BUILD
-
+def getLayerByName(name):
+    layer = None
+    for i in QgsMapLayerRegistry.instance().mapLayers().values():
+        if i.name() == name:
+            layer = i
+    return layer
 
 def to_layer(features, crs, encoding, geom_type, layer_type, path, name):
 
@@ -155,3 +150,37 @@ def clean_nulls(attrs):
 def rmv_parenthesis(my_string):
     idx = my_string.find(',ST_GeomFromText') - 1
     return  my_string[:idx] + my_string[(idx+1):]
+
+def getPostgisSchemas(connstring, commit=False):
+    """Execute query (string) with given parameters (tuple)
+    (optionally perform commit to save Db)
+    :return: result set [header,data] or [error] error
+    """
+
+    try:
+        connection = psycopg2.connect(connstring)
+    except psycopg2.Error, e:
+        print e.pgerror
+        connection = None
+
+    schemas = []
+    data = []
+    if connection:
+        query = unicode("""SELECT schema_name from information_schema.schemata;""")
+        cursor = connection.cursor()
+        try:
+            cursor.execute(query)
+            if cursor.description is not None:
+                data = cursor.fetchall()
+            if commit:
+                connection.commit()
+        except psycopg2.Error, e:
+            connection.rollback()
+        cursor.close()
+
+    # only extract user schemas
+    for schema in data:
+        if schema[0] not in ('topology', 'information_schema') and schema[0][:3] != 'pg_':
+            schemas.append(schema[0])
+    #return the result even if empty
+    return sorted(schemas)

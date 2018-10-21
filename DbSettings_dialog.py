@@ -73,13 +73,9 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
     def getDbSettings(self):
         connection = self.dbCombo.currentText()
         if connection in self.available_dbs.keys():
-            return {'dbname': self.available_dbs[connection]['name'],
-        'user': self.available_dbs[connection]['username'],
-        'host': self.available_dbs[connection]['host'],
-        'port': self.available_dbs[connection]['port'],
-        'password': self.available_dbs[connection]['password'],
-        'schema': self.schemaCombo.currentText(),
-        'table_name': self.nameLineEdit.text()}
+            return {'dbname': connection,
+                    'schema': self.schemaCombo.currentText(),
+                    'table_name': self.nameLineEdit.text()}
         else:
             return {}
 
@@ -88,24 +84,27 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
         schemas = []
         selected_db = self.getSelectedDb()
         if len(self.getSelectedDb()) > 1:
-            try:
-                print 'tries'
-                uri = QgsDataSourceURI()
-                db_info = self.available_dbs[selected_db]
-                print db_info, selected_db
-                conname = selected_db
-                dbname = db_info['database']
-                user = db_info['username']
-                host = db_info['host']
-                port = db_info['port']
-                password = db_info['password']
-                uri.setConnection(host, port, dbname, user, password)
-                connstring = "dbname=%s user=%s host=%s port=%s password=%s" % (dbname, user, host, port, password)
-                schemas = getPostgisSchemas(connstring)
-            except:
-                print 'error'
-                pass
+            self.get_connstring(selected_db)
+            schemas = getPostgisSchemas(self.connstring)
+            print 'connstring', self.connstring
         self.schemaCombo.addItems(schemas)
+
+    def get_connstring(self, selected_db):
+        db_info = self.available_dbs[selected_db]
+        print 'tries', db_info, selected_db
+        self.connstring = ''
+        try:
+            db_info['user'] = db_info['username']
+            del db_info['username']
+        except KeyError:
+            pass
+        for k, v in db_info.items():
+            self.connstring += str(k) + '=' + str(v) + ' '
+        if 'service' in db_info.keys():
+            pass
+        else:
+            self.connstring += 'dbname=' + str(selected_db)
+        return
 
     def closeEvent(self, event):
         self.closingPlugin.emit()

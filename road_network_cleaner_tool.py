@@ -21,15 +21,14 @@
  ***************************************************************************/
 """
 import traceback
-from PyQt4.QtCore import QThread, QSettings
+from PyQt4.QtCore import QThread, QSettings, QObject, pyqtSignal, QVariant
 from qgis.core import *
 from qgis.gui import *
 from qgis.utils import *
 
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
-from sGraph.merge_tools import *
-from sGraph.ss.break_tools import *  # better give these a name to make it explicit to which module the methods belong
-from sGraph.ss.utilityFunctions import *
+from sGraph.clean_tool import *  # better give these a name to make it explicit to which module the methods belong
+from sGraph.utilityFunctions import *
 
 # Import the debug library - required for the cleaning class in separate thread
 # set is_debug to False in release version
@@ -64,11 +63,14 @@ class NetworkCleanerTool(QObject):
 
         # setup GUI signals
         self.dlg.closingPlugin.connect(self.unloadGUI)
-        self.dlg.cleanButton.clicked.connect(self.startCleaning)
-        self.dlg.cancelButton.clicked.connect(self.killCleaning)
+        self.dlg.cleanButton.clicked.connect(self.startWorker)
+        self.dlg.cancelButton.clicked.connect(self.killWorker)
 
         # add layers to dialog
         self.updateLayers()
+
+        self.dlg.outputCleaned.setText(self.dlg.inputCombo.currentText() + "_cl")
+        self.dlg.inputCombo.currentIndexChanged.connect(self.updateOutputName)
 
         # setup legend interface signals
         self.legend.itemAdded.connect(self.updateLayers)
@@ -84,14 +86,11 @@ class NetworkCleanerTool(QObject):
     def unloadGUI(self):
         if self.dlg:
             self.dlg.closingPlugin.disconnect(self.unloadGUI)
-            self.dlg.cleanButton.clicked.disconnect(self.startCleaning)
-            self.dlg.cancelButton.clicked.disconnect(self.killCleaning)
+            self.dlg.cleanButton.clicked.disconnect(self.startWorker)
+            self.dlg.cancelButton.clicked.disconnect(self.killWorker)
             self.settings = None
-        try:
-            self.legend.itemAdded.disconnect(self.updateLayers)
-            self.legend.itemRemoved.disconnect(self.updateLayers)
-        except TypeError:
-            pass
+        self.legend.itemAdded.disconnect(self.updateLayers)
+        self.legend.itemRemoved.disconnect(self.updateLayers)
 
         self.dlg = None
 
@@ -99,23 +98,17 @@ class NetworkCleanerTool(QObject):
         """Return all PostGIS connection settings stored in QGIS
         :return: connection dict() with name and other settings
         """
-        con_settings = []
         settings = QSettings()
         settings.beginGroup('/PostgreSQL/connections')
-        for item in settings.childGroups():
-            con = dict()
-            con['name'] = unicode(item)
-            con['host'] = unicode(settings.value(u'%s/host' % unicode(item)))
-            con['port'] = unicode(settings.value(u'%s/port' % unicode(item)))
-            con['database'] = unicode(settings.value(u'%s/database' % unicode(item)))
-            con['username'] = unicode(settings.value(u'%s/username' % unicode(item)))
-            con['password'] = unicode(settings.value(u'%s/password' % unicode(item)))
-            con_settings.append(con)
+        named_dbs = settings.childGroups()
+        all_info = [i.split("/") + [unicode(settings.value(i))] for i in settings.allKeys() if
+                    settings.value(i) != NULL and settings.value(i) != '']
+        all_info = [i for i in all_info if
+                    i[0] in named_dbs and i[2] != NULL and i[1] in ['name', 'host', 'service', 'password', 'username',
+                                                                    'port']]
+        dbs = dict(
+            [k, dict([i[1:] for i in list(g)])] for k, g in itertools.groupby(sorted(all_info), operator.itemgetter(0)))
         settings.endGroup()
-        dbs = {}
-        if len(con_settings) > 0:
-            for conn in con_settings:
-                dbs[conn['name']]= conn
         return dbs
 
     def getActiveLayers(self):
@@ -133,16 +126,19 @@ class NetworkCleanerTool(QObject):
     # SOURCE: Network Segmenter https://github.com/OpenDigitalWorks/NetworkSegmenter
     # SOURCE: https://snorfalorpagus.net/blog/2013/12/07/multithreading-in-qgis-python-plugins/
 
+    def updateOutputName(self):
+        self.dlg.outputCleaned.setText(self.dlg.inputCombo.currentText() + "_cl")
+
     def giveMessage(self, message, level):
         # Gives warning according to message
         self.iface.messageBar().pushMessage("Road network cleaner: ", "%s" % (message), level, duration=5)
 
-    def cleaningError(self, e, exception_string):
+    def workerError(self, exception_string):
         # Gives error according to message
         QgsMessageLog.logMessage('Cleaning thread raised an exception: %s' % exception_string, level=QgsMessageLog.CRITICAL)
         self.dlg.close()
 
-    def startCleaning(self):
+    def startWorker(self):
         self.dlg.cleaningProgress.reset()
         self.settings = self.dlg.get_settings()
         if self.settings['output_type'] == 'postgis':
@@ -151,80 +147,79 @@ class NetworkCleanerTool(QObject):
 
         if self.settings['input']:
 
-            cleaning = self.clean(self.settings, self.iface)
+            cleaning = self.Worker(self.settings, self.iface)
+            print self.settings
             # start the cleaning in a new thread
             thread = QThread()
             cleaning.moveToThread(thread)
-            cleaning.finished.connect(self.cleaningFinished)
-            cleaning.error.connect(self.cleaningError)
+            cleaning.finished.connect(self.workerFinished)
+            cleaning.error.connect(self.workerError)
             cleaning.warning.connect(self.giveMessage)
             cleaning.cl_progress.connect(self.dlg.cleaningProgress.setValue)
 
             thread.started.connect(cleaning.run)
-            # thread.finished.connect(self.cleaningFinished)
+
+            thread.start()
 
             self.thread = thread
             self.cleaning = cleaning
 
-            self.thread.start()
-
-            if is_debug: print 'started'
+            #if is_debug:
+            print 'started'
         else:
             self.giveMessage('Missing user input!', QgsMessageBar.INFO)
             return
 
-    def cleaningFinished(self, ret):
-        if is_debug: print 'trying to finish'
+    def workerFinished(self, ret):
+        #if is_debug:
+        print 'trying to finish'
         # get cleaning settings
         layer_name = self.settings['input']
         path = self.settings['output']
         output_type = self.settings['output_type']
+        if output_type == 'postgis':
+            (dbname, schema_name, table_name) = path.split(':')
+            path = (self.dlg.dbsettings_dlg.connstring, schema_name, table_name)
         #  get settings from layer
         layer = getLayerByName(layer_name)
-        crs = layer.dataProvider().crs()
-        encoding = layer.dataProvider().encoding()
-        geom_type = layer.dataProvider().geometryType()
-        # create the cleaning results layers
-        try:
-            # create clean layer
-            if output_type == 'shp':
-                final = to_shp(path, ret[0][0], ret[0][1], crs, 'cleaned', encoding, geom_type)
-            elif output_type == 'memory':
-                final = to_shp(None, ret[0][0], ret[0][1], crs, path, encoding, geom_type)
-            else:
-                final = to_dblayer(self.settings['dbname'], self.settings['user'], self.settings['host'],
-                                   self.settings['port'], self.settings['password'], self.settings['schema'],
-                                   self.settings['table_name'], ret[0][1], ret[0][0], crs)
-            if final:
-                QgsMapLayerRegistry.instance().addMapLayer(final)
-                final.updateExtents()
-            # create errors layer
-            if self.settings['errors']:
-                errors = to_shp(None, ret[1][0], ret[1][1], crs, 'errors', encoding, geom_type)
-                if errors:
-                    QgsMapLayerRegistry.instance().addMapLayer(errors)
-                    errors.updateExtents()
-            # create unlinks layer
-            if self.settings['unlinks']:
-                unlinks = to_shp(None, ret[2][0], ret[2][1], crs, 'unlinks', encoding, 0)
-                if unlinks:
-                    QgsMapLayerRegistry.instance().addMapLayer(unlinks)
-                    unlinks.updateExtents()
 
-            self.iface.mapCanvas().refresh()
-
-            self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
-
-        except Exception, e:
-            # notify the user that sth went wrong
-            self.cleaning.error.emit(e, traceback.format_exc())
-            self.giveMessage('Something went wrong! See the message log for more information', QgsMessageBar.CRITICAL)
+        if self.cleaning:
+            # clean up the worker and thread
+            self.cleaning.finished.disconnect(self.workerFinished)
+            self.cleaning.error.disconnect(self.workerError)
+            self.cleaning.warning.disconnect(self.giveMessage)
+            self.cleaning.cl_progress.disconnect(self.dlg.cleaningProgress.setValue)
 
         # clean up the worker and thread
-        #self.cleaning.deleteLater()
+        self.thread.deleteLater()
         self.thread.quit()
         self.thread.wait()
         self.thread.deleteLater()
+
+        if ret:
+
+            cleaned_features, errors, unlinks = ret
+            cleaned = to_layer(cleaned_features, layer.crs(), layer.dataProvider().encoding(),
+                                 layer.dataProvider().geometryType(), output_type, path,
+                                 layer_name + '_cl')
+            QgsMapLayerRegistry.instance().addMapLayer(cleaned)
+            cleaned.updateExtents()
+            if self.settings['errors']:
+                errors = to_layer(errors, layer.crs(), layer.dataProvider().encoding(), 1, output_type,
+                                  (path[0], path[1], path[2] + "_cl_errors"), path[2] + "_cl_errors")
+                QgsMapLayerRegistry.instance().addMapLayer(errors)
+
+            if self.settings['unlinks']:
+                unlinks = to_layer(unlinks, layer.crs(), layer.dataProvider().encoding(), 1, output_type,
+                                  (path[0], path[1], path[2] + "_u"), path[2] + "_u")
+                QgsMapLayerRegistry.instance().addMapLayer(unlinks)
+
+            self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
+
+        else:
+            # notify the user that sth went wrong
+            self.giveMessage('Something went wrong! See the message log for more information', QgsMessageBar.CRITICAL)
+
 
         if is_debug: print 'thread running ', self.thread.isRunning()
         if is_debug: print 'has finished ', self.thread.isFinished()
@@ -236,30 +231,22 @@ class NetworkCleanerTool(QObject):
             self.dlg.cleaningProgress.reset()
             self.dlg.close()
 
-    def killCleaning(self):
+    def killWorker(self):
         if is_debug: print 'trying to cancel'
         # add emit signal to breakTool or mergeTool only to stop the loop
         if self.cleaning:
-
-            try:
-                dummy = self.cleaning.br
-                del dummy
-                self.cleaning.br.killed = True
-            except AttributeError:
-                pass
-            try:
-                dummy = self.cleaning.mrg
-                del dummy
-                self.cleaning.mrg.killed = True
-            except AttributeError:
-                pass
             # Disconnect signals
-            self.cleaning.finished.disconnect(self.cleaningFinished)
-            self.cleaning.error.disconnect(self.cleaningError)
+            self.cleaning.finished.disconnect(self.workerFinished)
+            self.cleaning.error.disconnect(self.workerError)
             self.cleaning.warning.disconnect(self.giveMessage)
             self.cleaning.cl_progress.disconnect(self.dlg.cleaningProgress.setValue)
+            try: # it might not have been connected already
+                self.cleaning.progress.disconnect(self.dlg.cleaningProgress.setValue)
+            except TypeError:
+                pass
             # Clean up thread and analysis
             self.cleaning.kill()
+            self.cleaning.clean_tool.kill()
             self.cleaning.deleteLater()
             self.thread.quit()
             self.thread.wait()
@@ -272,7 +259,7 @@ class NetworkCleanerTool(QObject):
 
 
     # SOURCE: https://snorfalorpagus.net/blog/2013/12/07/multithreading-in-qgis-python-plugins/
-    class clean(QObject):
+    class Worker(QObject):
 
         # Setup signals
         finished = pyqtSignal(object)
@@ -284,12 +271,9 @@ class NetworkCleanerTool(QObject):
         def __init__(self, settings, iface):
             QObject.__init__(self)
             self.settings = settings
+            self.cl_killed = False
             self.iface = iface
-            self.total =0
-
-        def add_step(self,step):
-            self.total += step
-            return self.total
+            self.clean_tool = None
 
         def run(self):
             if has_pydevd and is_debug:
@@ -299,65 +283,97 @@ class NetworkCleanerTool(QObject):
                 try:
                     # cleaning settings
                     layer_name = self.settings['input']
-                    tolerance = self.settings['tolerance']
-                    # project settings
                     layer = getLayerByName(layer_name)
+                    Snap = self.settings['snap']
+                    Break = self.settings['break']
+                    # Merge = 'between intersections'
+                    Merge = self.settings['merge']
+                    Orphans = self.settings['orphans']
 
-                    self.cl_progress.emit(2)
+                    Errors = self.settings['errors']
+                    Unlinks = self.settings['unlinks']
 
-                    self.br = breakTool(layer, tolerance, None, self.settings['errors'], self.settings['unlinks'])
+                    self.clean_tool = cleanTool(Snap, Break, Merge, Errors, Unlinks, Orphans)
+                    self.cl_progress.emit(0)
+                    self.clean_tool.progress.connect(self.cl_progress.emit)
 
-                    if self.cl_killed is True or self.br.killed is True: return
+                    # 0. LOAD GRAPH # errors: points, invalids, null, multiparts
+                    self.clean_tool.step = self.clean_tool.range/ float(layer.featureCount())
 
-                    self.br.add_edges()
+                    res = map(lambda f: self.clean_tool.sEdgesSpIndex.insertFeature(f), self.clean_tool.features_iter(layer))
 
-                    if self.cl_killed is True or self.br.killed is True: return
+                    # 1. BREAK AT COMMON VERTICES # errors: duplicates, broken, self_intersecting (overlapping detected as broken)
+                    if self.clean_tool.Break:
+                        print 'break'
+                        self.clean_tool.step = self.clean_tool.range / float(len(self.clean_tool.sEdges))
+                        broken_edges = map(lambda (sedge, vertices): self.clean_tool.breakAtVertices(sedge, vertices),
+                                           self.clean_tool.breakFeaturesIter())
+                        res = map(lambda edge_id: self.clean_tool.del_edge(edge_id), filter(lambda edge_id: edge_id is not None, broken_edges))
 
-                    self.cl_progress.emit(5)
-                    self.total = 5
-                    step = 40/ self.br.feat_count
-                    self.br.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
+                    # 2. SNAP # errors: snapped
+                    self.clean_tool.step = self.clean_tool.range/ float(len(self.clean_tool.sEdges))
+                    res = map(lambda (edgeid, qgspoint): self.clean_tool.createTopology(qgspoint, edgeid), self.clean_tool.endpointsIter())
+                    if self.clean_tool.Snap != -1:
+                        # group based on distance - create subgraph
+                        self.clean_tool.step = (self.clean_tool.range/ float(len(self.clean_tool.sNodes))) / float(2)
+                        subgraph_nodes = self.clean_tool.subgraph_nodes()
+                        self.clean_tool.step = (self.clean_tool.range/ float(len(subgraph_nodes))) / float(2)
+                        res = map(lambda nodes: self.clean_tool.mergeNodes(nodes), self.clean_tool.con_comp_iter(subgraph_nodes))
 
-                    broken_features = self.br.break_features()
+                    # 3. MERGE # errors merged
+                    if self.clean_tool.Merge:
+                        if self.clean_tool.Merge == 'between_intersections':
+                            self.clean_tool.step = (self.clean_tool.range / float(len(self.clean_tool.sNodes))) / float(2)
+                            subgraph_nodes = self.clean_tool.subgraph_con2_nodes()
+                            self.clean_tool.step = (self.clean_tool.range / float(len(subgraph_nodes))) / float(2)
+                            res = map(lambda group_edges: self.clean_tool.merge_edges(group_edges),
+                                      self.clean_tool.con_comp_iter(subgraph_nodes))
+                        elif self.clean_tool.Merge[0] == 'collinear':
+                            self.clean_tool.step = (self.clean_tool.range / float(len(self.clean_tool.sNodes))) / float(2)
+                            subgraph_nodes = self.clean_tool.subgraph_collinear_nodes()
+                            self.clean_tool.step = (self.clean_tool.range / float(len(subgraph_nodes))) / float(2)
+                            res = map(lambda (group_edges): self.clean_tool.merge_edges(group_edges),
+                                      self.con_comp_iter(subgraph_nodes))
 
-                    if self.cl_killed is True or self.br.killed is True: return
+                    # 4. ORPHANS
+                    # errors orphans, closed polylines
+                    if self.clean_tool.Orphans:
+                        self.clean_tool.step = len(self.clean_tool.sEdges) / float(self.clean_tool.range)
+                        res = map(
+                            lambda sedge: self.clean_tool.del_edge_w_nodes(sedge.id, sedge.getStartNode(), sedge.getEndNode()),
+                            filter(lambda edge: self.clean_tool.sNodes[edge.getStartNode()].getConnectivity() ==
+                                                self.clean_tool.sNodes[edge.getEndNode()].getConnectivity() == 1,
+                                   self.clean_tool.sEdges.values()))
 
-                    self.cl_progress.emit(45)
+                    error_features = []
+                    if self.clean_tool.Errors:
+                        all_errors = []
+                        all_errors += zip(self.clean_tool.multiparts, ['multipart'] * len(self.clean_tool.multiparts))
+                        all_errors += zip(self.clean_tool.points, ['point'] * len(self.clean_tool.points))
+                        all_errors += zip(self.clean_tool.orphans, ['orphan'] * len(self.clean_tool.orphans))
+                        all_errors += zip(self.clean_tool.closed_polylines, ['closed polyline'] * len(self.clean_tool.closed_polylines))
+                        all_errors += zip(self.clean_tool.duplicates, ['duplicate'] * len(self.clean_tool.duplicates))
+                        all_errors += zip(self.clean_tool.broken, ['broken'] * len(self.clean_tool.broken))
+                        all_errors += zip(self.clean_tool.merged, ['pseudo'] * len(self.clean_tool.merged))
+                        all_errors += zip(self.clean_tool.self_intersecting, ['self intersection'] * len(self.clean_tool.self_intersecting))
+                        all_errors += zip(self.clean_tool.snapped, ['snapped'] * len(self.clean_tool.snapped))
+                        error_features = [self.clean_tool.create_error_feat(k, str([i[1] for i in list(g)])[1:-1]) for k, g in
+                                          itertools.groupby(sorted(all_errors), operator.itemgetter(0))]
 
-                    self.mrg = mergeTool(broken_features, None, True)
-
-                    # TODO test
-                    try:
-                        step = 40/ len(self.mrg.con_1)
-                        self.mrg.progress.connect(lambda incr=self.add_step(step): self.cl_progress.emit(incr))
-                    except ZeroDivisionError:
-                        pass
-
-                    merged_features = self.mrg.merge()
-
-                    if self.cl_killed is True or self.mrg.killed is True: return
-
-                    fields = self.br.layer_fields
-
-                    # prepare other output data
-                    ((errors_list, errors_fields), (unlinks_list, unlinks_fields)) = ((None, None), (None, None))
-                    if self.settings['errors']:
-                        self.br.updateErrors(self.mrg.errors_features)
-                        errors_list = [[k, [[k], [v[0]]], v[1]] for k, v in self.br.errors_features.items()]
-                        errors_fields = [QgsField('id_input', QVariant.Int), QgsField('errors', QVariant.String)]
-
-                    if self.settings['unlinks']:
-                        unlinks_list = self.br.unlinked_features
-                        unlinks_fields = [QgsField('id', QVariant.Int), QgsField('line_id1', QVariant.Int), QgsField('line_id2', QVariant.Int), QgsField('x', QVariant.Double), QgsField('y', QVariant.Double)]
+                    unlink_features = []
+                    if self.clean_tool.Unlinks:
+                        unlink_features = map(lambda p: self.clean_tool.create_unlink_feat(p), self.clean_tool.unlinks)
 
                     if is_debug: print "survived!"
+                    self.clean_tool.progress.disconnect()
                     self.cl_progress.emit(100)
                     # return cleaned data, errors and unlinks
-                    ret = ((merged_features, fields), (errors_list, errors_fields), (unlinks_list, unlinks_fields))
+
+                    ret = map(lambda e: e.feature, self.clean_tool.sEdges.values()), error_features, unlink_features
 
                 except Exception, e:
                     # forward the exception upstream
-                    self.error.emit(e, traceback.format_exc())
+                    self.error.emit( traceback.format_exc())
 
             self.finished.emit(ret)
 

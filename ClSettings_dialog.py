@@ -44,32 +44,8 @@ class ClSettingsDialog(QtGui.QDialog, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
-        self.invalidsCheckBox.setDisabled(True)
-        self.invalidsCheckBox.setChecked(True)
-
-        self.pointsCheckBox.setDisabled(True)
-        self.pointsCheckBox.setChecked(True)
-        self.multipartsCheckBox.setDisabled(True)
-        self.multipartsCheckBox.setChecked(True)
-        self.selfinterCheckBox.setDisabled(True)
-        self.selfinterCheckBox.setChecked(True)
-        self.duplicatesCheckBox.setDisabled(True)
-        self.duplicatesCheckBox.setChecked(True)
-        self.overlapsCheckBox.setDisabled(True)
-        self.overlapsCheckBox.setChecked(True)
-        self.closedplCheckBox.setDisabled(True)
-        self.closedplCheckBox.setChecked(True)
-
-        self.breakCheckBox.setDisabled(True)
-        self.breakCheckBox.setChecked(True)
-        self.mergeCheckBox.setDisabled(True)
-        self.mergeCheckBox.setChecked(True)
-        self.orphansCheckBox.setDisabled(True)
-        self.orphansCheckBox.setChecked(True)
 
 
-    def getCleaningSettings(self):
-        return {'break': self.breakCheckBox.isChecked(), 'merge': self.mergeCheckBox.isChecked(), 'orphans': self.orphansCheckBox.isChecked()}
 
     def closeEvent(self, event):
         self.closingPlugin.emit()

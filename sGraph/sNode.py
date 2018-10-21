@@ -1,5 +1,5 @@
 # general imports
-from qgis.core import QgsFeature, QgsGeometry, QgsField
+from qgis.core import QgsFeature, QgsGeometry, QgsField, QgsFields
 from PyQt4.QtCore import QObject, QVariant
 
 prototype_fields = QgsFields()
