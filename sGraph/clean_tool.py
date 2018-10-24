@@ -301,7 +301,7 @@ class cleanTool(QObject):
                         #if p not in f_pl:
                         self.unlinks.append(p)
                     elif crossing_point.wkbType() == 4:
-                        for cr_point in crossing_point.asMultiPoint(): #TODO if not end one or other 
+                        for cr_point in crossing_point.asMultiPoint(): #TODO if not end one or other
                             #if cr_point not in f_pl:
                             self.unlinks.append(cr_point)
                     # TODO: unlink should not be a vertex in f_geom/g_geom what if OS? remove/move vertex?? if unlink not added in common _points

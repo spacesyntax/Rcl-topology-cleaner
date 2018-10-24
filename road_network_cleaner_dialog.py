@@ -52,10 +52,10 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.cleaningProgress.setMinimum(0)
         self.cleaningProgress.setMaximum(100)
         # Setup some defaults
-        self.meterSpin.setRange(1, 30)
-        self.meterSpin.setSingleStep(1)
-        self.meterSpin.setValue(5)
-        self.meterSpin.setDisabled(True)
+        self.snapSpinBox.setRange(1, 30)
+        self.snapSpinBox.setSingleStep(1)
+        self.snapSpinBox.setValue(5)
+        self.snapSpinBox.setDisabled(True)
 
         self.memoryRadioButton.setChecked(True)
         self.shpRadioButton.setChecked(False)
@@ -81,7 +81,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.memoryRadioButton.clicked.connect(self.update_output_text)
         self.shpRadioButton.clicked.connect(self.setShpOutput)
 
-        if self.memoryRadioButton.isChecked():
+        if self.memoryRadioButton.isChecked() and self.getNetwork():
             self.outputCleaned.setText(self.getNetwork() + "_cl")
 
         self.dataSourceCombo.addItems(['OpenStreetMap', 'OrdnanceSurvey', 'other'])
@@ -109,34 +109,35 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
     def setClSettings(self):
         if self.dataSourceCombo.currentText() == 'OpenStreetMap':
             self.snapCheckBox.setCheckState(2)
-            self.meterSpin.setValue(5)
+            self.snapSpinBox.setValue(5)
             self.breakCheckBox.setCheckState(2)
             self.mergeCheckBox.setCheckState(2)
             self.orphansCheckBox.setCheckState(2)
 
             self.snapCheckBox.setDisabled(True)
-            self.meterSpin.setDisabled(False)
+            self.snapSpinBox.setDisabled(False)
             self.breakCheckBox.setDisabled(True)
             self.mergeCheckBox.setDisabled(True)
             self.mergeCollinearCheckBox.setDisabled(True)
-            # self.orphansCheckBox.setDisabled(True)
+            self.orphansCheckBox.setDisabled(True)
 
         elif self.dataSourceCombo.currentText() == 'OrdnanceSurvey':
             self.snapCheckBox.setCheckState(2)
-            self.meterSpin.setValue(5)
+            self.snapSpinBox.setValue(5)
             self.breakCheckBox.setCheckState(0)
             self.mergeCheckBox.setCheckState(2)
             self.orphansCheckBox.setCheckState(2)
 
             self.snapCheckBox.setDisabled(True)
-            self.meterSpin.setDisabled(False)
+            self.snapSpinBox.setDisabled(False)
             self.breakCheckBox.setDisabled(True)
             self.mergeCheckBox.setDisabled(True)
             self.mergeCollinearCheckBox.setDisabled(True)
+            self.orphansCheckBox.setDisabled(True)
 
         else:
             self.snapCheckBox.setDisabled(False)
-            self.meterSpin.setDisabled(False)
+            self.snapSpinBox.setDisabled(False)
             self.breakCheckBox.setDisabled(False)
             self.mergeCheckBox.setDisabled(False)
             self.mergeCollinearCheckBox.setDisabled(False)
@@ -160,6 +161,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         else:
             self.lockGUI(True)
 
+
     def lockGUI(self, onoff):
         # self.snapCheckBox.setDisabled(onoff)
         self.set_enabled_tolerance()
@@ -171,10 +173,19 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.unlinksCheckBox.setDisabled(onoff)
         self.errorsCheckBox.setDisabled(onoff)
         self.cleanButton.setDisabled(onoff)
+        self.orphansCheckBox.setDisabled(onoff)
+        self.mergeCheckBox.setDisabled(onoff)
+        self.mergeCollinearCheckBox.setDisabled(onoff)
+        self.breakCheckBox.setDisabled(onoff)
+        self.snapCheckBox.setDisabled(onoff)
+        self.snapSpinBox.setDisabled(onoff)
+        self.angleSpinBox.setDisabled(onoff)
+        self.dataSourceCombo.setDisabled(onoff)
+
 
     def getTolerance(self):
         if self.snapCheckBox.isChecked():
-            return self.meterSpin.value()
+            return self.snapSpinBox.value()
         else:
             return None
 
@@ -188,7 +199,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         if self.mergeCheckBox.isChecked():
             return 'between intersections'
         elif self.mergeCollinearCheckBox.isChecked():
-            return ['collinear', self.collinearSpinBox.value()]
+            return ['collinear', self.angleSpinBox.value()]
         else:
             return None
 
@@ -226,9 +237,9 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
     def set_enabled_tolerance(self):
         if self.snapCheckBox.isChecked():
-            self.meterSpin.setDisabled(False)
+            self.snapSpinBox.setDisabled(False)
         else:
-            self.meterSpin.setDisabled(True)
+            self.snapSpinBox.setDisabled(True)
 
     def get_settings(self):
         settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'snap': self.getTolerance(), 'break': self.getBreakages(), 'merge':self.getMerge(), 'orphans':self.getOrphans(),
@@ -241,7 +252,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
     def setOutput(self):
         if self.shpRadioButton.isChecked():
-            self.file_name = QtGui.QFileDialog.getSaveFileName(self, "Save output file ", "cleaned_network", '*.shp')
+            self.file_name = QtGui.QFileDialog.getSaveFileName(self, "Save output file ", self.getNetwork() + "_cl", '*.shp')
             if self.file_name:
                 self.outputCleaned.setText(self.file_name)
             else:

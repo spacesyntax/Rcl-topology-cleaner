@@ -69,7 +69,8 @@ class NetworkCleanerTool(QObject):
         # add layers to dialog
         self.updateLayers()
 
-        self.dlg.outputCleaned.setText(self.dlg.inputCombo.currentText() + "_cl")
+        if self.dlg.getNetwork():
+            self.dlg.outputCleaned.setText(self.dlg.inputCombo.currentText() + "_cl")
         self.dlg.inputCombo.currentIndexChanged.connect(self.updateOutputName)
 
         # setup legend interface signals
@@ -150,6 +151,7 @@ class NetworkCleanerTool(QObject):
             cleaning = self.Worker(self.settings, self.iface)
             print self.settings
             # start the cleaning in a new thread
+            self.dlg.lockGUI(True)
             thread = QThread()
             cleaning.moveToThread(thread)
             cleaning.finished.connect(self.workerFinished)
@@ -173,6 +175,7 @@ class NetworkCleanerTool(QObject):
     def workerFinished(self, ret):
         #if is_debug:
         print 'trying to finish'
+        self.dlg.lockGUI(False)
         # get cleaning settings
         layer_name = self.settings['input']
         path = self.settings['output']

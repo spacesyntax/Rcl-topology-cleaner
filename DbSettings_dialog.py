@@ -27,7 +27,7 @@ import os
 from PyQt4.QtCore import pyqtSignal
 from qgis.core import QgsDataSourceURI
 
-from sGraph.ss.utilityFunctions import *
+from sGraph.utilityFunctions import *
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'DbSettings_dialog_base.ui'))
@@ -48,7 +48,6 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
-        self.nameLineEdit.setText("cleaned")
         self.available_dbs = available_dbs
 
         self.okButton.clicked.connect(self.close)
@@ -56,6 +55,7 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
         self.dbCombo.currentIndexChanged.connect(self.setDbOutput)
         self.schemaCombo.currentIndexChanged.connect(self.setDbOutput)
         self.nameLineEdit.textChanged.connect(self.setDbOutput)
+        self.nameLineEdit.setReadOnly(False)
 
 
         self.popDbs()
