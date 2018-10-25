@@ -71,6 +71,7 @@ class NetworkCleanerTool(QObject):
 
         if self.dlg.getNetwork():
             self.dlg.outputCleaned.setText(self.dlg.inputCombo.currentText() + "_cl")
+            self.dlg.dbsettings_dlg.nameLineEdit.setText(self.dlg.inputCombo.currentText() + "_cl")
         self.dlg.inputCombo.currentIndexChanged.connect(self.updateOutputName)
 
         # setup legend interface signals
@@ -129,6 +130,7 @@ class NetworkCleanerTool(QObject):
 
     def updateOutputName(self):
         self.dlg.outputCleaned.setText(self.dlg.inputCombo.currentText() + "_cl")
+        self.dlg.dbsettings_dlg.nameLineEdit.setText(self.dlg.inputCombo.currentText() + "_cl")
 
     def giveMessage(self, message, level):
         # Gives warning according to message

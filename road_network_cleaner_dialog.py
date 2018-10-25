@@ -46,8 +46,6 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
-        #self.outputCleaned.setText("cleaned")
-
         # Setup the progress bar
         self.cleaningProgress.setMinimum(0)
         self.cleaningProgress.setMaximum(100)
@@ -80,9 +78,6 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.memoryRadioButton.clicked.connect(self.setTempOutput)
         self.memoryRadioButton.clicked.connect(self.update_output_text)
         self.shpRadioButton.clicked.connect(self.setShpOutput)
-
-        if self.memoryRadioButton.isChecked() and self.getNetwork():
-            self.outputCleaned.setText(self.getNetwork() + "_cl")
 
         self.dataSourceCombo.addItems(['OpenStreetMap', 'OrdnanceSurvey', 'other'])
         self.setClSettings()
@@ -268,8 +263,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.disable_browse()
         if self.postgisRadioButton.isChecked():
             self.outputCleaned.clear()
-            table_name = self.getNetwork() + "_cl"
-            self.dbsettings_dlg.nameLineEdit.setText(table_name)
+
             try:
                 self.dbsettings = self.dbsettings_dlg.getDbSettings()
                 db_layer_name = "%s:%s:%s" % (self.dbsettings['dbname'], self.dbsettings['schema'], self.dbsettings['table_name'])
