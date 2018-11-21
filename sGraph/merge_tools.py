@@ -186,7 +186,7 @@ class mergeTool(QObject):
                     new_feat = [self.last_fid, f_attrs, new_geom.exportToWkt()]
                     merged_features.append(new_feat)
 
-        return self.exclude_orphans(merged_features + self.feat_to_copy)
+        return merged_features + self.feat_to_copy # w-o orphans
 
     def exclude_orphans(self, all_features):
 

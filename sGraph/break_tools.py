@@ -264,9 +264,9 @@ class breakTool(QObject):
 
             if is_orphan:
                 if is_closed is True:
-                    return 'closed polyline', []
+                    return None, []
                 else:
-                    return 'orphan', []
+                    return None, []
 
             elif is_self_intersersecting:
                 if has_overlaps:
