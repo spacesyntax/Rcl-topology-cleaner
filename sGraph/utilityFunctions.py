@@ -9,6 +9,16 @@ from psycopg2.extensions import AsIs
 def duplicates(lst, item):
     return [i for i, x in enumerate(lst) if x == item]
 
+from collections import defaultdict
+
+def list_duplicates(seq):
+    tally = defaultdict(list)
+    for i,item in enumerate(seq):
+        tally[item].append(i)
+    return set([key for key,locs in tally.items()
+                            if len(locs)>1])
+
+
 # QGSFEATURES _______________________________________________________________
 
 

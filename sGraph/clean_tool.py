@@ -73,7 +73,7 @@ class cleanTool(QObject):
         # multilines
         #self.invalids, self.empty,
         self.duplicates, self.multiparts, self.points, self.orphans, self.closed_polylines, self.broken, self.merged, self.self_intersecting, self.snapped, self.unlinks =\
-                 [], [], [], [], [], [], [], [], [], []
+            [], [], [], [], [], [], [], [], [], []
         self.errors_id = 0
         self.unlinks_id = 0
 
@@ -93,14 +93,14 @@ class cleanTool(QObject):
         res = map(lambda f:self.sEdgesSpIndex.insertFeature(f), self.features_iter(layer))
 
         # 1. BREAK AT COMMON VERTICES
-        # errors: duplicates, broken, self_intersecting (overlapping detected as broken)
+        # errors: broken, self_intersecting (overlapping detected as broken - cleaned only when common vertices)
         if self.Break:
             # update sEdges where necessary
             self.step = len(self.sEdges) / float(self.range)
-            broken_edges = map(lambda (sedge, vertices): self.breakAtVertices(sedge, vertices), self.breakFeaturesIter())
-            res = map(lambda edge_id: self.del_edge(edge_id), filter(lambda edge_id: edge_id is not None, broken_edges))
+            broken_edges = list(self.breakFeaturesIter())
+            res = map(lambda edge_id: self.del_edge(edge_id), set(broken_edges + self.duplicates))
 
-        # 2. SNAP
+        # 3. SNAP
         # errors: snapped
         self.step = len(self.sEdges) / float(self.range)
         res = map(lambda (edgeid, qgspoint): self.createTopology(qgspoint, edgeid), self.endpointsIter())
@@ -109,9 +109,10 @@ class cleanTool(QObject):
             self.step = (len(self.sNodes) / float(self.range)) / float(2)
             subgraph_nodes = self.subgraph_nodes()
             self.step = (len(subgraph_nodes) / float(self.range))/ float(2)
-            res = map(lambda nodes: self.mergeNodes(nodes), self.con_comp_iter(subgraph_nodes))
+            collapsed_edges = map(lambda nodes: self.mergeNodes(nodes), self.con_comp_iter(subgraph_nodes))
+            res = map(lambda edge_id: self.del_edge(edge_id), itertools.chain.from_iterable(collapsed_edges))
 
-        # 3. MERGE
+        # 4. MERGE
         # errors merged
         if self.Merge:
             if self.Merge == 'between_intersections':
@@ -125,7 +126,7 @@ class cleanTool(QObject):
                 self.step = (len(subgraph_nodes) / float(self.range)) / float(2)
                 res = map(lambda (group_edges): self.merge_edges(group_edges), self.con_comp_iter(subgraph_nodes))
 
-        # 4. ORPHANS
+        # 5. ORPHANS
         # errors orphans, closed polylines
         if self.Orphans:
             self.step = len(self.sEdges) / float(self.range)
@@ -248,22 +249,6 @@ class cleanTool(QObject):
     # 1. BREAK AT COMMON VERTICES---------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
 
-    def breakAtVertices(self, sedge_feat, point_series):
-        if len(point_series) > 1:
-            for points in point_series:
-                geom = QgsGeometry.fromPolyline(points)
-                broken_feature = copy_feature(sedge_feat, QgsGeometry.fromPolyline(points), self.sEdgesId)
-                if 0 < geom.length() < self.Snap:
-                    pass
-                else:
-                    self.sEdges[self.sEdgesId] = sEdge(self.sEdgesId, broken_feature, [])
-                    self.sEdgesId += 1
-            # del after adding all
-            return sedge_feat.id()
-        else:
-            return None
-
-
     def breakFeaturesIter(self):
 
         for id, sedge in self.sEdges.items():
@@ -271,54 +256,51 @@ class cleanTool(QObject):
             self.total_progress += self.step
             self.progress.emit(self.total_progress)
 
+            # return break points, crossing points and duplicates
+
             f_geom = sedge.feature.geometry()
             f_pl = f_geom.asPolyline()
             f_pl_indices = dict(zip(f_pl, range(0, len(f_pl))))
-            vertices = [0, len(f_pl)-1]
+            common_points = set(list_duplicates(f_pl))
 
-            for k, v in dict((x, duplicates(f_pl, x)) for x in set(f_pl) if f_pl.count(x) > 1).items():
-                if len(v) > 1:
-                    self.self_intersecting.append(f_pl[v[0]])
-                    vertices += v
+            for inter_edge in self.sEdgesSpIndex.intersects(f_geom.boundingBox()):
+                g_geom = self.sEdges[inter_edge].feature.geometry()
+                g_geom_pl = g_geom.asPolyline()
+                if inter_edge == id:
+                    pass
+                elif f_geom.isGeosEqual(g_geom) and inter_edge < id:
+                    self.duplicates.append(id)
+                    common_points = set([])
+                else:
+                    if f_geom.distance(g_geom) <= 0:
+                        common_points.update(set(f_pl[1:-1]).intersection(set(g_geom_pl)))
+                        # TODO if self.OS remove vertices otf and empty common_points
+                    if f_geom.crosses(g_geom) and self.Unlinks :
+                        inter = f_geom.intersection(g_geom)
+                        unlinks = []
+                        if inter.wkbType() == 1:
+                            unlinks.append(inter.asPoint())
+                        elif inter.wkbType() == 4:
+                            unlinks += [j for j in inter.asMultiPoint()]
+                        self.unlinks += list(set(unlinks).difference({f_pl[0], f_pl[-1], g_geom_pl[0], g_geom_pl[-1]}))
 
-            intersecting_edges = filter(lambda inter_edge: self.sEdges[inter_edge].id != id
-                                                   and f_geom.distance(self.sEdges[inter_edge].feature.geometry()) <= 0,
-                                        self.sEdgesSpIndex.intersects(f_geom.boundingBox()))
-            # check for common vertices
-            common_points = set([])
-            for unq_inter_id in intersecting_edges:
-                g_geom = self.sEdges[unq_inter_id].feature.geometry()
-
-                if f_geom.isGeosEqual(g_geom):
-                    del self.sEdges[id]
-                    self.duplicates.append(f_pl_indices[0])
-                    self.duplicates.append(f_pl[-1])
-
-                elif self.Unlinks and f_geom.crosses(g_geom):
-                    crossing_point = f_geom.intersection(g_geom)
-                    if crossing_point.wkbType() == 1:
-                        p = crossing_point.asPoint()
-                        #if p not in f_pl:
-                        self.unlinks.append(p)
-                    elif crossing_point.wkbType() == 4:
-                        for cr_point in crossing_point.asMultiPoint(): #TODO if not end one or other
-                            #if cr_point not in f_pl:
-                            self.unlinks.append(cr_point)
-                    # TODO: unlink should not be a vertex in f_geom/g_geom what if OS? remove/move vertex?? if unlink not added in common _points
-
-                common_points.update(set(f_pl[1:-1]).intersection(set(g_geom.asPolyline())))
-                # TODO if self.Errors check for overlaps
-                vertices += [f_pl_indices[p] for p in common_points]
-
+            vertices = map(lambda j: f_pl_indices[j], common_points) + [0, len(f_pl) - 1]
             vertices = sorted(set(vertices))
-            if len(common_points) > 0:
-                self.broken += list(common_points)
+            self.broken += list(common_points)
 
-            point_series = map(lambda (index_start, index_end): f_pl[index_start: index_end + 1], zip(vertices[:-1], vertices[1:]))
+            if len(vertices) > 2:
+                for (index_start, index_end) in zip(vertices[:-1], vertices[1:]):
+                    geom = QgsGeometry.fromPolyline(f_pl[index_start: index_end + 1])
+                    broken_feature = copy_feature(sedge.feature, geom, self.sEdgesId)
+                    if 0 < geom.length() < self.Snap:
+                        pass
+                    else:
+                        self.sEdges[self.sEdgesId] = sEdge(self.sEdgesId, broken_feature, [])
+                        self.sEdgesId += 1
 
-            yield sedge.feature, point_series
+                yield id # del after adding all
 
-    # 2. SNAP ENDPOINTS ------------------------------------------------------------------------------------------------
+    # 3. SNAP ENDPOINTS ------------------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
 
     def subgraph_nodes(self):
@@ -383,7 +365,7 @@ class cleanTool(QObject):
         self.sNodesId += 1
         return edges_to_rem
 
-    # 3. MERGE BETWEEN INTERSECTIONS -----------------------------------------------------------------------------------
+    # 4. MERGE BETWEEN INTERSECTIONS -----------------------------------------------------------------------------------
     #    MERGE COLLINEAR SEGMENTS --------------------------------------------------------------------------------------
 
     def subgraph_con2_nodes(self):
@@ -393,7 +375,7 @@ class cleanTool(QObject):
             self.total_progress += self.step
             self.progress.emit(self.total_progress)
 
-            con_edges = [e for e in snode.topology if len(self.sEdges[e].nodes) != 1]
+            con_edges = [e for e in snode.topology if len(set(self.sEdges[e].nodes)) != 1]
             if len(con_edges) == 2:
                 self.merged.append(snode.point)
                 try:
@@ -465,7 +447,7 @@ class cleanTool(QObject):
             del self.sEdges[e]
         return group_edges
 
-    # 4. REMOVE ORPHANS -----------------------------------------------------------------------------------
+    # 5. REMOVE ORPHANS -----------------------------------------------------------------------------------
     # -----------------------------------------------------------------------------------------------------
 
     def del_edge_w_nodes(self, edge_id, start, end):

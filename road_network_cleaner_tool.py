@@ -284,102 +284,103 @@ class NetworkCleanerTool(QObject):
             if has_pydevd and is_debug:
                 pydevd.settrace('localhost', port=53100, stdoutToServer=True, stderrToServer=True, suspend=False)
             ret = None
-            if self.settings:
-                try:
-                    # cleaning settings
-                    layer_name = self.settings['input']
-                    layer = getLayerByName(layer_name)
-                    Snap = self.settings['snap']
-                    Break = self.settings['break']
-                    # Merge = 'between intersections'
-                    Merge = self.settings['merge']
-                    Orphans = self.settings['orphans']
+            #if self.settings:
+            try:
+                # cleaning settings
+                layer_name = self.settings['input']
+                layer = getLayerByName(layer_name)
+                Snap = self.settings['snap']
+                Break = self.settings['break']
+                # Merge = 'between intersections'
+                Merge = self.settings['merge']
+                Orphans = self.settings['orphans']
 
-                    Errors = self.settings['errors']
-                    Unlinks = self.settings['unlinks']
+                Errors = self.settings['errors']
+                Unlinks = self.settings['unlinks']
 
-                    self.clean_tool = cleanTool(Snap, Break, Merge, Errors, Unlinks, Orphans)
-                    self.cl_progress.emit(0)
-                    self.clean_tool.progress.connect(self.cl_progress.emit)
+                self.clean_tool = cleanTool(Snap, Break, Merge, Errors, Unlinks, Orphans)
+                self.cl_progress.emit(0)
+                self.clean_tool.progress.connect(self.cl_progress.emit)
 
-                    # 0. LOAD GRAPH # errors: points, invalids, null, multiparts
-                    self.clean_tool.step = self.clean_tool.range/ float(layer.featureCount())
+                # 0. LOAD GRAPH # errors: points, invalids, null, multiparts
+                self.clean_tool.step = self.clean_tool.range/ float(layer.featureCount())
 
-                    res = map(lambda f: self.clean_tool.sEdgesSpIndex.insertFeature(f), self.clean_tool.features_iter(layer))
+                res = map(lambda f: self.clean_tool.sEdgesSpIndex.insertFeature(f), self.clean_tool.features_iter(layer))
 
-                    # 1. BREAK AT COMMON VERTICES # errors: duplicates, broken, self_intersecting (overlapping detected as broken)
-                    if self.clean_tool.Break:
-                        print 'break'
-                        self.clean_tool.step = self.clean_tool.range / float(len(self.clean_tool.sEdges))
-                        broken_edges = map(lambda (sedge, vertices): self.clean_tool.breakAtVertices(sedge, vertices),
-                                           self.clean_tool.breakFeaturesIter())
-                        res = map(lambda edge_id: self.clean_tool.del_edge(edge_id), filter(lambda edge_id: edge_id is not None, broken_edges))
+                # 1. BREAK AT COMMON VERTICES # errors: duplicates, broken, self_intersecting (overlapping detected as broken)
+                if self.clean_tool.Break:
+                    print 'break'
+                    self.clean_tool.step = self.clean_tool.range / float(len(self.clean_tool.sEdges))
+                    broken_edges = list(self.breakFeaturesIter())
+                    res = map(lambda edge_id: self.del_edge(edge_id),
+                              set(broken_edges + self.duplicates))
 
-                    # 2. SNAP # errors: snapped
-                    self.clean_tool.step = self.clean_tool.range/ float(len(self.clean_tool.sEdges))
-                    res = map(lambda (edgeid, qgspoint): self.clean_tool.createTopology(qgspoint, edgeid), self.clean_tool.endpointsIter())
-                    if self.clean_tool.Snap != -1:
-                        # group based on distance - create subgraph
-                        self.clean_tool.step = (self.clean_tool.range/ float(len(self.clean_tool.sNodes))) / float(2)
-                        subgraph_nodes = self.clean_tool.subgraph_nodes()
-                        self.clean_tool.step = (self.clean_tool.range/ float(len(subgraph_nodes))) / float(2)
-                        collapsed_edges = map(lambda nodes: self.clean_tool.mergeNodes(nodes), self.clean_tool.con_comp_iter(subgraph_nodes))
-                        res = map(lambda edge_id: self.clean_tool.del_edge(edge_id), set(list(itertools.chain.from_iterable(collapsed_edges))))
+                # 2. SNAP # errors: snapped
+                self.clean_tool.step = self.clean_tool.range/ float(len(self.clean_tool.sEdges))
+                res = map(lambda (edgeid, qgspoint): self.clean_tool.createTopology(qgspoint, edgeid), self.clean_tool.endpointsIter())
+                if self.clean_tool.Snap != -1:
+                    # group based on distance - create subgraph
+                    self.clean_tool.step = (self.clean_tool.range/ float(len(self.clean_tool.sNodes))) / float(2)
+                    subgraph_nodes = self.clean_tool.subgraph_nodes()
+                    self.clean_tool.step = (self.clean_tool.range/ float(len(subgraph_nodes))) / float(2)
+                    collapsed_edges = map(lambda nodes: self.clean_tool.mergeNodes(nodes), self.clean_tool.con_comp_iter(subgraph_nodes))
+                    res = map(lambda edge_id: self.clean_tool.del_edge(edge_id), set(list(itertools.chain.from_iterable(collapsed_edges))))
 
-                    # 3. MERGE # errors merged
-                    if self.clean_tool.Merge:
-                        if self.clean_tool.Merge == 'between_intersections':
-                            self.clean_tool.step = (self.clean_tool.range / float(len(self.clean_tool.sNodes))) / float(2)
-                            subgraph_nodes = self.clean_tool.subgraph_con2_nodes()
-                            self.clean_tool.step = (self.clean_tool.range / float(len(subgraph_nodes))) / float(2)
-                            res = map(lambda group_edges: self.clean_tool.merge_edges(group_edges),
-                                      self.clean_tool.con_comp_iter(subgraph_nodes))
-                        elif self.clean_tool.Merge[0] == 'collinear':
-                            self.clean_tool.step = (self.clean_tool.range / float(len(self.clean_tool.sNodes))) / float(2)
-                            subgraph_nodes = self.clean_tool.subgraph_collinear_nodes()
-                            self.clean_tool.step = (self.clean_tool.range / float(len(subgraph_nodes))) / float(2)
-                            res = map(lambda (group_edges): self.clean_tool.merge_edges(group_edges),
-                                      self.con_comp_iter(subgraph_nodes))
+                # 3. MERGE # errors merged
+                if self.clean_tool.Merge:
+                    if self.clean_tool.Merge == 'between_intersections':
+                        self.clean_tool.step = (self.clean_tool.range / float(len(self.clean_tool.sNodes))) / float(2)
+                        subgraph_nodes = self.clean_tool.subgraph_con2_nodes()
+                        self.clean_tool.step = (self.clean_tool.range / float(len(subgraph_nodes))) / float(2)
+                        res = map(lambda group_edges: self.clean_tool.merge_edges(group_edges),
+                                  self.clean_tool.con_comp_iter(subgraph_nodes))
+                    elif self.clean_tool.Merge[0] == 'collinear':
+                        self.clean_tool.step = (self.clean_tool.range / float(len(self.clean_tool.sNodes))) / float(2)
+                        subgraph_nodes = self.clean_tool.subgraph_collinear_nodes()
+                        self.clean_tool.step = (self.clean_tool.range / float(len(subgraph_nodes))) / float(2)
+                        res = map(lambda (group_edges): self.clean_tool.merge_edges(group_edges),
+                                  self.con_comp_iter(subgraph_nodes))
 
-                    # 4. ORPHANS
-                    # errors orphans, closed polylines
-                    if self.clean_tool.Orphans:
-                        self.clean_tool.step = len(self.clean_tool.sEdges) / float(self.clean_tool.range)
-                        res = map(
-                            lambda sedge: self.clean_tool.del_edge_w_nodes(sedge.id, sedge.getStartNode(), sedge.getEndNode()),
-                            filter(lambda edge: self.clean_tool.sNodes[edge.getStartNode()].getConnectivity() ==
-                                                self.clean_tool.sNodes[edge.getEndNode()].getConnectivity() == 1,
-                                   self.clean_tool.sEdges.values()))
+                # 4. ORPHANS
+                # errors orphans, closed polylines
+                if self.clean_tool.Orphans:
+                    self.clean_tool.step = len(self.clean_tool.sEdges) / float(self.clean_tool.range)
+                    res = map(
+                        lambda sedge: self.clean_tool.del_edge_w_nodes(sedge.id, sedge.getStartNode(), sedge.getEndNode()),
+                        filter(lambda edge: self.clean_tool.sNodes[edge.getStartNode()].getConnectivity() ==
+                                            self.clean_tool.sNodes[edge.getEndNode()].getConnectivity() == 1,
+                               self.clean_tool.sEdges.values()))
 
-                    error_features = []
-                    if self.clean_tool.Errors:
-                        all_errors = []
-                        all_errors += zip(self.clean_tool.multiparts, ['multipart'] * len(self.clean_tool.multiparts))
-                        all_errors += zip(self.clean_tool.points, ['point'] * len(self.clean_tool.points))
-                        all_errors += zip(self.clean_tool.orphans, ['orphan'] * len(self.clean_tool.orphans))
-                        all_errors += zip(self.clean_tool.closed_polylines, ['closed polyline'] * len(self.clean_tool.closed_polylines))
-                        all_errors += zip(self.clean_tool.duplicates, ['duplicate'] * len(self.clean_tool.duplicates))
-                        all_errors += zip(self.clean_tool.broken, ['broken'] * len(self.clean_tool.broken))
-                        all_errors += zip(self.clean_tool.merged, ['pseudo'] * len(self.clean_tool.merged))
-                        all_errors += zip(self.clean_tool.self_intersecting, ['self intersection'] * len(self.clean_tool.self_intersecting))
-                        all_errors += zip(self.clean_tool.snapped, ['snapped'] * len(self.clean_tool.snapped))
-                        error_features = [self.clean_tool.create_error_feat(k, str([i[1] for i in list(g)])[1:-1]) for k, g in
-                                          itertools.groupby(sorted(all_errors), operator.itemgetter(0))]
+                error_features = []
+                if self.clean_tool.Errors:
+                    all_errors = []
+                    all_errors += zip(self.clean_tool.multiparts, ['multipart'] * len(self.clean_tool.multiparts))
+                    all_errors += zip(self.clean_tool.points, ['point'] * len(self.clean_tool.points))
+                    all_errors += zip(self.clean_tool.orphans, ['orphan'] * len(self.clean_tool.orphans))
+                    all_errors += zip(self.clean_tool.closed_polylines, ['closed polyline'] * len(self.clean_tool.closed_polylines))
+                    all_errors += zip(self.clean_tool.duplicates, ['duplicate'] * len(self.clean_tool.duplicates))
+                    all_errors += zip(self.clean_tool.broken, ['broken'] * len(self.clean_tool.broken))
+                    all_errors += zip(self.clean_tool.merged, ['pseudo'] * len(self.clean_tool.merged))
+                    all_errors += zip(self.clean_tool.self_intersecting, ['self intersection'] * len(self.clean_tool.self_intersecting))
+                    all_errors += zip(self.clean_tool.snapped, ['snapped'] * len(self.clean_tool.snapped))
+                    error_features = [self.clean_tool.create_error_feat(k, str([i[1] for i in list(g)])[1:-1]) for k, g in
+                                      itertools.groupby(sorted(all_errors), operator.itemgetter(0))]
 
-                    unlink_features = []
-                    if self.clean_tool.Unlinks:
-                        unlink_features = map(lambda p: self.clean_tool.create_unlink_feat(p), self.clean_tool.unlinks)
+                unlink_features = []
+                if self.clean_tool.Unlinks:
+                    unlink_features = map(lambda p: self.clean_tool.create_unlink_feat(p), self.clean_tool.unlinks)
 
-                    if is_debug: print "survived!"
-                    self.clean_tool.progress.disconnect()
-                    self.cl_progress.emit(100)
-                    # return cleaned data, errors and unlinks
+                if is_debug: print "survived!"
+                self.clean_tool.progress.disconnect()
+                self.cl_progress.emit(100)
+                # return cleaned data, errors and unlinks
 
-                    ret = map(lambda e: e.feature, self.clean_tool.sEdges.values()), error_features, unlink_features
+                ret = map(lambda e: e.feature, self.clean_tool.sEdges.values()), error_features, unlink_features
 
-                except Exception, e:
-                    # forward the exception upstream
-                    self.error.emit( traceback.format_exc())
+            except Exception, e:
+                # forward the exception upstream
+                print traceback.format_exc()
+                self.error.emit(traceback.format_exc())
 
             self.finished.emit(ret)
 
