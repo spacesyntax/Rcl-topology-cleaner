@@ -6,7 +6,7 @@ from qgis.core import QgsGeometry, QgsSpatialIndex, QgsFields, QgsField, QgsFeat
 
 # plugin module imports
 try:
-    from utilityFunctions import *
+    from sGraph.ss2.utilityFunctions import *
     from sNode import sNode
     from sEdge import sEdge
 except ImportError:
@@ -76,7 +76,6 @@ class cleanTool(QObject):
             [], [], [], [], [], [], [], [], [], []
         self.errors_id = 0
         self.unlinks_id = 0
-
 
     # RUN --------------------------------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
@@ -173,53 +172,7 @@ class cleanTool(QObject):
     # 0. LOAD GRAPH OPERATIONS -----------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
 
-    def features_iter(self, layer):
 
-        # detecting errors:
-        # NULL, point, invalid, multipart geometries - snap errors will be added later
-        # updating sEdges
-
-        for f in layer.getFeatures():
-
-            self.total_progress += self.step
-            self.progress.emit(self.total_progress)
-
-            f_geom = f.geometry()
-
-            # dropZValue if geometry is 3D
-            if f.geometry().geometry().is3D():
-                    f.geometry().geometry().dropZValue()
-
-            f_geom_length = f_geom.length()
-
-            if 0 < f_geom_length <= self.Snap: # if self.Snap == -1 never valid
-                # do not add as error, it will be added later
-                pass
-            elif f_geom.wkbType() == 2:
-                f.setFeatureId(self.sEdgesId)
-                self.sEdges[self.sEdgesId] = sEdge(self.sEdgesId, f, []) # empty topology - topology is (end, start)
-                self.sEdgesId += 1
-                yield f
-            elif f_geom is NULL:
-                #self.empty_geometries.append()
-                pass
-            elif not f_geom.isGeosValid():
-                #self.invalids.append(copy_feature(f, QgsGeometry(), f.id()))
-                pass
-            elif f_geom_length <= 0:
-                self.points.append(f_geom.asPoint())
-            elif f_geom.wkbType() == 5:
-                ml_segms = f_geom.asMultiPolyline()
-                for ml in ml_segms:
-                    ml_geom = QgsGeometry(ml)
-                    ml_feat = copy_feat(f, ml_geom, self.sEdgesId)
-                    self.multiparts.append(ml_geom.asPolyline()[0])
-                    self.multiparts.append(ml_geom.asPolyline()[-1])
-                    self.sEdges[self.sEdgesId] = sEdge(self.sEdgesId, ml_feat, [])
-                    self.sEdgesId += 1
-                    yield ml_feat
-            elif self.killed is True:
-                break
 
     def createTopology(self, qgspoint, fid):
         try:

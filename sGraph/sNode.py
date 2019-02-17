@@ -9,22 +9,13 @@ prototype_fields.append(QgsField('connectivity', QVariant.Int))
 
 class sNode(QObject):
 
-    def __init__(self, id, topology, qgspoint):
+    def __init__(self, id, feature, topology, adj_edges):
         QObject.__init__(self)
         self.id = id
         self.topology = topology
-        self.connectivity = len(topology)
-        self.point = qgspoint
-        self.geometry = QgsGeometry.fromPoint(self.point)
-        self.closest_nodes = [id]
+        self.adj_edges = adj_edges
+        self.feature = feature
 
-    def getConnectivity(self):
-        return len(set(self.topology))
-
-    def getFeature(self):
-        f = QgsFeature()
-        f.setFeatureId(self.id)
-        f.setGeometry(self.geometry)
-        f.setFields(prototype_fields)
-        f.setAttributes([self.id, self.getConnectivity()])
-        return f
+    def getCoords(self):
+        coords = self.feature.geometry().asPoint()
+        return coords[0], coords[1]

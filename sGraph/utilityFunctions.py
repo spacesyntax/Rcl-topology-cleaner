@@ -1,74 +1,94 @@
-from qgis.core import QgsFeature, QgsMapLayerRegistry, QgsVectorLayer, QgsVectorFileWriter
+import collections
 import math
-import psycopg2
-from psycopg2.extensions import AsIs
-
-
-# GENERAL _______________________________________________________________
-
-def duplicates(lst, item):
-    return [i for i, x in enumerate(lst) if x == item]
-
 from collections import defaultdict
 
-def list_duplicates(seq):
-    tally = defaultdict(list)
-    for i,item in enumerate(seq):
-        tally[item].append(i)
-    return set([key for key,locs in tally.items()
-                            if len(locs)>1])
+# FEATURES -----------------------------------------------------------------
+
+# detecting errors:
+# (NULL), point, (invalids), multipart geometries, snap (will be added later)
+points = []
+multiparts = []
+def clean_features_iter(layer, snap):
+    id = 0
+    for f in layer.getFeatures():
+
+        # dropZValue if geometry is 3D
+        if f.geometry().geometry().is3D():
+                f.geometry().geometry().dropZValue()
+
+        f_geom = f.geometry()
+
+        # point
+        if f_geom.length() <= 0:
+            points.append(f_geom.asPoint())
+        # short line (when snap != -1)
+        elif f_geom.wkbType() == 2:
+            # if self.Snap == -1 never valid
+            f.setFeatureId(id)
+            id += 1
+            if f_geom.length() > snap: # do not add as error, it will be added later
+                yield f
+        # empty geometry
+        elif f_geom is NULL:
+            #self.empty_geometries.append()
+            pass
+        # invalid geometry
+        elif not f_geom.isGeosValid():
+            #self.invalids.append(copy_feature(f, QgsGeometry(), f.id()))
+            pass
+        # multilinestring
+        elif f_geom.wkbType() == 5:
+            ml_segms = f_geom.asMultiPolyline()
+            for ml in ml_segms:
+                ml_geom = QgsGeometry(ml)
+                # if self.Snap == -1 never valid
+                if ml_geom.length() > snap:  # do not add as error, it will be added later
+                    ml_feat = QgsFeature(f)
+                    ml_feat.setFeatureId(id)
+                    id += 1
+                    ml_feat.setGeometry(ml_geom)
+                    multiparts.append(ml_geom.asPolyline()[0])
+                    multiparts.append(ml_geom.asPolyline()[-1])
+                    yield ml_feat
+
+# GEOMETRY -----------------------------------------------------------------
+
+def getSelfIntersections(polyline):
+    return [item for item, count in collections.Counter(polyline).items() if count > 1] # points
 
 
-# QGSFEATURES _______________________________________________________________
+def find_vertex_indices(polyline, points):
+    indices = defaultdict(list)
+    for idx, vertex in enumerate(polyline):
+        indices[vertex].append(idx)
+    break_indices = [indices[v] for v in set(points)] + [[0, (len(polyline) - 1)]]
+    break_indices = [item for sublist in break_indices for item in sublist]
+    return sorted(list(set(break_indices)))
 
 
-def copy_feature(prototype_feat, geom, id):
-    f = QgsFeature(prototype_feat)
-    f.setFeatureId(id)
-    f.setGeometry(geom)
-    return f
+def break_feat(polyline, vertices_indices):
+    vertices_indices = sorted(vertices_indices)
+    for start, end in zip(vertices_indices[:-1], vertices_indices[1:]):
+        yield start, end
 
+# ITERATORS -----------------------------------------------------------------
 
-def merge_features(feature_list, new_id):
-    # get attributes from longest
-    geometries = [f.geometry() for f in feature_list]
-    lengths = [geom.length() for geom in geometries]
-    new_feat = QgsFeature(feature_list[lengths.index(max(lengths))])
-    new_geom = geometries[0]
-    for i in geometries[1:]:
-        new_geom = new_geom.combine(i)
-    new_feat.setGeometry(new_geom)
-    new_feat.setFeatureId(new_id)
-    return new_feat
+# connected components iterator from group_dictionary e.g. { A: [B,C,D], B: [D,E,F], ...}
+def con_comp_iter(group_dictionary):
+    components_passed = set([])
+    for id in group_dictionary.keys():
+        if {id}.isdisjoint(components_passed):
+            group = [[id]]
+            candidates = ['dummy', 'dummy']
+            while len(candidates) > 0:
+                flat_group = group[:-1] + group[-1]
+                candidates = map(lambda last_visited_node: set(group_dictionary[last_visited_node]).difference(set(flat_group)), group[-1])
+                candidates = list(set(itertools.chain.from_iterable(candidates)))
+                group = flat_group + [candidates]
+                components_passed.update(set(candidates))
+            yield group[:-1]
 
-# ANGLES _______________________________________________________________
-
-
-def angle_3_points(p1, p2, p3):
-    inter_vertex1 = math.hypot(abs(float(p2.x()) - float(p1.x())), abs(float(p2.y()) - float(p1.y())))
-    inter_vertex2 = math.hypot(abs(float(p2.x()) - float(p3.x())), abs(float(p2.y()) - float(p3.y())))
-    vertex1_2 = math.hypot(abs(float(p1.x()) - float(p3.x())), abs(float(p1.y()) - float(p3.y())))
-    A = ((inter_vertex1 ** 2) + (inter_vertex2 ** 2) - (vertex1_2 ** 2))
-    B = (2 * inter_vertex1 * inter_vertex2)
-    if B != 0:
-        cos_angle = A / B
-    else:
-        cos_angle = NULL
-    if cos_angle < -1:
-        cos_angle = int(-1)
-    if cos_angle > 1:
-        cos_angle = int(1)
-    return 180 - math.degrees(math.acos(cos_angle))
-
-
-# LAYER _______________________________________________________________
-
-def getLayerByName(name):
-    layer = None
-    for i in QgsMapLayerRegistry.instance().mapLayers().values():
-        if i.name() == name:
-            layer = i
-    return layer
+# WRITE -----------------------------------------------------------------
 
 def to_layer(features, crs, encoding, geom_type, layer_type, path, name):
 
@@ -98,99 +118,14 @@ def to_layer(features, crs, encoding, geom_type, layer_type, path, name):
         pr.addFeatures(features)
         layer.commitChanges()
 
-    elif layer_type == 'postgis':
-        crs_id = crs.postgisSrid()
-        geom_types = {1: 'Point', 2: 'Linestring', 3: 'Polygon', 4: 'MultiPoint', 5: 'MultiLineString', 6: 'MultiPolygon'}
-        post_q_flds = {2: 'bigint', 6: 'numeric', 1: 'bool', 'else': 'text'}
-        try:
-            # crs = QgsCoordinateReferenceSystem(crs_id, QgsCoordinateReferenceSystem.EpsgCrsId)
-            # mem_layer = to_layer(features, crs, encoding, geom_type, 'memory', path, name)
-            # error = QgsVectorLayerImport.importLayer(mem_layer, path, "postgres", crs, False, False)
-            # if error[0] != 0: print u'Error', error[1]
-
-            (connstring, schema_name, table_name) = path
-
-            uri = connstring + """ type=""" + geom_types[geom_type] + """ table=\"""" + schema_name + """\".\"""" + table_name + """\" (geom) """
-            print uri , 'POSTGIS'
-
-            con = psycopg2.connect(connstring)
-            cur = con.cursor()
-
-            postgis_flds_q = """"""
-            for f in fields:
-                f_name = '\"' + f.name() + '\"'
-                try:
-                    f_type = post_q_flds[f.type()]
-                except KeyError:
-                    f_type = post_q_flds['else']
-                postgis_flds_q += cur.mogrify("""%s %s,""", (AsIs(f_name), AsIs(f_type)))
-
-            query = cur.mogrify(
-                """DROP TABLE IF EXISTS %s.%s; CREATE TABLE %s.%s(%s geom geometry(%s, %s))""", (
-                AsIs(schema_name), AsIs(table_name), AsIs(schema_name), AsIs(table_name), AsIs(postgis_flds_q), geom_types[geom_type],  AsIs(crs_id)))
-            cur.execute(query)
-            con.commit()
-
-            data = map(lambda f: (clean_nulls(f.attributes()), f.geometry().exportToWkt()), features)
-            args_str = ','.join(
-                map(lambda (attrs, wkt): rmv_parenthesis(cur.mogrify("%s,ST_GeomFromText(%s,%s))", (tuple(attrs), wkt, AsIs(crs_id)))), tuple(data)))
-
-            ins_str = cur.mogrify("""INSERT INTO %s.%s VALUES """, (AsIs(schema_name), AsIs(table_name)))
-            cur.execute(ins_str + args_str)
-            con.commit()
-            con.close()
-
-            layer = QgsVectorLayer(uri, table_name, 'postgres')
-        except psycopg2.DatabaseError, e:
-            print e
-    else:
-        print "file type not supported"
     return layer
 
 
-def clean_nulls(attrs):
-    cleaned_attrs = []
-    for attr in attrs:
-        if attr:
-            cleaned_attrs.append(attr)
-        else:
-            cleaned_attrs.append(None)
-    return cleaned_attrs
+# LAYER -----------------------------------------------------------------
 
-def rmv_parenthesis(my_string):
-    idx = my_string.find(',ST_GeomFromText') - 1
-    return  my_string[:idx] + my_string[(idx+1):]
-
-def getPostgisSchemas(connstring, commit=False):
-    """Execute query (string) with given parameters (tuple)
-    (optionally perform commit to save Db)
-    :return: result set [header,data] or [error] error
-    """
-
-    try:
-        connection = psycopg2.connect(connstring)
-    except psycopg2.Error, e:
-        print e.pgerror
-        connection = None
-
-    schemas = []
-    data = []
-    if connection:
-        query = unicode("""SELECT schema_name from information_schema.schemata;""")
-        cursor = connection.cursor()
-        try:
-            cursor.execute(query)
-            if cursor.description is not None:
-                data = cursor.fetchall()
-            if commit:
-                connection.commit()
-        except psycopg2.Error, e:
-            connection.rollback()
-        cursor.close()
-
-    # only extract user schemas
-    for schema in data:
-        if schema[0] not in ('topology', 'information_schema') and schema[0][:3] != 'pg_':
-            schemas.append(schema[0])
-    #return the result even if empty
-    return sorted(schemas)
+def getLayerByName(name):
+    layer = None
+    for i in QgsMapLayerRegistry.instance().mapLayers().values():
+        if i.name() == name:
+            layer = i
+    return layer

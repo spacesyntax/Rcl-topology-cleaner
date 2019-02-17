@@ -1,10 +1,7 @@
 
-execfile(u'/Users/i.kolovou/Documents/Github/Rcl-topology-cleaner/sGraph/clean_tool.py'.encode('utf-8'))
 execfile(u'/Users/i.kolovou/Documents/Github/Rcl-topology-cleaner/sGraph/sNode.py'.encode('utf-8'))
 execfile(u'/Users/i.kolovou/Documents/Github/Rcl-topology-cleaner/sGraph/sEdge.py'.encode('utf-8'))
 execfile(u'/Users/i.kolovou/Documents/Github/Rcl-topology-cleaner/sGraph/utilityFunctions.py'.encode('utf-8'))
-
-#execfile(u'/Users/I.Kolovou/Documents/GitHub/Road-network-cleaner/sGraph/clean_tool.py'.encode('utf-8'))
 
 # SETTINGS _______________________________________________________________________
 import time
@@ -19,8 +16,8 @@ layer = getLayerByName(layer_name)
 # cleaning settings
 Snap = 1
 Break = True
-#Merge = 'between intersections'
-Merge = ['collinear', 10]
+Merge = 'between intersections'
+#Merge = ['collinear', 10]
 Orphans = True
 
 Errors = True

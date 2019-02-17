@@ -25,9 +25,8 @@ from PyQt4 import QtGui, uic
 
 import os
 from PyQt4.QtCore import pyqtSignal
-from qgis.core import QgsDataSourceURI
 
-from sGraph.utilityFunctions import *
+from sGraph.ss2.utilityFunctions import *
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'DbSettings_dialog_base.ui'))

@@ -21,14 +21,14 @@
  ***************************************************************************/
 """
 import traceback
-from PyQt4.QtCore import QThread, QSettings, QObject, pyqtSignal, QVariant
+from PyQt4.QtCore import QThread, QSettings
 from qgis.core import *
 from qgis.gui import *
 from qgis.utils import *
 
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
-from sGraph.clean_tool import *  # better give these a name to make it explicit to which module the methods belong
-from sGraph.utilityFunctions import *
+from sGraph.ss2.clean_tool import *  # better give these a name to make it explicit to which module the methods belong
+from sGraph.ss2.utilityFunctions import *
 
 # Import the debug library - required for the cleaning class in separate thread
 # set is_debug to False in release version
