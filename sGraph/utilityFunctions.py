@@ -8,7 +8,10 @@ from collections import defaultdict
 # (NULL), point, (invalids), multipart geometries, snap (will be added later)
 points = []
 multiparts = []
-def clean_features_iter(layer, snap):
+# do not snap - because if self loop needs to break it will not
+
+
+def clean_features_iter(layer):
     id = 0
     for f in layer.getFeatures():
 
@@ -21,13 +24,11 @@ def clean_features_iter(layer, snap):
         # point
         if f_geom.length() <= 0:
             points.append(f_geom.asPoint())
-        # short line (when snap != -1)
+
         elif f_geom.wkbType() == 2:
-            # if self.Snap == -1 never valid
             f.setFeatureId(id)
             id += 1
-            if f_geom.length() > snap: # do not add as error, it will be added later
-                yield f
+            yield f
         # empty geometry
         elif f_geom is NULL:
             #self.empty_geometries.append()
@@ -41,17 +42,16 @@ def clean_features_iter(layer, snap):
             ml_segms = f_geom.asMultiPolyline()
             for ml in ml_segms:
                 ml_geom = QgsGeometry(ml)
-                # if self.Snap == -1 never valid
-                if ml_geom.length() > snap:  # do not add as error, it will be added later
-                    ml_feat = QgsFeature(f)
-                    ml_feat.setFeatureId(id)
-                    id += 1
-                    ml_feat.setGeometry(ml_geom)
-                    multiparts.append(ml_geom.asPolyline()[0])
-                    multiparts.append(ml_geom.asPolyline()[-1])
-                    yield ml_feat
+                ml_feat = QgsFeature(f)
+                ml_feat.setFeatureId(id)
+                id += 1
+                ml_feat.setGeometry(ml_geom)
+                multiparts.append(ml_geom.asPolyline()[0])
+                multiparts.append(ml_geom.asPolyline()[-1])
+                yield ml_feat
 
 # GEOMETRY -----------------------------------------------------------------
+
 
 def getSelfIntersections(polyline):
     return [item for item, count in collections.Counter(polyline).items() if count > 1] # points
@@ -66,12 +66,31 @@ def find_vertex_indices(polyline, points):
     return sorted(list(set(break_indices)))
 
 
-def break_feat(polyline, vertices_indices):
-    vertices_indices = sorted(vertices_indices)
-    for start, end in zip(vertices_indices[:-1], vertices_indices[1:]):
-        yield start, end
+def angular_change(geom1,geom2):
+    pl1 = geom1.asPolyline()
+    pl2 = geom2.asPolyline()
+    points1 = set([pl1[0], pl1[-1]])
+    points2 = set([pl2[0], pl2[-1]])
+    inter_point = points1.intersection(points2)
+
+    # find index in geom1
+    # if index 0, then get first vertex
+    # if index -1, then get the one before last vertex
+
+    # find index in geom2
+
+    return
+
+
+def merge_geoms(geoms):
+    # get attributes from longest
+    new_geom = geoms[0]
+    for i in geoms[1:]:
+        new_geom = new_geom.combine(i)
+    return new_geom
 
 # ITERATORS -----------------------------------------------------------------
+
 
 # connected components iterator from group_dictionary e.g. { A: [B,C,D], B: [D,E,F], ...}
 def con_comp_iter(group_dictionary):
@@ -88,7 +107,25 @@ def con_comp_iter(group_dictionary):
                 components_passed.update(set(candidates))
             yield group[:-1]
 
+gr = [[29, 27, 26, 28], [31, 11, 10, 3, 30], [71, 51, 52, 69],
+      [78, 67, 68, 39, 75], [86, 84, 81, 82, 83, 85], [84, 67, 78, 77, 81],
+      [86, 68, 67, 84]]
+
+
+def grouper(sequence):
+    result = []  # will hold (members, group) tuples
+    for item in sequence:
+        for members, group in result:
+            if members.intersection(item):  # overlap
+                members.update(item)
+                group.append(item)
+                break
+        else:  # no group found, add new
+            result.append((set(item), [item]))
+    return [group for members, group in result]
+
 # WRITE -----------------------------------------------------------------
+
 
 def to_layer(features, crs, encoding, geom_type, layer_type, path, name):
 
@@ -122,6 +159,7 @@ def to_layer(features, crs, encoding, geom_type, layer_type, path, name):
 
 
 # LAYER -----------------------------------------------------------------
+
 
 def getLayerByName(name):
     layer = None

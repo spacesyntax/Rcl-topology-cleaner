@@ -17,10 +17,10 @@ class sEdge(QObject):
 
     def replace_start(self, id, point):
         self.nodes[0] = id
-        self.feature.geometry().moveVertex(point, 0)
+        self.feature.geometry().moveVertex(point.x(), point.y(), 0)
         return
 
     def replace_end(self, id, point):
         self.nodes[1] = id
-        self.feature.geometry().moveVertex(point, len(self.feature.geometry().asPolyline()) -1)
+        self.feature.geometry().moveVertex(point.x(), point.y(), len(self.feature.geometry().asPolyline()) - 1)
         return
