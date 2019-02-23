@@ -1,6 +1,9 @@
 import collections
 import math
 from collections import defaultdict
+from qgis.core import QgsMapLayerRegistry, QgsFields, QgsField, QgsGeometry, QgsFeature, QgsVectorLayer, QgsVectorFileWriter
+from PyQt4.QtCore import  QVariant
+import itertools
 
 # FEATURES -----------------------------------------------------------------
 
@@ -10,6 +13,8 @@ points = []
 multiparts = []
 # do not snap - because if self loop needs to break it will not
 
+
+# FEATURES -----------------------------------------------------------------
 
 def clean_features_iter(layer):
     id = 0
@@ -49,6 +54,16 @@ def clean_features_iter(layer):
                 multiparts.append(ml_geom.asPolyline()[0])
                 multiparts.append(ml_geom.asPolyline()[-1])
                 yield ml_feat
+
+flds = QgsFields()
+flds.append(QgsField('id', QVariant.Int))
+def create_feat_from_point(p, id):
+    f = QgsFeature()
+    f.setFeatureId(id)
+    f.setGeometry(QgsGeometry.fromPoint(p))
+    f.setAttributes([id])
+    f.setFields(flds)
+    return f
 
 # GEOMETRY -----------------------------------------------------------------
 

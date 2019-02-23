@@ -53,6 +53,9 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.snapSpinBox.setRange(1, 30)
         self.snapSpinBox.setSingleStep(1)
         self.snapSpinBox.setValue(5)
+        self.angularChangeSpinBox.setRange(1, 45)
+        self.angularChangeSpinBox.setSingleStep(1)
+        self.angularChangeSpinBox.setValue(10)
 
         self.memoryRadioButton.setChecked(True)
         self.shpRadioButton.setChecked(False)
@@ -108,6 +111,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
             self.edit_mode = False
             self.snapCheckBox.setCheckState(2)
             self.snapSpinBox.setValue(5)
+            self.angularChangeSpinBox.setValue(10)
             self.breakCheckBox.setCheckState(2)
             self.mergeCheckBox.setCheckState(2)
             self.orphansCheckBox.setCheckState(2)
@@ -118,6 +122,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
             self.edit_mode = False
             self.snapCheckBox.setCheckState(2)
             self.snapSpinBox.setValue(5)
+            self.angularChangeSpinBox.setValue(10)
             self.breakCheckBox.setCheckState(0)
             self.mergeCheckBox.setCheckState(2)
             self.orphansCheckBox.setCheckState(2)
@@ -167,6 +172,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.breakCheckBox.setDisabled(onoff)
         self.snapCheckBox.setDisabled(onoff)
         self.snapSpinBox.setDisabled(onoff)
+        self.angularChangeSpinBox.setDisabled(onoff)
         self.angleSpinBox.setDisabled(onoff)
         if onoff == True:
             self.edit_mode = False
@@ -177,7 +183,13 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         if self.snapCheckBox.isChecked():
             return self.snapSpinBox.value()
         else:
-            return None
+            return 0
+
+    def getSimplificationTolerance(self):
+        if self.snapCheckBox.isChecked():
+            return self.angularChangeSpinBox.value()
+        else:
+            return 0
 
     def getBreakages(self):
         if self.breakCheckBox.isChecked():
@@ -187,11 +199,14 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
     def getMerge(self):
         if self.mergeCheckBox.isChecked():
-            return 'between intersections'
+            return 'intersections'
         elif self.mergeCollinearCheckBox.isChecked():
-            return ['collinear', self.angleSpinBox.value()]
+            return 'collinear'
         else:
             return None
+
+    def getCollinearThreshold(self):
+        return self.angleSpinBox.value()
 
     def getOrphans(self):
         if self.orphansCheckBox.isChecked():
@@ -225,9 +240,16 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         else:
             return 'memory'
 
+    def fix_unlinks(self):
+        if self.dataSourceCombo.currentText() == 'OrdnanceSurvey':
+            return True
+        else:
+            return False
+
     def get_settings(self):
         settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'snap': self.getTolerance(), 'break': self.getBreakages(), 'merge':self.getMerge(), 'orphans':self.getOrphans(),
-                    'errors': self.get_errors(), 'unlinks': self.get_unlinks(),  'user_id': None, 'output_type': self.get_output_type()}
+                    'errors': self.get_errors(), 'unlinks': self.get_unlinks(), 'collinear_angle': self.getCollinearThreshold(), 'simplification_threshold': self.getSimplificationTolerance(),
+                    'fix_unlinks': self.fix_unlinks(), 'output_type': self.get_output_type()}
         return settings
 
     def get_dbsettings(self):

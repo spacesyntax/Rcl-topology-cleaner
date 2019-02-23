@@ -1,13 +1,12 @@
 # general imports
 import itertools
-import operator
 from PyQt4.QtCore import QObject, pyqtSignal, QVariant
 from qgis.core import QgsGeometry, QgsSpatialIndex, QgsFields, QgsField, QgsFeature
 from collections import defaultdict
 
 # plugin module imports
 try:
-    from sGraph.utilityFunctions import *
+    from utilityFunctions import *
     from sNode import sNode
     from sEdge import sEdge
 except ImportError:
@@ -16,7 +15,6 @@ except ImportError:
 # special cases:
 # SELF LOOPS
 #   - topology of self loop node would include itself
-
 # DUPLICATE
 #   - topology of n1 would include n2 many times
 
@@ -32,13 +30,14 @@ class sGraph(QObject):
         QObject.__init__(self)
         self.sEdges = edges
         self.sNodes = nodes # can be empty
+        self.total_progress = 0
+        self.step = 0
 
         if len(self.sEdges) == 0:
             self.edge_id = 0
             self.sNodesCoords = {}
             self.node_id = 0
         else:
-            print len(self.sEdges)
             self.edge_id = max(self.sEdges.keys())
             self.node_id = max(self.sNodes.keys())
             self.sNodesCoords = {snode.getCoords(): snode.id for snode in self.sNodes.values()}
@@ -46,7 +45,7 @@ class sGraph(QObject):
         self.edgeSpIndex = QgsSpatialIndex()
         self.ndSpIndex = QgsSpatialIndex()
         res = map(lambda sedge: self.edgeSpIndex.insertFeature(sedge.feature), self.sEdges.values())
-        res = map(lambda snode: self.ndSpIndex.insertFeature(snode.feature), self.sNodes.values())
+
         del res
 
         self.errors = []
@@ -71,12 +70,17 @@ class sGraph(QObject):
             sedge = sEdge(self.edge_id, f, snodes)
             self.sEdges[self.edge_id] = sedge
             self.edgeSpIndex.insertFeature(f)
+
         return
 
     # pseudo graph from feat iter (only clean features - ids are fixed)
     def load_edges_w_o_topology(self, clean_feat_iter):
 
         for f in clean_feat_iter:
+
+            #self.total_progress += self.step
+            #self.progress.emit(self.total_progress)
+
             # add edge
             sedge = sEdge(f.id(), f, [])
             self.sEdges[f.id()] = sedge
@@ -99,10 +103,9 @@ class sGraph(QObject):
             self.sNodesCoords[(point[0], point[1])] = node_id
             snode = sNode(node_id, feature, [], [])
             self.sNodes[self.node_id] = snode
-            self.ndSpIndex.insertFeature(feature)
         return node_id
 
-    # create topology
+    # store topology
     def update_topology(self, node1, node2, edge):
         self.sNodes[node1].topology.append(node2)
         self.sNodes[node1].adj_edges.append(edge)
@@ -112,7 +115,6 @@ class sGraph(QObject):
 
     # delete point
     def delete_node(self, node_id):
-        # self.ndSpIndex.deleteFeature(self.sNodes[node_id].feature)
         del self.sNodes[node_id]
         return True
 
@@ -120,10 +122,7 @@ class sGraph(QObject):
         self.sNodes[nodes[0]].adj_edges.remove(e)
         self.sNodes[nodes[0]].topology.remove(nodes[1])
         self.sNodes[nodes[1]].adj_edges.remove(e) # if self loop - removed twice
-        try:
-            self.sNodes[nodes[1]].topology.remove(nodes[0])
-        except ValueError:
-            pass # if self loop node has been removed
+        self.sNodes[nodes[1]].topology.remove(nodes[0]) # if self loop - removed twice
         del self.sEdges[e]
         return
 
@@ -131,6 +130,10 @@ class sGraph(QObject):
     # can be applied to edges w-o topology for speed purposes
     def break_features_iter(self, getUnlinks, angle_threshold, fix_unlinks=False):
         for sedge in self.sEdges.values():
+
+            #self.total_progress += self.step
+            #self.progress.emit(self.total_progress)
+
             f = sedge.feature
             f_geom = f.geometry()
             pl = f_geom.asPolyline()
@@ -152,18 +155,18 @@ class sGraph(QObject):
                 unlinks = []
                 for line in lines:
                     crossing_points = f_geom.intersection(self.sEdges[line].feature.geometry())
-                    if crossing_points.wkbType() == 1:
-                        unlinks.append(crossing_points)
-                    else:
+                    if crossing_points.geometry().wkbType() == 1:
+                        unlinks.append(crossing_points.asPoint())
+                    elif crossing_points.geometry().wkbType() == 4:
                         for p in crossing_points.asMultiPoint():
                             unlinks.append(p)
-                self.unlinks += unlinks
                 if fix_unlinks:
                     # find vertices
                     unlinks = map(lambda p: self.fix_unlink(p, pl, sedge.id), unlinks)
                     intersections = list(intersections.difference(set(unlinks)))
                 else: # TODO: exclude vertices - might be in one of the lines
                     pass
+                self.unlinks += unlinks
 
             # errors
             self.errors += intersections
@@ -188,6 +191,7 @@ class sGraph(QObject):
     # group points based on proximity - spatial index is not updated
     def snap_endpoints(self, snap_threshold):
         # TODO: test when loading points
+        res = map(lambda snode: self.ndSpIndex.insertFeature(snode.feature), self.sNodes.values())
         filtered_nodes = {}
         for node in self.sNodes.values():
             # find nodes within x distance
@@ -199,40 +203,51 @@ class sGraph(QObject):
 
         for group in con_comp_iter(filtered_nodes):
 
-            # find con nodes
-            con_nodes = set(
-                itertools.chain.from_iterable([self.sNodes[node].topology for node in group]))
-            con_nodes = con_nodes.difference(group)
-
             # find con_edges
-            con_edges = set(
-                itertools.chain.from_iterable([self.sNodes[node].adj_edges for node in group]))
-            short_edges = set([])
-            for e in con_edges:
-                sedge = self.sEdges[e]
-                nds = set(sedge.nodes)
-                # TODO if self loop and one intermediate vertex, it turns back on itself
-                if len(nds.intersection(group)) == len(nds) and (len(sedge.feature.geometry().asPolyline()) <= 3 or sedge.feature.geometry().length() <= snap_threshold):
-                    short_edges.update({e})
-                    # remove short edges
-                    del self.sEdges[e]
-
-            con_edges = con_edges.difference(short_edges)
+            con_edges = set(itertools.chain.from_iterable([self.sNodes[node].adj_edges for node in group]))
 
             # collapse nodes to node
-            merged_node_id, centroid_point = self.collapse_to_node(group, list(con_nodes), [])
+            merged_node_id, centroid_point = self.collapse_to_node(group)
 
             # update connected edges and their topology
             for edge in con_edges:
-                start, end = self.sEdges[edge].nodes
-                # two ifs to account for self loops
-                if start in group:
+                sedge = self.sEdges[edge]
+                start, end = sedge.nodes
+                # if existing self loop
+                if start == end: # and will be in group
+                    if sedge.feature.geometry().length() <= snap_threshold: # short self-loop
+                        self.remove_edge((start, end), edge)
+                    else:
+                        self.sEdges[edge].replace_start(self.node_id, centroid_point)
+                        self.update_topology(merged_node_id, merged_node_id, edge)
+                        self.sNodes[end].topology.remove(start)
+                        self.sEdges[edge].replace_end(self.node_id, centroid_point)
+                        self.sNodes[start].topology.remove(end)
+                    # self.sNodes[start].topology.remove(end)
+                # if becoming self loop (if one intermediate vertex - turns back on itself)
+                elif start in group and end in group:
+                    if (len(sedge.feature.geometry().asPolyline()) <= 3
+                            or sedge.feature.geometry().length() <= snap_threshold):
+                        self.remove_edge((start, end), edge)
+                    else:
+                        self.sEdges[edge].replace_start(self.node_id, centroid_point)
+                        self.sEdges[edge].replace_end(self.node_id, centroid_point)
+                        self.update_topology(merged_node_id, merged_node_id, edge)
+                        self.sNodes[end].topology.remove(start)
+                        self.sNodes[start].topology.remove(end)
+                # if only start
+                elif start in group:
                     self.sEdges[edge].replace_start(self.node_id, centroid_point)
-                    self.update_topology(merged_node_id, end, edge)
+                    self.sNodes[merged_node_id].topology.append(end)
+                    self.sNodes[merged_node_id].adj_edges.append(edge)
+                    self.sNodes[end].topology.append(merged_node_id)
                     self.sNodes[end].topology.remove(start)
-                if end in group:
+                # if only end
+                elif end in group:
                     self.sEdges[edge].replace_end(self.node_id, centroid_point)
-                    self.update_topology(merged_node_id, start, edge)
+                    self.sNodes[merged_node_id].topology.append(start)
+                    self.sNodes[merged_node_id].adj_edges.append(edge)
+                    self.sNodes[start].topology.append(merged_node_id)
                     self.sNodes[start].topology.remove(end)
 
             # delete old nodes
@@ -240,7 +255,7 @@ class sGraph(QObject):
 
         return
 
-    def collapse_to_node(self, group, con_nodes, con_edges):
+    def collapse_to_node(self, group):
 
         # create new node, coords
         self.node_id += 1
@@ -250,7 +265,7 @@ class sGraph(QObject):
         feat.setGeometry(centroid)
         feat.setAttributes([self.node_id])
         feat.setFeatureId(self.node_id)
-        snode = sNode(self.node_id, feat, con_nodes, con_edges)
+        snode = sNode(self.node_id, feat, [], [])
         self.sNodes[self.node_id] = snode
         self.ndSpIndex.insertFeature(feat)
 
@@ -287,7 +302,7 @@ class sGraph(QObject):
     # TODO: snap_geometries (not endpoints)
     # TODO: extend
 
-    def clean_dupl(self, nodes, group_edges, snap_threshold):
+    def clean_dupl(self, group_edges, snap_threshold):
         # keep line with minimum length
         # TODO: add distance centroids
         lengths = [self.sEdges[e].feature.geometry().length() for e in group_edges]
@@ -297,17 +312,18 @@ class sGraph(QObject):
         for e in sorted_edges[1:]:
             # delete line
             if abs(self.sEdges[e].feature.geometry().length() - min_len) <= snap_threshold:
-                self.remove_edge(nodes, e)
+                self.remove_edge(self.sEdges[e].nodes, e)
         return
 
     def clean_orphan(self, e):
         nds = e.nodes
         snds = self.sNodes[nds[0]], self.sNodes[nds[1]]
         # connectivity of both endpoints 1
-        # second condition to account for 2 self loops connecting two one point
-        if len(set(snds[0].topology)) == len(set(snds[1].topology)) == 1 : # can be parallel or selfloop to line - 2 items
-            # if nds[0] == nds[1]:
-            # if len(snds[0].adj_edges) in [[], [e.id]]:
+        # if parallel - A:[B,B]
+        # if selfloop to line - A: [A,A, C]
+        # if selfloop
+        # if selfloop and parallel
+        if len(set(snds[0].topology)) == len(set(snds[1].topology)) == 1 and len(set(snds[0].adj_edges)) == 1:
             del self.sEdges[e.id]
             for nd in set(nds):
                 del self.sNodes[nd]
@@ -316,25 +332,30 @@ class sGraph(QObject):
     # find duplicate geometries
     # find orphans
 
-    def clean_dupl_orphans(self, orphans, snap_threshold):
-        # group duplicate edges (same length or snap_threshold)
-        # delete longest edges & update topology
-        input = [(e.id, frozenset(e.nodes)) for e in graph.sEdges.values()]
-        groups = defaultdict(list)
-        for v, k in input: groups[k].append(v)
+    def clean(self, duplicates, orphans, snap_threshold, closed_polylines):
+        # clean duplicates - delete longest from group using snap threshold
+        if duplicates:
+            input = [(e.id, frozenset(e.nodes)) for e in self.sEdges.values()]
+            groups = defaultdict(list)
+            for v, k in input: groups[k].append(v)
 
-        dupl_candidates = dict(filter(lambda (nodes, edges): len(edges) > 1, groups.items()))
-        res = map(lambda (nodes, group_edges): self.clean_dupl(nodes, group_edges, snap_threshold), dupl_candidates.items())
+            dupl_candidates = dict(filter(lambda (nodes, edges): len(edges) > 1, groups.items()))
+            res = map(lambda (nodes, group_edges): self.clean_dupl(group_edges, snap_threshold), dupl_candidates.items())
 
         # clean orphans
         if orphans:
             res = map(lambda e: self.clean_orphan(e), self.sEdges.values())
+        elif closed_polylines:
+            res = map(lambda e: self.clean_orphan(e), filter(lambda edg: len(set(edg.nodes)) == 1, self.sEdges.values()))
+
         return
 
     # merge
 
     def merge(self, parameter, angle_threshold=None):
 
+        # special cases: merge parallels (becomes orphan)
+        # do not merge two parallel self loops
         if parameter == 'angle':
             con2 = filter(lambda (line1, line2): angular_change(self.sEdges[line1].feature.geometry(),
                                                                 self.sEdges[line2].feature.geometry()) <= angle_threshold, con2)
@@ -353,7 +374,7 @@ class sGraph(QObject):
         # what if two parallel edges at the edge - should become self loop
         for nd_id, nd in self.sNodes.items():
             con_edges = nd.adj_edges
-            if len(nd.topology) != 2 and len(con_edges) != 2:  # not set to include parallels and self loops
+            if (len(nd.topology) != 2 and len(con_edges) != 2):  # not set to include parallels and self loops
                 for e in con_edges:
                     yield e
 
@@ -364,10 +385,12 @@ class sGraph(QObject):
             startnode, endnode = endnode, startnode
         group_nodes = [startnode, endnode]
         group_edges = [startedge]
-        while len(self.sNodes[group_nodes[-1]].adj_edges) == 2 and not group_nodes[0] == group_nodes[-1]: # not topology to account for self loops ??
+        while len(self.sNodes[group_nodes[-1]].adj_edges) == 2:
             last_visited = group_nodes[-1]
-            con_node = set(self.sNodes[last_visited].topology).difference(set(group_nodes[1:])).pop() # group_nodes[1:] so that self loops are allowed to merge
+            if last_visited in self.sNodes[last_visited].topology:  # to account for self loops
+                break
             con_edge = set(self.sNodes[last_visited].adj_edges).difference(set(group_edges)).pop()
+            con_node = [n for n in self.sEdges[con_edge].nodes if n != last_visited][0] # to account for self loops
             group_nodes.append(con_node)
             group_edges.append(con_edge)
         if len(group_nodes) > 2:
@@ -393,19 +416,23 @@ class sGraph(QObject):
         merged_edge = sEdge(self.edge_id, feat, [group_nodes[0], group_nodes[-1]])
         self.sEdges[self.edge_id] = merged_edge
 
-        # del edges
-        #for e in group_edges:
-        #    del self.sEdges[e]
-
         # update ends
-        #self.sNodes[group_nodes[0]].topology.remove(group_nodes[1])
-        #self.sNodes[group_nodes[-1]].topology.remove(group_nodes[-2])
-        #self.sNodes[group_nodes[0]].adj_edges.remove(group_edges[0])
-        #self.sNodes[group_nodes[-1]].adj_edges.remove(group_edges[-1])
+        self.sNodes[group_nodes[0]].topology.remove(group_nodes[1])
+        self.update_topology(group_nodes[0], group_nodes[-1], self.edge_id)
+        if group_nodes == [group_nodes[0], group_nodes[1], group_nodes[0]]:
+            pass
+        else:
+            self.sNodes[group_nodes[-1]].topology.remove(group_nodes[-2])
+        self.sNodes[group_nodes[0]].adj_edges.remove(group_edges[0])
+        self.sNodes[group_nodes[-1]].adj_edges.remove(group_edges[-1])
 
         # middle nodes del
-        #for nd in group_nodes[1:-1]:
-            #del self.sNodes[nd]
+        for nd in group_nodes[1:-1]:
+            del self.sNodes[nd]
+
+        # del edges
+        for e in group_edges:
+            del self.sEdges[e]
 
         return
 
@@ -421,9 +448,11 @@ class sGraph(QObject):
         pass
 
     def collapse_to_medial_axis(self):
+
         pass
 
-    def simplify_angle(self):
+    def simplify_angle(self, max_angle_threshold):
+
         pass
 
     def kill(self):

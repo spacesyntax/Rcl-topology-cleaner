@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>289</width>
-    <height>557</height>
+    <width>295</width>
+    <height>565</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -25,6 +25,13 @@
      <property name="sizeConstraint">
       <enum>QLayout::SetMinimumSize</enum>
      </property>
+     <item row="16" column="0" colspan="2">
+      <widget class="QCheckBox" name="simplifyCheckBox">
+       <property name="text">
+        <string>simplify angular changes </string>
+       </property>
+      </widget>
+     </item>
      <item row="2" column="0" colspan="2">
       <widget class="QLabel" name="label_5">
        <property name="font">
@@ -38,14 +45,14 @@
        </property>
       </widget>
      </item>
-     <item row="38" column="0">
+     <item row="39" column="0">
       <widget class="QPushButton" name="settingsButton">
        <property name="text">
         <string>Settings</string>
        </property>
       </widget>
      </item>
-     <item row="38" column="1">
+     <item row="39" column="1">
       <widget class="QPushButton" name="cancelButton">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -93,7 +100,7 @@
        </property>
       </widget>
      </item>
-     <item row="16" column="2">
+     <item row="17" column="2">
       <widget class="QLabel" name="label_3">
        <property name="text">
         <string/>
@@ -132,7 +139,7 @@
        </property>
       </widget>
      </item>
-     <item row="16" column="0" colspan="2">
+     <item row="17" column="0" colspan="2">
       <widget class="QCheckBox" name="orphansCheckBox">
        <property name="minimumSize">
         <size>
@@ -180,7 +187,7 @@
        </property>
       </widget>
      </item>
-     <item row="31" column="0" colspan="3">
+     <item row="32" column="0" colspan="3">
       <widget class="QCheckBox" name="errorsCheckBox">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
@@ -199,7 +206,7 @@
        </property>
       </widget>
      </item>
-     <item row="30" column="0" colspan="3">
+     <item row="31" column="0" colspan="3">
       <widget class="QCheckBox" name="unlinksCheckBox">
        <property name="minimumSize">
         <size>
@@ -212,7 +219,7 @@
        </property>
       </widget>
      </item>
-     <item row="38" column="2">
+     <item row="39" column="2">
       <widget class="QPushButton" name="cleanButton">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
@@ -250,7 +257,7 @@
        </property>
       </widget>
      </item>
-     <item row="29" column="2">
+     <item row="30" column="2">
       <widget class="QPushButton" name="browseCleaned">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
@@ -269,21 +276,21 @@
        </property>
       </widget>
      </item>
-     <item row="22" column="1">
+     <item row="23" column="1">
       <widget class="QRadioButton" name="shpRadioButton">
        <property name="text">
         <string>shapefile</string>
        </property>
       </widget>
      </item>
-     <item row="18" column="0" colspan="3">
+     <item row="19" column="0" colspan="3">
       <widget class="Line" name="line">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
        </property>
       </widget>
      </item>
-     <item row="36" column="0" colspan="3">
+     <item row="37" column="0" colspan="3">
       <widget class="QProgressBar" name="cleaningProgress">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
@@ -296,7 +303,7 @@
        </property>
       </widget>
      </item>
-     <item row="29" column="0" colspan="2">
+     <item row="30" column="0" colspan="2">
       <widget class="QLineEdit" name="outputCleaned">
        <property name="enabled">
         <bool>true</bool>
@@ -309,7 +316,7 @@
        </property>
       </widget>
      </item>
-     <item row="34" column="0" colspan="3">
+     <item row="35" column="0" colspan="3">
       <widget class="Line" name="line_2">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
@@ -333,21 +340,21 @@
        </property>
       </widget>
      </item>
-     <item row="22" column="0">
+     <item row="23" column="0">
       <widget class="QRadioButton" name="memoryRadioButton">
        <property name="text">
         <string>memory</string>
        </property>
       </widget>
      </item>
-     <item row="22" column="2">
+     <item row="23" column="2">
       <widget class="QRadioButton" name="postgisRadioButton">
        <property name="text">
         <string>PostGIS</string>
        </property>
       </widget>
      </item>
-     <item row="21" column="0" colspan="3">
+     <item row="22" column="0" colspan="3">
       <widget class="QLabel" name="label_4">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
@@ -394,6 +401,9 @@
         <string>Edit default</string>
        </property>
       </widget>
+     </item>
+     <item row="16" column="2">
+      <widget class="QSpinBox" name="angularChangeSpinBox"/>
      </item>
     </layout>
    </item>

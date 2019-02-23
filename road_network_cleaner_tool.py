@@ -25,10 +25,11 @@ from PyQt4.QtCore import QThread, QSettings
 from qgis.core import *
 from qgis.gui import *
 from qgis.utils import *
+import operator
 
 from road_network_cleaner_dialog import RoadNetworkCleanerDialog
-from sGraph.ss2.clean_tool import *  # better give these a name to make it explicit to which module the methods belong
-from sGraph.ss2.utilityFunctions import *
+from sGraph.sGraph import *  # better give these a name to make it explicit to which module the methods belong
+from sGraph.utilityFunctions import *
 
 # Import the debug library - required for the cleaning class in separate thread
 # set is_debug to False in release version
@@ -151,7 +152,6 @@ class NetworkCleanerTool(QObject):
         if self.settings['input']:
 
             cleaning = self.Worker(self.settings, self.iface)
-            print self.settings
             # start the cleaning in a new thread
             self.dlg.lockGUI(True)
             thread = QThread()
@@ -168,15 +168,16 @@ class NetworkCleanerTool(QObject):
             self.thread = thread
             self.cleaning = cleaning
 
-            #if is_debug:
-            print 'started'
+            if is_debug:
+                print 'started'
+            self.giveMessage('Process started..', QgsMessageBar.INFO)
         else:
             self.giveMessage('Missing user input!', QgsMessageBar.INFO)
             return
 
     def workerFinished(self, ret):
-        #if is_debug:
-        print 'trying to finish'
+        if is_debug:
+            print 'trying to finish'
         self.dlg.lockGUI(False)
         # get cleaning settings
         layer_name = self.settings['input']
@@ -251,7 +252,7 @@ class NetworkCleanerTool(QObject):
                 pass
             # Clean up thread and analysis
             self.cleaning.kill()
-            self.cleaning.clean_tool.kill()
+            self.cleaning.graph.kill() #todo
             self.cleaning.deleteLater()
             self.thread.quit()
             self.thread.wait()
@@ -278,7 +279,8 @@ class NetworkCleanerTool(QObject):
             self.settings = settings
             self.cl_killed = False
             self.iface = iface
-            self.clean_tool = None
+            self.pseudo_graph = sGraph({}, {})
+            self.graph = None
 
         def run(self):
             if has_pydevd and is_debug:
@@ -289,98 +291,71 @@ class NetworkCleanerTool(QObject):
                 # cleaning settings
                 layer_name = self.settings['input']
                 layer = getLayerByName(layer_name)
-                Snap = self.settings['snap']
-                Break = self.settings['break']
-                # Merge = 'between intersections'
-                Merge = self.settings['merge']
-                Orphans = self.settings['orphans']
+                snap_threshold = self.settings['snap']
+                break_at_vertices = self.settings['break']
+                merge_type = self.settings['merge']
+                collinear_threshold = self.settings['collinear_angle']
+                angle_threshold = self.settings['simplification_threshold']
+                fix_unlinks = self.settings['fix_unlinks']
+                orphans = self.settings['orphans']
+                errors = self.settings['errors']
+                getUnlinks = self.settings['unlinks']
 
-                Errors = self.settings['errors']
-                Unlinks = self.settings['unlinks']
 
-                self.clean_tool = cleanTool(Snap, Break, Merge, Errors, Unlinks, Orphans)
                 self.cl_progress.emit(0)
-                self.clean_tool.progress.connect(self.cl_progress.emit)
+                # self.pseudo_graph.step = layer.featureCount() / float(10)
+                #self.pseudo_graph.progress.connect(self.cl_progress.emit)
+                self.graph = sGraph({}, {})
+                self.pseudo_graph.load_edges_w_o_topology(clean_features_iter(layer))
+                QgsMessageLog.logMessage('pseudo_graph edges added', level=QgsMessageLog.CRITICAL)
 
-                # 0. LOAD GRAPH # errors: points, invalids, null, multiparts
-                self.clean_tool.step = self.clean_tool.range/ float(layer.featureCount())
+                if break_at_vertices:
+                    #self.pseudo_graph.step = len(self.pseudo_graph.sEdges) / float(20)
+                    self.graph.load_edges(self.pseudo_graph.break_features_iter(getUnlinks, angle_threshold, fix_unlinks))
+                    QgsMessageLog.logMessage('pseudo_graph edges broken', level=QgsMessageLog.CRITICAL)
 
-                res = map(lambda f: self.clean_tool.sEdgesSpIndex.insertFeature(f), self.clean_tool.features_iter(layer))
+                #self.pseudo_graph.progress.disconnect() # self.cl_progress.emit
 
-                # 1. BREAK AT COMMON VERTICES # errors: duplicates, broken, self_intersecting (overlapping detected as broken)
-                if self.clean_tool.Break:
-                    print 'break'
-                    self.clean_tool.step = self.clean_tool.range / float(len(self.clean_tool.sEdges))
-                    broken_edges = list(self.breakFeaturesIter())
-                    res = map(lambda edge_id: self.del_edge(edge_id),
-                              set(broken_edges + self.duplicates))
+                #self.graph.progress.connect(self.cl_progress.emit)
+                #self.graph.total = self.pseudo_graph.total
+                #self.graph.step = 0
+                self.graph.clean(True, False, snap_threshold, True)
+                QgsMessageLog.logMessage('graph clean parallel and closed pl', level=QgsMessageLog.CRITICAL)
 
-                # 2. SNAP # errors: snapped
-                self.clean_tool.step = self.clean_tool.range/ float(len(self.clean_tool.sEdges))
-                res = map(lambda (edgeid, qgspoint): self.clean_tool.createTopology(qgspoint, edgeid), self.clean_tool.endpointsIter())
-                if self.clean_tool.Snap != -1:
-                    # group based on distance - create subgraph
-                    self.clean_tool.step = (self.clean_tool.range/ float(len(self.clean_tool.sNodes))) / float(2)
-                    subgraph_nodes = self.clean_tool.subgraph_nodes()
-                    self.clean_tool.step = (self.clean_tool.range/ float(len(subgraph_nodes))) / float(2)
-                    collapsed_edges = map(lambda nodes: self.clean_tool.mergeNodes(nodes), self.clean_tool.con_comp_iter(subgraph_nodes))
-                    res = map(lambda edge_id: self.clean_tool.del_edge(edge_id), set(list(itertools.chain.from_iterable(collapsed_edges))))
+                if merge_type:
 
-                # 3. MERGE # errors merged
-                if self.clean_tool.Merge:
-                    if self.clean_tool.Merge == 'between_intersections':
-                        self.clean_tool.step = (self.clean_tool.range / float(len(self.clean_tool.sNodes))) / float(2)
-                        subgraph_nodes = self.clean_tool.subgraph_con2_nodes()
-                        self.clean_tool.step = (self.clean_tool.range / float(len(subgraph_nodes))) / float(2)
-                        res = map(lambda group_edges: self.clean_tool.merge_edges(group_edges),
-                                  self.clean_tool.con_comp_iter(subgraph_nodes))
-                    elif self.clean_tool.Merge[0] == 'collinear':
-                        self.clean_tool.step = (self.clean_tool.range / float(len(self.clean_tool.sNodes))) / float(2)
-                        subgraph_nodes = self.clean_tool.subgraph_collinear_nodes()
-                        self.clean_tool.step = (self.clean_tool.range / float(len(subgraph_nodes))) / float(2)
-                        res = map(lambda (group_edges): self.clean_tool.merge_edges(group_edges),
-                                  self.con_comp_iter(subgraph_nodes))
+                    self.graph.merge(merge_type, collinear_threshold)
+                    self.graph.clean(True, False, snap_threshold, True)
+                    QgsMessageLog.logMessage('merge and clean', level=QgsMessageLog.CRITICAL)
 
-                # 4. ORPHANS
-                # errors orphans, closed polylines
-                if self.clean_tool.Orphans:
-                    self.clean_tool.step = len(self.clean_tool.sEdges) / float(self.clean_tool.range)
-                    res = map(
-                        lambda sedge: self.clean_tool.del_edge_w_nodes(sedge.id, sedge.getStartNode(), sedge.getEndNode()),
-                        filter(lambda edge: self.clean_tool.sNodes[edge.getStartNode()].getConnectivity() ==
-                                            self.clean_tool.sNodes[edge.getEndNode()].getConnectivity() == 1,
-                               self.clean_tool.sEdges.values()))
+                if snap_threshold != 0:
+
+                    self.graph.snap_endpoints(snap_threshold)
+                    self.graph.clean(True, orphans, snap_threshold, False)
+                    if merge_type:
+                        self.graph.merge(merge_type, collinear_threshold)
+                    QgsMessageLog.logMessage('snap, clean and merge', level=QgsMessageLog.CRITICAL)
+
+                if getUnlinks:
+                    unlink_features = map(lambda p: create_feat_from_point(p), zip(range(1, len(self.graph.unlinks)), self.graph.unlinks))
+                    QgsMessageLog.logMessage('unlinks created', level=QgsMessageLog.CRITICAL)
 
                 error_features = []
-                if self.clean_tool.Errors:
-                    all_errors = []
-                    all_errors += zip(self.clean_tool.multiparts, ['multipart'] * len(self.clean_tool.multiparts))
-                    all_errors += zip(self.clean_tool.points, ['point'] * len(self.clean_tool.points))
-                    all_errors += zip(self.clean_tool.orphans, ['orphan'] * len(self.clean_tool.orphans))
-                    all_errors += zip(self.clean_tool.closed_polylines, ['closed polyline'] * len(self.clean_tool.closed_polylines))
-                    all_errors += zip(self.clean_tool.duplicates, ['duplicate'] * len(self.clean_tool.duplicates))
-                    all_errors += zip(self.clean_tool.broken, ['broken'] * len(self.clean_tool.broken))
-                    all_errors += zip(self.clean_tool.merged, ['pseudo'] * len(self.clean_tool.merged))
-                    all_errors += zip(self.clean_tool.self_intersecting, ['self intersection'] * len(self.clean_tool.self_intersecting))
-                    all_errors += zip(self.clean_tool.snapped, ['snapped'] * len(self.clean_tool.snapped))
-                    error_features = [self.clean_tool.create_error_feat(k, str([i[1] for i in list(g)])[1:-1]) for k, g in
-                                      itertools.groupby(sorted(all_errors), operator.itemgetter(0))]
-
-                unlink_features = []
-                if self.clean_tool.Unlinks:
-                    unlink_features = map(lambda p: self.clean_tool.create_unlink_feat(p), self.clean_tool.unlinks)
+                if errors and False:
+                    error_features = map(lambda p: create_feat_from_point(p), zip(range(1, len(self.graph.unlinks)), self.graph.errors))
+                    QgsMessageLog.logMessage('errors created', level=QgsMessageLog.CRITICAL)
 
                 if is_debug: print "survived!"
-                self.clean_tool.progress.disconnect()
+                #self.graph.progress.disconnect()
                 self.cl_progress.emit(100)
                 # return cleaned data, errors and unlinks
-
-                ret = map(lambda e: e.feature, self.clean_tool.sEdges.values()), error_features, unlink_features
+                ret = map(lambda e: e.feature, self.graph.sEdges.values()), error_features, unlink_features
+                #ret = None
 
             except Exception, e:
                 # forward the exception upstream
-                print traceback.format_exc()
-                self.error.emit(traceback.format_exc())
+                # print e
+                self.error.emit(e, traceback.format_exc() )
 
             self.finished.emit(ret)
 
