@@ -110,6 +110,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         if self.dataSourceCombo.currentText() == 'OpenStreetMap':
             self.edit_mode = False
             self.snapCheckBox.setCheckState(2)
+            self.simplifyCheckBox.setCheckState(2)
             self.snapSpinBox.setValue(5)
             self.angularChangeSpinBox.setValue(10)
             self.breakCheckBox.setCheckState(2)
@@ -121,6 +122,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         elif self.dataSourceCombo.currentText() == 'OrdnanceSurvey':
             self.edit_mode = False
             self.snapCheckBox.setCheckState(2)
+            self.simplifyCheckBox.setCheckState(2)
             self.snapSpinBox.setValue(5)
             self.angularChangeSpinBox.setValue(10)
             self.breakCheckBox.setCheckState(0)
@@ -171,6 +173,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.mergeCollinearCheckBox.setDisabled(onoff)
         self.breakCheckBox.setDisabled(onoff)
         self.snapCheckBox.setDisabled(onoff)
+        self.simplifyCheckBox.setDisabled(onoff)
         self.snapSpinBox.setDisabled(onoff)
         self.angularChangeSpinBox.setDisabled(onoff)
         self.angleSpinBox.setDisabled(onoff)
@@ -186,7 +189,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
             return 0
 
     def getSimplificationTolerance(self):
-        if self.snapCheckBox.isChecked():
+        if self.simplifyCheckBox.isChecked():
             return self.angularChangeSpinBox.value()
         else:
             return 0
@@ -234,7 +237,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
     def get_output_type(self):
         if self.shpRadioButton.isChecked():
-            return 'shp'
+            return 'shapefile'
         elif self.postgisRadioButton.isChecked():
             return 'postgis'
         else:
@@ -244,13 +247,60 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         if self.dataSourceCombo.currentText() == 'OrdnanceSurvey':
             return True
         else:
-            return False
+            return None
 
     def get_settings(self):
-        settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'snap': self.getTolerance(), 'break': self.getBreakages(), 'merge':self.getMerge(), 'orphans':self.getOrphans(),
-                    'errors': self.get_errors(), 'unlinks': self.get_unlinks(), 'collinear_angle': self.getCollinearThreshold(), 'simplification_threshold': self.getSimplificationTolerance(),
-                    'fix_unlinks': self.fix_unlinks(), 'output_type': self.get_output_type()}
+        break_at_vertices, merge_type, snap_threshold, orphans, fix_unlinks = self.getBreakages(), self.getMerge(),  self.getTolerance(), self.getOrphans(), self.fix_unlinks()
+        getUnlinks = self.get_unlinks()
+        settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'snap': snap_threshold, 'break': break_at_vertices, 'merge': merge_type, 'orphans': orphans,
+                    'errors': self.get_errors(), 'unlinks': getUnlinks, 'collinear_angle': self.getCollinearThreshold(), 'simplification_threshold': self.getSimplificationTolerance(),
+                    'fix_unlinks': fix_unlinks, 'output_type': self.get_output_type(), 'progress_ranges': self.get_progress_ranges(break_at_vertices, merge_type, snap_threshold, orphans, fix_unlinks, getUnlinks)}
         return settings
+
+    def get_progress_ranges(self, break_at_vertices, merge_type, snap_threshold, orphans, fix_unlinks, getUnlinks):
+        range = 100
+        #load_range, cl1_range, cl2_range, cl3_range, break_range, merge1_range, merge2_range, snap_range, unlinks_range = 0, 0, 0, 0, 0, 0, 0, 0, 0
+
+        # hard-coded ranges
+        load_range = 10
+        cl1_range = 5 # necessary - closed polylines
+        range = range - (load_range + cl1_range)
+
+        cl2_range = 0
+        cl3_range = 0
+        cl4_range = 0
+        if merge_type in ('intersections', 'collinear'):
+            cl2_range = 5
+            cl4_range = 5
+        if orphans:
+            cl3_range = 5
+
+        range = range - (cl2_range + cl3_range + cl4_range)
+        unlinks_range = 0
+        if fix_unlinks or getUnlinks:
+            unlinks_range = 5
+
+        range -= unlinks_range
+
+        process_count = 0
+        if break_at_vertices:
+            process_count += 4  # double weight
+        if merge_type:
+            process_count += 1
+        if snap_threshold != 0:
+            process_count += 1
+        range = range / float(process_count)
+
+        break_range, merge1_range, merge2_range, snap_range = 0, 0, 0, 0
+        if break_at_vertices:
+            break_range = 4*range
+        if merge_type:
+            merge1_range = range - 5
+            merge2_range = 5
+        if snap_threshold != 0:
+            snap_range = range
+
+        return [float(i) for i in [load_range, cl1_range, cl2_range, cl3_range, cl4_range, break_range, merge1_range, merge2_range, snap_range, unlinks_range]]
 
     def get_dbsettings(self):
         settings = self.dbsettings_dlg.getDbSettings()

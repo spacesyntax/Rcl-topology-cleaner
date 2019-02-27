@@ -1,9 +1,11 @@
 import collections
 import math
 from collections import defaultdict
-from qgis.core import QgsMapLayerRegistry, QgsFields, QgsField, QgsGeometry, QgsFeature, QgsVectorLayer, QgsVectorFileWriter
+from qgis.core import QgsMapLayerRegistry, QgsFields, QgsField, QgsGeometry, QgsFeature, QgsVectorLayer, QgsVectorFileWriter, QGis, NULL
 from PyQt4.QtCore import  QVariant
 import itertools
+import psycopg2
+
 
 # FEATURES -----------------------------------------------------------------
 
@@ -11,14 +13,18 @@ import itertools
 # (NULL), point, (invalids), multipart geometries, snap (will be added later)
 points = []
 multiparts = []
-# do not snap - because if self loop needs to break it will not
+error_flds = QgsFields()
+error_flds.append(QgsField('error type', QVariant.String))
+error_feat = QgsFeature()
+error_feat.setFields(error_flds)
 
+# do not snap - because if self loop needs to break it will not
 
 # FEATURES -----------------------------------------------------------------
 
-def clean_features_iter(layer):
+def clean_features_iter(feat_iter):
     id = 0
-    for f in layer.getFeatures():
+    for f in feat_iter:
 
         # dropZValue if geometry is 3D
         if f.geometry().geometry().is3D():
@@ -29,7 +35,9 @@ def clean_features_iter(layer):
         # point
         if f_geom.length() <= 0:
             points.append(f_geom.asPoint())
-
+            ml_error = QgsFeature(error_feat)
+            ml_error.setGeometry(f_geom)
+            ml_error.setAttributes('point')
         elif f_geom.wkbType() == 2:
             f.setFeatureId(id)
             id += 1
@@ -46,24 +54,20 @@ def clean_features_iter(layer):
         elif f_geom.wkbType() == 5:
             ml_segms = f_geom.asMultiPolyline()
             for ml in ml_segms:
-                ml_geom = QgsGeometry(ml)
+                ml_geom = QgsGeometry(QgsGeometry.fromPolyline(ml))
                 ml_feat = QgsFeature(f)
                 ml_feat.setFeatureId(id)
                 id += 1
                 ml_feat.setGeometry(ml_geom)
-                multiparts.append(ml_geom.asPolyline()[0])
-                multiparts.append(ml_geom.asPolyline()[-1])
+                ml_error = QgsFeature(error_feat)
+                ml_error.setGeometry(QgsGeometry.fromPoint(ml_geom.asPolyline()[0]))
+                ml_error.setAttributes(['multipart'])
+                multiparts.append(ml_error)
+                ml_error = QgsFeature(error_feat)
+                ml_error.setGeometry(QgsGeometry.fromPoint(ml_geom.asPolyline()[-1]))
+                ml_error.setAttributes(['multipart'])
+                multiparts.append(ml_error)
                 yield ml_feat
-
-flds = QgsFields()
-flds.append(QgsField('id', QVariant.Int))
-def create_feat_from_point(p, id):
-    f = QgsFeature()
-    f.setFeatureId(id)
-    f.setGeometry(QgsGeometry.fromPoint(p))
-    f.setAttributes([id])
-    f.setFields(flds)
-    return f
 
 # GEOMETRY -----------------------------------------------------------------
 
@@ -97,11 +101,13 @@ def angular_change(geom1,geom2):
     return
 
 
-def merge_geoms(geoms):
+def merge_geoms(geoms, simpl_threshold):
     # get attributes from longest
     new_geom = geoms[0]
     for i in geoms[1:]:
         new_geom = new_geom.combine(i)
+    if simpl_threshold != 0:
+        new_geom = new_geom.simplify(simpl_threshold)
     return new_geom
 
 # ITERATORS -----------------------------------------------------------------
@@ -141,15 +147,14 @@ def grouper(sequence):
 
 # WRITE -----------------------------------------------------------------
 
-
+# geom_type allowed: 'Point', 'Linestring', 'Polygon'
 def to_layer(features, crs, encoding, geom_type, layer_type, path, name):
 
     first_feat = features[0]
     fields = first_feat.fields()
     layer = None
     if layer_type == 'memory':
-        geom_types = {1: 'Point', 2: 'Linestring', 3:'Polygon'}
-        layer = QgsVectorLayer(geom_types[geom_type] + '?crs=' + crs.authid(), name, "memory")
+        layer = QgsVectorLayer(geom_type + '?crs=' + crs.authid(), name, "memory")
         pr = layer.dataProvider()
         pr.addAttributes(fields.toList())
         layer.updateFields()
@@ -158,12 +163,12 @@ def to_layer(features, crs, encoding, geom_type, layer_type, path, name):
         layer.commitChanges()
 
     elif layer_type == 'shapefile':
-        file_writer = QgsVectorFileWriter(path, encoding, fields, geom_type, crs, "ESRI Shapefile")
-        print path, encoding, fields, geom_type, crs
+
+        wkbTypes = { 'Point': QGis.WKBPoint, 'Linestring': QGis.WKBLineString, 'Polygon': QGis.WKBPolygon }
+        file_writer = QgsVectorFileWriter(path, encoding, fields, wkbTypes[geom_type], crs, "ESRI Shapefile")
         if file_writer.hasError() != QgsVectorFileWriter.NoError:
             print "Error when creating shapefile: ", file_writer.errorMessage()
         del file_writer
-        # TODO: get name from path
         layer = QgsVectorLayer(path, name, "ogr")
         pr = layer.dataProvider()
         layer.startEditing()
@@ -182,3 +187,40 @@ def getLayerByName(name):
         if i.name() == name:
             layer = i
     return layer
+
+
+# POSTGIS -----------------------------------------------------------------
+
+def getPostgisSchemas(connstring, commit=False):
+    """Execute query (string) with given parameters (tuple)
+    (optionally perform commit to save Db)
+    :return: result set [header,data] or [error] error
+    """
+
+    try:
+        connection = psycopg2.connect(connstring)
+    except psycopg2.Error, e:
+        print e.pgerror
+        connection = None
+
+    schemas = []
+    data = []
+    if connection:
+        query = unicode("""SELECT schema_name from information_schema.schemata;""")
+        cursor = connection.cursor()
+        try:
+            cursor.execute(query)
+            if cursor.description is not None:
+                data = cursor.fetchall()
+            if commit:
+                connection.commit()
+        except psycopg2.Error, e:
+            connection.rollback()
+        cursor.close()
+
+    # only extract user schemas
+    for schema in data:
+        if schema[0] not in ('topology', 'information_schema') and schema[0][:3] != 'pg_':
+            schemas.append(schema[0])
+    #return the result even if empty
+    return sorted(schemas)

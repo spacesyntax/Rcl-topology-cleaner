@@ -18,6 +18,20 @@ except ImportError:
 # DUPLICATE
 #   - topology of n1 would include n2 many times
 
+# TODO: change based on adding and deleteting features
+# always use clean_feature_iterators in the outputs
+
+unlink_feat = QgsFeature()
+unlink_flds = QgsFields()
+unlink_flds.append(QgsField('id', QVariant.Int))
+unlink_feat.setFields(unlink_flds)
+
+error_feat = QgsFeature()
+error_flds = QgsFields()
+error_flds.append(QgsField('error type', QVariant.String))
+error_feat.setFields(unlink_flds)
+
+
 class sGraph(QObject):
 
     finished = pyqtSignal(object)
@@ -49,6 +63,7 @@ class sGraph(QObject):
         del res
 
         self.errors = []
+        # breakages, orphans1, merges, snaps
         self.unlinks = []
 
     # graph from feat iter
@@ -56,6 +71,13 @@ class sGraph(QObject):
     def load_edges(self, feat_iter):
 
         for f in feat_iter:
+
+            if self.killed is True:
+                break
+
+            self.total_progress += self.step
+            self.progress.emit(self.total_progress)
+
             # add edge
             geometry = f.geometry().asPolyline()
             startpoint = geometry[0]
@@ -69,7 +91,7 @@ class sGraph(QObject):
             f.setFeatureId(self.edge_id)
             sedge = sEdge(self.edge_id, f, snodes)
             self.sEdges[self.edge_id] = sedge
-            self.edgeSpIndex.insertFeature(f)
+            #self.edgeSpIndex.insertFeature(f)
 
         return
 
@@ -78,8 +100,11 @@ class sGraph(QObject):
 
         for f in clean_feat_iter:
 
-            #self.total_progress += self.step
-            #self.progress.emit(self.total_progress)
+            if self.killed is True:
+                break
+
+            self.total_progress += self.step
+            self.progress.emit(self.total_progress)
 
             # add edge
             sedge = sEdge(f.id(), f, [])
@@ -129,10 +154,14 @@ class sGraph(QObject):
     # create graph (broken_features_iter)
     # can be applied to edges w-o topology for speed purposes
     def break_features_iter(self, getUnlinks, angle_threshold, fix_unlinks=False):
+        unlinks_id = 0
         for sedge in self.sEdges.values():
 
-            #self.total_progress += self.step
-            #self.progress.emit(self.total_progress)
+            if self.killed is True:
+                break
+
+            self.total_progress += self.step
+            self.progress.emit(self.total_progress)
 
             f = sedge.feature
             f_geom = f.geometry()
@@ -148,30 +177,42 @@ class sGraph(QObject):
             intersections += self_intersections
             intersections = (set(intersections))
 
-            # unlinks
-            if getUnlinks:
+            # unlinks (if OS unlinks generated in advance)
+            if getUnlinks and fix_unlinks:
                 lines = filter(lambda line: f_geom.crosses(self.sEdges[line].feature.geometry()), lines)
 
                 unlinks = []
                 for line in lines:
                     crossing_points = f_geom.intersection(self.sEdges[line].feature.geometry())
                     if crossing_points.geometry().wkbType() == 1:
-                        unlinks.append(crossing_points.asPoint())
+                        un_f = QgsFeature(unlink_feat)
+                        un_f.setGeometry(crossing_points)
+                        un_f.setFeatureId(unlinks_id)
+                        un_f.setAttributes([unlinks_id])
+                        unlinks_id += 1
+                        unlinks.append(un_f)
                     elif crossing_points.geometry().wkbType() == 4:
                         for p in crossing_points.asMultiPoint():
-                            unlinks.append(p)
-                if fix_unlinks:
-                    # find vertices
-                    unlinks = map(lambda p: self.fix_unlink(p, pl, sedge.id), unlinks)
-                    intersections = list(intersections.difference(set(unlinks)))
-                else: # TODO: exclude vertices - might be in one of the lines
-                    pass
+                            un_f = QgsFeature(unlink_feat)
+                            un_f.setGeometry(QgsGeometry.fromPoint(p))
+                            un_f.setFeatureId(unlinks_id)
+                            un_f.setAttributes([unlinks_id])
+                            unlinks_id += 1
+                            unlinks.append(un_f)
+                # find vertices
+                unlinks = map(lambda p: self.fix_unlink(p, pl, sedge.id), unlinks)
+                intersections = list(intersections.difference(set(unlinks)))
+                # TODO: exclude vertices - might be in one of the lines
                 self.unlinks += unlinks
 
-            # errors
-            self.errors += intersections
             if len(intersections) > 0:
                 # broken features iterator
+                # errors
+                for pnt in intersections:
+                    err_f = QgsFeature(error_feat)
+                    err_f.setGeometry(QgsGeometry.fromPoint(pnt))
+                    err_f.setAttributes(['broken'])
+                    self.errors.append(err_f)
                 vertices_indices = find_vertex_indices(pl, intersections)
                 for start, end in zip(vertices_indices[:-1], vertices_indices[1:]):
                     broken_feat = QgsFeature(f)
@@ -188,12 +229,35 @@ class sGraph(QObject):
             self.sEdges[e].feature.geometry().moveVertex(point.x() + 1, point.y() + 1, polyline.index(point))
         return
 
+    def con_comp_iter(self, group_dictionary):
+        components_passed = set([])
+        for id in group_dictionary.keys():
+
+            self.total_progress += self.step
+            self.progress.emit(self.total_progress)
+
+            if {id}.isdisjoint(components_passed):
+                group = [[id]]
+                candidates = ['dummy', 'dummy']
+                while len(candidates) > 0:
+                    flat_group = group[:-1] + group[-1]
+                    candidates = map(
+                        lambda last_visited_node: set(group_dictionary[last_visited_node]).difference(set(flat_group)),
+                        group[-1])
+                    candidates = list(set(itertools.chain.from_iterable(candidates)))
+                    group = flat_group + [candidates]
+                    components_passed.update(set(candidates))
+                yield group[:-1]
+
     # group points based on proximity - spatial index is not updated
     def snap_endpoints(self, snap_threshold):
+
         # TODO: test when loading points
         res = map(lambda snode: self.ndSpIndex.insertFeature(snode.feature), self.sNodes.values())
         filtered_nodes = {}
         for node in self.sNodes.values():
+            if self.killed is True:
+                break
             # find nodes within x distance
             node_geom = node.feature.geometry()
             nodes = filter(lambda nd: nd != node.id and node_geom.distance(self.sNodes[nd].feature.geometry()) <= snap_threshold,
@@ -201,7 +265,15 @@ class sGraph(QObject):
             if len(nodes) > 0:
                 filtered_nodes[node.id] = nodes
 
-        for group in con_comp_iter(filtered_nodes):
+        step_original = float(self.step)
+        self.step = (len(filtered_nodes) * self.step) / float(len(self.sEdges))
+        for group in self.con_comp_iter(filtered_nodes):
+
+            if self.killed is True:
+                break
+
+            self.total_progress += self.step
+            self.progress.emit(self.total_progress)
 
             # find con_edges
             con_edges = set(itertools.chain.from_iterable([self.sNodes[node].adj_edges for node in group]))
@@ -249,6 +321,13 @@ class sGraph(QObject):
                     self.sNodes[merged_node_id].adj_edges.append(edge)
                     self.sNodes[start].topology.append(merged_node_id)
                     self.sNodes[start].topology.remove(end)
+
+            # errors
+            for node in group:
+                err_f = QgsFeature(error_feat)
+                err_f.setGeometry(self.sNodes[node].feature.geometry())
+                err_f.setAttributes(['snapped'])
+                self.errors.append(err_f)
 
             # delete old nodes
             res = map(lambda item: self.delete_node(item), group)
@@ -303,6 +382,10 @@ class sGraph(QObject):
     # TODO: extend
 
     def clean_dupl(self, group_edges, snap_threshold):
+
+        self.total_progress += self.step
+        self.progress.emit(self.total_progress)
+
         # keep line with minimum length
         # TODO: add distance centroids
         lengths = [self.sEdges[e].feature.geometry().length() for e in group_edges]
@@ -312,10 +395,20 @@ class sGraph(QObject):
         for e in sorted_edges[1:]:
             # delete line
             if abs(self.sEdges[e].feature.geometry().length() - min_len) <= snap_threshold:
+
+                for p in set([self.sNodes[n].feature.geometry() for n in self.sEdges[e].nodes]):
+                    err_f = QgsFeature(error_feat)
+                    err_f.setGeometry(p)
+                    err_f.setAttributes([ 'duplicate'])
+                    self.errors.append(err_f)
                 self.remove_edge(self.sEdges[e].nodes, e)
         return
 
     def clean_orphan(self, e):
+
+        self.total_progress += self.step
+        self.progress.emit(self.total_progress)
+
         nds = e.nodes
         snds = self.sNodes[nds[0]], self.sNodes[nds[1]]
         # connectivity of both endpoints 1
@@ -326,6 +419,10 @@ class sGraph(QObject):
         if len(set(snds[0].topology)) == len(set(snds[1].topology)) == 1 and len(set(snds[0].adj_edges)) == 1:
             del self.sEdges[e.id]
             for nd in set(nds):
+                err_f = QgsFeature(error_feat)
+                err_f.setGeometry(self.sNodes[nd].feature.geometry())
+                err_f.setAttributes(['orphan'])
+                self.errors.append(err_f)
                 del self.sNodes[nd]
         return True
 
@@ -334,45 +431,90 @@ class sGraph(QObject):
 
     def clean(self, duplicates, orphans, snap_threshold, closed_polylines):
         # clean duplicates - delete longest from group using snap threshold
+        step_original = float(self.step)
         if duplicates:
             input = [(e.id, frozenset(e.nodes)) for e in self.sEdges.values()]
             groups = defaultdict(list)
             for v, k in input: groups[k].append(v)
 
             dupl_candidates = dict(filter(lambda (nodes, edges): len(edges) > 1, groups.items()))
-            res = map(lambda (nodes, group_edges): self.clean_dupl(group_edges, snap_threshold), dupl_candidates.items())
 
+            self.step = (len(dupl_candidates) * self.step) / float(len(self.sEdges))
+            for (nodes, group_edges) in dupl_candidates.items():
+
+                if self.killed is True:
+                    break
+
+                self.total_progress += self.step
+                self.progress.emit(self.total_progress)
+                self.clean_dupl(group_edges, snap_threshold)
+
+        self.step = step_original
         # clean orphans
         if orphans:
-            res = map(lambda e: self.clean_orphan(e), self.sEdges.values())
-        elif closed_polylines:
-            res = map(lambda e: self.clean_orphan(e), filter(lambda edg: len(set(edg.nodes)) == 1, self.sEdges.values()))
+            for e in self.sEdges.values():
 
+                if self.killed is True:
+                    break
+
+                self.total_progress += self.step
+                self.progress.emit(self.total_progress)
+
+                self.clean_orphan(e)
+
+        # clean orphan closed polylines
+        elif closed_polylines:
+
+            for e in self.sEdges.values():
+
+                if self.killed is True:
+                    break
+
+                self.total_progress += self.step
+                self.progress.emit(self.total_progress)
+
+                if len(set(e.nodes)) == 1:
+                    self.clean_orphan(e)
         return
 
     # merge
 
-    def merge(self, parameter, angle_threshold=None):
+    def merge_b_intersections(self, angle_threshold=0):
 
         # special cases: merge parallels (becomes orphan)
         # do not merge two parallel self loops
-        if parameter == 'angle':
-            con2 = filter(lambda (line1, line2): angular_change(self.sEdges[line1].feature.geometry(),
-                                                                self.sEdges[line2].feature.geometry()) <= angle_threshold, con2)
 
         edges_passed = set([])
+        self.step = (len(self.sNodes) * self.step) / float(len(self.sEdges))
+
         for e in self.edge_edges_iter():
             if {e}.isdisjoint(edges_passed):
                 edges_passed.update({e})
                 group_nodes, group_edges = self.route_polylines(e)
                 if group_edges:
                     edges_passed.update({group_edges[-1]})
-                    self.merge_edges(group_nodes, group_edges)
+                    self.merge_edges(group_nodes, group_edges, angle_threshold)
         return
+
+    def merge_collinear(self, collinear_threshold, angle_threshold=0):
+
+        return
+
+    def collinear_iter(self):
+        # get points with connectivity 2
+        # isolate
+        pass
 
     def edge_edges_iter(self):
         # what if two parallel edges at the edge - should become self loop
         for nd_id, nd in self.sNodes.items():
+
+            if self.killed is True:
+                break
+
+            self.total_progress += self.step
+            self.progress.emit(self.total_progress)
+
             con_edges = nd.adj_edges
             if (len(nd.topology) != 2 and len(con_edges) != 2):  # not set to include parallels and self loops
                 for e in con_edges:
@@ -398,7 +540,60 @@ class sGraph(QObject):
         else:
             return None, None
 
-    def merge_edges(self, group_nodes, group_edges):
+    def generate_unlinks(self): # for osm or other
+
+        # spIndex # TODO change OTF - insert/delete feature
+        self.edgeSpIndex = QgsSpatialIndex()
+        self.step = self.step / 2.0
+
+        for e in self.sEdges.values():
+            if self.killed is True:
+                break
+
+            self.total_progress += self.step
+            self.progress.emit(self.total_progress)
+
+            self.edgeSpIndex.insertFeature(e.feature)
+
+        unlinks_id = 0
+
+
+        for id, e in self.sEdges.items():
+
+            if self.killed is True:
+                break
+
+            self.total_progress += self.step
+            self.progress.emit(self.total_progress)
+
+            f_geom = e.feature.geometry()
+            lines = filter(lambda line: f_geom.crosses(self.sEdges[line].feature.geometry()) and id != line, self.edgeSpIndex.intersects(f_geom.boundingBox()))
+
+            unlinks = []
+            for line in lines:
+                crossing_points = f_geom.intersection(self.sEdges[line].feature.geometry())
+                if crossing_points.geometry().wkbType() == 1:
+                    un_f = QgsFeature(unlink_feat)
+                    un_f.setGeometry(crossing_points)
+                    un_f.setFeatureId(unlinks_id)
+                    un_f.setAttributes([unlinks_id])
+                    unlinks_id += 1
+                    unlinks.append(un_f)
+                elif crossing_points.geometry().wkbType() == 4:
+                    for p in crossing_points.asMultiPoint():
+                        un_f = QgsFeature(unlink_feat)
+                        un_f.setGeometry(QgsGeometry.fromPoint(p))
+                        un_f.setFeatureId(unlinks_id)
+                        un_f.setAttributes([unlinks_id])
+                        unlinks_id += 1
+                        unlinks.append(un_f)
+            self.unlinks += unlinks
+
+        return
+
+
+    # TODO: features added - pass through clean_iterator (can be ml line)
+    def merge_edges(self, group_nodes, group_edges, angle_threshold):
 
         geoms = map(lambda e: self.sEdges[e].feature.geometry(), group_edges)
         lengths = map(lambda g: g.length(), geoms)
@@ -410,24 +605,35 @@ class sGraph(QObject):
         # attributes from longest
         longest_feat = self.sEdges[group_edges[lengths.index(max_len)]].feature
         feat.setAttributes(longest_feat.attributes())
-        feat.setGeometry(merge_geoms(geoms))
+        merged_geom = merge_geoms(geoms, angle_threshold)
+        feat.setGeometry(merged_geom)
         feat.setFeatureId(self.edge_id)
 
-        merged_edge = sEdge(self.edge_id, feat, [group_nodes[0], group_nodes[-1]])
+        if merged_geom.wkbType() == 2:
+            p0 = merged_geom.asPolyline()[0]
+        else:
+            p0 = merged_geom.asMultiPolyline()[0][0]
+
+        if p0 == self.sNodes[group_nodes[0]].feature.geometry().asPoint():
+            merged_edge = sEdge(self.edge_id, feat, [group_nodes[0], group_nodes[-1]])
+        else:
+            merged_edge = sEdge(self.edge_id, feat, [group_nodes[-1], group_nodes[0]])
         self.sEdges[self.edge_id] = merged_edge
 
         # update ends
         self.sNodes[group_nodes[0]].topology.remove(group_nodes[1])
         self.update_topology(group_nodes[0], group_nodes[-1], self.edge_id)
-        if group_nodes == [group_nodes[0], group_nodes[1], group_nodes[0]]:
-            pass
-        else:
-            self.sNodes[group_nodes[-1]].topology.remove(group_nodes[-2])
+        #if group_nodes == [group_nodes[0], group_nodes[1], group_nodes[0]]:
+        self.sNodes[group_nodes[-1]].topology.remove(group_nodes[-2])
         self.sNodes[group_nodes[0]].adj_edges.remove(group_edges[0])
         self.sNodes[group_nodes[-1]].adj_edges.remove(group_edges[-1])
 
         # middle nodes del
         for nd in group_nodes[1:-1]:
+            err_f = QgsFeature(error_feat)
+            err_f.setGeometry(self.sNodes[nd].feature.geometry())
+            err_f.setAttributes(['merged'])
+            self.errors.append(err_f)
             del self.sNodes[nd]
 
         # del edges

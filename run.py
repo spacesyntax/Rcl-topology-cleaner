@@ -7,22 +7,23 @@ execfile(u'/Users/i.kolovou/Documents/Github/Rcl-topology-cleaner/sGraph/utility
 # parameters
 layer_name = 'oproads_lon'
 # time with previous version: ~ 16 minutes
-# time with new      version:
-# reduction:
+# time with new      version: ~ 3 minutes
+# reduction: 80%
 
-layer_name = 'osm_lon_small'
+layer_name = 'osm_lon_small_cl'
 layer = getLayerByName(layer_name)
 crs = layer.crs()
 encoding = layer.dataProvider().encoding()
 geom_type = layer.dataProvider().geometryType()
 getUnlinks = True
-snap_threshold = 5
+snap_threshold = 10
 angle_threshold = 15
 merge_type = 'intersections' # 'angle'
 orphans = True
 fix_unlinks = False
 collinear_threshold = None
 duplicates = True
+path = '/Users/i.kolovou/Downloads/osm_lon_small_cl.shp'
 
 # 1. LOAD
 _time = time.time()
@@ -41,7 +42,7 @@ pseudo_graph.step = len(pseudo_graph.sEdges)/ float(20)
 graph.load_edges(pseudo_graph.break_features_iter(getUnlinks, angle_threshold, fix_unlinks))
 print time.time() - _time
 
-broken_layer = to_layer(map(lambda e: e.feature, graph.sEdges.values()), crs, encoding, geom_type, 'memory', None, 'broken_layer')
+broken_layer = to_layer(map(lambda e: e.feature, graph.sEdges.values()), crs, encoding, geom_type, 'memory', path, 'broken_layer')
 QgsMapLayerRegistry.instance().addMapLayer(broken_layer)
 
 # nodes
@@ -101,10 +102,10 @@ QgsMapLayerRegistry.instance().addMapLayer(merged_layer)
 route_graph = graph.merge(('route hierarchy', 45))
 angle_column = route_graph.applyAngularCost({'class':'value'})
 route_graph.simplifyAngle('angle_column')
-graph = route_graph.break_graph(unlinks)
+graph = route_graph.break_graph(graph.unlinks)
 
-# collapse to node rb, short
-graph.simplify_circles('length_column', {'rb_column': 'rb_value'})
+# collapse to node rb, short (has happened)
+graph.simplify_roundabouts({'rb_column': 'rb_value'})
 
 # collapse to medial axis
-graph.simplify_parallel_lines('dc column':'dc_value', distance)
+graph.simplify_parallel_lines({'dc column':'dc_value'}, {'dc column_distance':'dc_distance_value'})
