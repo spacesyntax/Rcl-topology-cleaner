@@ -29,7 +29,7 @@ path = '/Users/i.kolovou/Downloads/osm_lon_small_cl.shp'
 _time = time.time()
 pseudo_graph = sGraph({},{})
 pseudo_graph.step = layer.featureCount()/ float(10)
-pseudo_graph.load_edges_w_o_topology(clean_features_iter(layer))
+pseudo_graph.load_edges_w_o_topology(clean_features_iter(layer.getFeatures()))
 print time.time() - _time
 
 #pseudo_layer = to_layer(map(lambda e: e.feature, pseudo_graph.sEdges.values()), crs, encoding, geom_type, 'memory', None, 'pseudo_layer')
@@ -57,7 +57,7 @@ print time.time() - _time
 
 # 3. MERGE
 _time = time.time()
-graph.merge(merge_type, collinear_threshold)
+graph.merge_b_intersections(angle_threshold)
 print time.time() - _time
 
 merged_layer = to_layer(map(lambda e: e.feature, graph.sEdges.values()), crs, encoding, geom_type, 'memory', None, 'merged_layer')
@@ -82,7 +82,7 @@ QgsMapLayerRegistry.instance().addMapLayer(nodes)
 
 # 6. CLEAN ALL
 _time = time.time()
-graph.clean(True, True, snap_threshold, False)
+graph.clean(True, False, snap_threshold, True)
 print time.time() - _time
 
 cleaned_layer = to_layer(map(lambda e: e.feature, graph.sEdges.values()), crs, encoding, geom_type, 'memory', None, 'cleaned_layer')
@@ -90,13 +90,17 @@ QgsMapLayerRegistry.instance().addMapLayer(cleaned_layer)
 
 # 7. MERGE
 _time = time.time()
-graph.merge(merge_type, collinear_threshold)
+graph.merge_b_intersections(angle_threshold)
 print time.time() - _time
 
 merged_layer = to_layer(map(lambda e: e.feature, graph.sEdges.values()), crs, encoding, geom_type, 'memory', None, 'merged_layer')
 QgsMapLayerRegistry.instance().addMapLayer(merged_layer)
 
 
+# 6. CLEAN ALL
+_time = time.time()
+graph.clean(True, True, snap_threshold, False)
+print time.time() - _time
 
 # simplify angle
 route_graph = graph.merge(('route hierarchy', 45))

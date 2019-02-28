@@ -141,8 +141,28 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         return self.inputCombo.currentText()
 
     def getOutput(self):
-        if self.outputCleaned.text() != 'cleaned':
+        if self.shpRadioButton.isChecked():
             return self.outputCleaned.text()
+        elif self.postgisRadioButton.isChecked():
+            # get from available dbs
+            # path = {'database':, 'service':, 'host': , 'port': , 'password': , 'user': , 'schema':}
+            database, schema, table_name = self.outputCleaned.text().split(':')
+            try:
+                service = self.dbsettings_dlg.available_dbs[database]['service']
+            except KeyError: service = None
+            try:
+                host = self.dbsettings_dlg.available_dbs[database]['host']
+            except KeyError: host = None
+            try:
+                port = self.dbsettings_dlg.available_dbs[database]['port']
+            except KeyError: port = None
+            try:
+                password = self.dbsettings_dlg.available_dbs[database]['password']
+            except KeyError: password = None
+            try:
+                user = self.dbsettings_dlg.available_dbs[database]['user']
+            except KeyError: user = None
+            return {'database': database, 'service': service, 'host': host, 'port': port, 'password': password, 'user': user, 'schema':schema, 'table_name': table_name}
         else:
             return None
 
@@ -316,7 +336,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         elif self.postgisRadioButton.isChecked():
             self.dbsettings_dlg.show()
             # Run the dialog event loop
-            result2 = self.dbsettings_dlg.exec_()
+            #result2 = self.dbsettings_dlg.exec_()
             self.dbsettings = self.dbsettings_dlg.getDbSettings()
         return
 

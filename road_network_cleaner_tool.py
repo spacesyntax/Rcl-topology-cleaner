@@ -184,9 +184,6 @@ class NetworkCleanerTool(QObject):
         layer_name = self.settings['input']
         path = self.settings['output']
         output_type = self.settings['output_type']
-        if output_type == 'postgis':
-            (dbname, schema_name, table_name) = path.split(':')
-            path = (self.dlg.dbsettings_dlg.connstring, schema_name, table_name)
         #  get settings from layer
         layer = getLayerByName(layer_name)
 
@@ -209,7 +206,11 @@ class NetworkCleanerTool(QObject):
 
             if self.settings['errors']:
                 errors_path = None
-                if path: errors_path = path[:-4] + "_cl_errors.shp"
+                if output_type == 'shapefile':
+                    errors_path = path[:-4] + "_cl_errors.shp"
+                elif output_type == 'postgis':
+                    errors_path = dict(path)
+                    errors_path['table_name'] = errors_path['table_name'] + '_errors'
                 errors = to_layer(errors, layer.crs(), layer.dataProvider().encoding(), 'Point', output_type,
                                   errors_path, layer_name + "_cl_errors")
                 errors.loadNamedStyle(os.path.dirname(__file__) + '/qgis_styles/errors.qml')
@@ -218,7 +219,11 @@ class NetworkCleanerTool(QObject):
 
             if self.settings['unlinks']:
                 unlinks_path = None
-                if path: unlinks_path = path[:-4] + "_u.shp"
+                if output_type == 'shapefile':
+                    unlinks_path = path[:-4] + "_u.shp"
+                elif output_type == 'postgis':
+                    unlinks_path = dict(path)
+                    unlinks_path['table_name'] = unlinks_path['table_name'] + '_u'
                 unlinks = to_layer(unlinks, layer.crs(), layer.dataProvider().encoding(), 'Point', output_type,
                                    unlinks_path, layer_name + "_u")
                 unlinks.loadNamedStyle(os.path.dirname(__file__) + '/qgis_styles/unlinks.qml')

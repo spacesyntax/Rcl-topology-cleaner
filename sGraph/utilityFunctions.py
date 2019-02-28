@@ -1,10 +1,11 @@
 import collections
 import math
 from collections import defaultdict
-from qgis.core import QgsMapLayerRegistry, QgsFields, QgsField, QgsGeometry, QgsFeature, QgsVectorLayer, QgsVectorFileWriter, QGis, NULL
+from qgis.core import QgsMapLayerRegistry, QgsFields, QgsField, QgsGeometry, QgsFeature, QgsVectorLayer, QgsVectorFileWriter, QGis, NULL, QgsDataSourceURI, QgsVectorLayerImport
 from PyQt4.QtCore import  QVariant
 import itertools
 import psycopg2
+from qgis.gui import QgsMessageBar
 
 
 # FEATURES -----------------------------------------------------------------
@@ -37,7 +38,8 @@ def clean_features_iter(feat_iter):
             points.append(f_geom.asPoint())
             ml_error = QgsFeature(error_feat)
             ml_error.setGeometry(f_geom)
-            ml_error.setAttributes('point')
+            ml_error.setAttributes(['point'])
+            points.append(ml_error)
         elif f_geom.wkbType() == 2:
             f.setFeatureId(id)
             id += 1
@@ -174,6 +176,34 @@ def to_layer(features, crs, encoding, geom_type, layer_type, path, name):
         layer.startEditing()
         pr.addFeatures(features)
         layer.commitChanges()
+
+    elif layer_type == 'postgis':
+
+        layer = QgsVectorLayer(geom_type + '?crs=' + crs.authid(), name, "memory")
+        pr = layer.dataProvider()
+        pr.addAttributes(fields.toList())
+        layer.updateFields()
+        layer.startEditing()
+        pr.addFeatures(features)
+        layer.commitChanges()
+        uri = QgsDataSourceURI()
+        # passwords, usernames need to be empty if not provided or else connection will fail
+        if path['service']:
+            uri.setConnection(path['service'], path['database'], '', '')
+        elif path['password']:
+            uri.setConnection(path['host'], path['port'], path['database'], path['user'], path['password'])
+        else:
+            uri.setConnection(path['host'], path['port'], path['database'], path['user'], '')
+        #uri = "dbname='test' host=localhost port=5432 user='user' password='password' key=gid type=POINT table=\"public\".\"test\" (geom) sql="
+        #crs = QgsCoordinateReferenceSystem(int(crs.postgisSrid()), QgsCoordinateReferenceSystem.EpsgCrsId)
+        # layer - QGIS vector layer
+        uri.setDataSource(path['schema'], path['table_name'], "geom")
+        error = QgsVectorLayerImport.importLayer(layer, uri.uri(), "postgres", crs, False, False)
+        if error[0] != 0:
+            print "Error when creating postgis layer: ", error[1]
+
+        print uri.uri()
+        layer = QgsVectorLayer(uri.uri(), name, "postgres")
 
     return layer
 

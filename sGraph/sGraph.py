@@ -29,7 +29,7 @@ unlink_feat.setFields(unlink_flds)
 error_feat = QgsFeature()
 error_flds = QgsFields()
 error_flds.append(QgsField('error type', QVariant.String))
-error_feat.setFields(unlink_flds)
+error_feat.setFields(error_flds)
 
 
 class sGraph(QObject):
@@ -59,12 +59,13 @@ class sGraph(QObject):
         self.edgeSpIndex = QgsSpatialIndex()
         self.ndSpIndex = QgsSpatialIndex()
         res = map(lambda sedge: self.edgeSpIndex.insertFeature(sedge.feature), self.sEdges.values())
-
         del res
 
         self.errors = []
-        # breakages, orphans1, merges, snaps
+        # breakages, orphans, merges, snaps, duplicate, points, mlparts
         self.unlinks = []
+        self.points = []
+        self.multiparts = []
 
     # graph from feat iter
     # updates the id
@@ -149,7 +150,68 @@ class sGraph(QObject):
         self.sNodes[nodes[1]].adj_edges.remove(e) # if self loop - removed twice
         self.sNodes[nodes[1]].topology.remove(nodes[0]) # if self loop - removed twice
         del self.sEdges[e]
+        # spIndex self.edgeSpIndex.deleteFeature(self.sEdges[e].feature)
         return
+
+    def add_edges_from_feat(self, any_f, angle_threshold):
+
+        f_geom = any_f.feature.geometry()
+
+        if f_geom.length() <= 0:
+            points.append(f_geom.asPoint())
+            ml_error = QgsFeature(error_feat)
+            ml_error.setGeometry(f_geom)
+            ml_error.setAttributes(['point'])
+            self.points.append(ml_error)
+        elif f_geom.wkbType() == 2:
+            self.edge_id += 1
+            any_f.setFeatureId(self.edge_id)
+            self.edgeSpIndex.insertFeature(any_f)
+            startpoint = f_geom.asPolyline()[0]
+            endpoint = f_geom.asPolyline()[-1]
+            start = self.load_point(startpoint)
+            end = self.load_point(endpoint)
+            snodes = [start, end]
+            self.update_topology(snodes[0], snodes[1], self.edge_id)
+            sedge = sEdge(self.edge_id, any_f, snodes)
+            self.sEdges[self.edge_id] = sedge
+        # empty geometry
+        elif f_geom is NULL:
+            #self.empty_geometries.append()
+            pass
+        # invalid geometry
+        elif not f_geom.isGeosValid():
+            #self.invalids.append(copy_feature(f, QgsGeometry(), f.id()))
+            pass
+        # multilinestring
+        elif f_geom.wkbType() == 5:
+            ml_segms = f_geom.asMultiPolyline()
+            for ml in ml_segms:
+                ml_geom = QgsGeometry(QgsGeometry.fromPolyline(ml))
+                ml_feat = QgsFeature(any_f)
+                self.edge_id += 1
+                ml_feat.setFeatureId(self.edge_id)
+                ml_feat.setGeometry(ml_geom)
+                self.edgeSpIndex.insertFeature(ml_feat)
+                startpoint = ml_geom.asPolyline()[0]
+                endpoint = ml_geom.asPolyline()[-1]
+                start = self.load_point(startpoint)
+                end = self.load_point(endpoint)
+                snodes = [start, end]
+                self.update_topology(snodes[0], snodes[1], self.edge_id)
+                sedge = sEdge(self.edge_id, ml_feat, snodes)
+                self.sEdges[self.edge_id] = sedge
+                ml_error = QgsFeature(error_feat)
+                ml_error.setGeometry(QgsGeometry.fromPoint(ml_geom.asPolyline()[0]))
+                ml_error.setAttributes(['multipart'])
+                self.multiparts.append(ml_error)
+                ml_error = QgsFeature(error_feat)
+                ml_error.setGeometry(QgsGeometry.fromPoint(ml_geom.asPolyline()[-1]))
+                ml_error.setAttributes(['multipart'])
+                self.multiparts.append(ml_error)
+
+        return
+                    # introduce duplicates
 
     # create graph (broken_features_iter)
     # can be applied to edges w-o topology for speed purposes
@@ -265,8 +327,7 @@ class sGraph(QObject):
             if len(nodes) > 0:
                 filtered_nodes[node.id] = nodes
 
-        step_original = float(self.step)
-        self.step = (len(filtered_nodes) * self.step) / float(len(self.sEdges))
+        self.step = (len(filtered_nodes) * self.step) / float(len(self.sNodes))
         for group in self.con_comp_iter(filtered_nodes):
 
             if self.killed is True:
@@ -527,7 +588,7 @@ class sGraph(QObject):
             startnode, endnode = endnode, startnode
         group_nodes = [startnode, endnode]
         group_edges = [startedge]
-        while len(self.sNodes[group_nodes[-1]].adj_edges) == 2:
+        while len(set(self.sNodes[group_nodes[-1]].adj_edges)) == 2:
             last_visited = group_nodes[-1]
             if last_visited in self.sNodes[last_visited].topology:  # to account for self loops
                 break
@@ -606,13 +667,31 @@ class sGraph(QObject):
         longest_feat = self.sEdges[group_edges[lengths.index(max_len)]].feature
         feat.setAttributes(longest_feat.attributes())
         merged_geom = merge_geoms(geoms, angle_threshold)
-        feat.setGeometry(merged_geom)
-        feat.setFeatureId(self.edge_id)
-
         if merged_geom.wkbType() == 2:
             p0 = merged_geom.asPolyline()[0]
+            p1 = merged_geom.asPolyline()[-1]
         else:
             p0 = merged_geom.asMultiPolyline()[0][0]
+            p1 = merged_geom.asMultiPolyline()[-1][-1]
+
+        # special case - if self loop breaks at intersection of other line & then merged back on old self loop point
+        # TODO: include in merged_geoms functions to make indepedent
+        selfloop_point = self.sNodes[group_nodes[0]].feature.geometry().asPoint()
+        if p0 == p1 and p0 != selfloop_point:
+            merged_points = geoms[0].asPolyline()
+            geom1 = self.sEdges[group_edges[0]].feature.geometry().asPolyline()
+            if not geom1[0] == selfloop_point:
+                merged_points = merged_points[::-1]
+            for geom in geoms[1:]:
+                points = geom.asPolyline()
+                if not points[0] == merged_points[-1]:
+                    merged_points += (points[::-1])[1:]
+                else:
+                    merged_points += points[1:]
+            merged_geom = QgsGeometry.fromPolyline(merged_points)
+
+        feat.setGeometry(merged_geom)
+        feat.setFeatureId(self.edge_id)
 
         if p0 == self.sNodes[group_nodes[0]].feature.geometry().asPoint():
             merged_edge = sEdge(self.edge_id, feat, [group_nodes[0], group_nodes[-1]])
