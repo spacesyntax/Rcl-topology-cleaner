@@ -216,7 +216,7 @@ class sGraph(QObject):
     # create graph (broken_features_iter)
     # can be applied to edges w-o topology for speed purposes
     def break_features_iter(self, getUnlinks, angle_threshold, fix_unlinks=False):
-        unlinks_id = 0
+
         for sedge in self.sEdges.values():
 
             if self.killed is True:
@@ -239,34 +239,6 @@ class sGraph(QObject):
             intersections += self_intersections
             intersections = (set(intersections))
 
-            # unlinks (if OS unlinks generated in advance)
-            if getUnlinks and fix_unlinks:
-                lines = filter(lambda line: f_geom.crosses(self.sEdges[line].feature.geometry()), lines)
-
-                unlinks = []
-                for line in lines:
-                    crossing_points = f_geom.intersection(self.sEdges[line].feature.geometry())
-                    if crossing_points.geometry().wkbType() == 1:
-                        un_f = QgsFeature(unlink_feat)
-                        un_f.setGeometry(crossing_points)
-                        un_f.setFeatureId(unlinks_id)
-                        un_f.setAttributes([unlinks_id])
-                        unlinks_id += 1
-                        unlinks.append(un_f)
-                    elif crossing_points.geometry().wkbType() == 4:
-                        for p in crossing_points.asMultiPoint():
-                            un_f = QgsFeature(unlink_feat)
-                            un_f.setGeometry(QgsGeometry.fromPoint(p))
-                            un_f.setFeatureId(unlinks_id)
-                            un_f.setAttributes([unlinks_id])
-                            unlinks_id += 1
-                            unlinks.append(un_f)
-                # find vertices
-                unlinks = map(lambda p: self.fix_unlink(p, pl, sedge.id), unlinks)
-                intersections = list(intersections.difference(set(unlinks)))
-                # TODO: exclude vertices - might be in one of the lines
-                self.unlinks += unlinks
-
             if len(intersections) > 0:
                 # broken features iterator
                 # errors
@@ -286,9 +258,49 @@ class sGraph(QObject):
                 f.setGeometry(simpl_geom)
                 yield f
 
-    def fix_unlink(self, point, polyline, e):
-        if point in polyline:
-            self.sEdges[e].feature.geometry().moveVertex(point.x() + 1, point.y() + 1, polyline.index(point))
+    def fix_unlinks(self):
+
+
+        unlinks_id = 0
+
+        self.edgeSpIndex = QgsSpatialIndex()
+        self.step = self.step / 2.0
+
+        for e in self.sEdges.values():
+            if self.killed is True:
+                break
+
+            self.total_progress += self.step
+            self.progress.emit(self.total_progress)
+
+            self.edgeSpIndex.insertFeature(e.feature)
+
+        for sedge in self.sEdges.values():
+
+            if self.killed is True:
+                break
+
+            self.total_progress += self.step
+            self.progress.emit(self.total_progress)
+
+            f = sedge.feature
+            f_geom = f.geometry()
+            pl = f_geom.asPolyline()
+            lines = filter(lambda line: line!= f.id(), self.edgeSpIndex.intersects(f_geom.boundingBox()))
+            lines = filter(lambda line: f_geom.crosses(self.sEdges[line].feature.geometry()), lines)
+            for line in lines:
+                crossing_points = f_geom.intersection(self.sEdges[line].feature.geometry())
+                if crossing_points.geometry().wkbType() == 1:
+                    if crossing_points.asPoint() in pl[1:-1]:
+                        self.sEdges[sedge.id].feature.geometry().moveVertex(crossing_points.asPoint().x() + 1, crossing_points.asPoint().y() + 1, pl.index(crossing_points.asPoint()))
+                elif crossing_points.geometry().wkbType() == 4:
+                    for p in crossing_points.asMultiPoint():
+                        if p in pl[1:-1]:
+                            self.sEdges[sedge.id].feature.geometry().moveVertex(p.x() + 1,
+                                                                            p.y() + 1,
+                                                                            pl.index(p))
+            # TODO: exclude vertices - might be in one of the lines
+
         return
 
     def con_comp_iter(self, group_dictionary):
@@ -559,6 +571,25 @@ class sGraph(QObject):
 
     def merge_collinear(self, collinear_threshold, angle_threshold=0):
 
+        self.step = (len(self.sNodes) * self.step) / float(len(self.sNodes))
+
+        collinear_nodes = filter(lambda nd2: angle_3_points(self.sEdges[nd2].adj_edges[0].feature.geometry(), self.sEdges[nd2].adj_edges[1].feature.geometry()) <= collinear_threshold,
+                                 filter(lambda nd: nd.adj_edges == 2, self.sNodes.values()))
+        collinear_nodes = {nd.id: set(nd.topology) for nd in collinear_nodes}
+
+        for group in self.con_comp_iter(collinear_nodes):
+
+            if self.killed is True:
+                break
+
+            self.total_progress += self.step
+            self.progress.emit(self.total_progress)
+
+            # find con_edges
+            con_edges = set(itertools.chain.from_iterable([self.sNodes[node].adj_edges for node in group]))
+            con_edges_nodes = {frozenset(self.sEdges[e].nodes): e for e in con_edges}
+            ordered_edges = [con_edges_nodes[i] for i in zip(group[:-1], group[1:])]
+            self.merge_edges(group, ordered_edges, angle_threshold)
         return
 
     def collinear_iter(self):

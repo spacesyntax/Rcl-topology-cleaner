@@ -139,7 +139,7 @@ class NetworkCleanerTool(QObject):
         # Gives warning according to message
         self.iface.messageBar().pushMessage("Road network cleaner: ", "%s" % (message), level, duration=5)
 
-    def workerError(self, exception_string):
+    def workerError(self, e, exception_string):
         # Gives error according to message
         QgsMessageLog.logMessage('Cleaning thread raised an exception: %s' % exception_string, level=QgsMessageLog.CRITICAL)
         self.dlg.close()
@@ -205,30 +205,37 @@ class NetworkCleanerTool(QObject):
             cleaned_features, errors, unlinks = ret
 
             if self.settings['errors']:
-                errors_path = None
-                if output_type == 'shapefile':
-                    errors_path = path[:-4] + "_cl_errors.shp"
-                elif output_type == 'postgis':
-                    errors_path = dict(path)
-                    errors_path['table_name'] = errors_path['table_name'] + '_errors'
-                errors = to_layer(errors, layer.crs(), layer.dataProvider().encoding(), 'Point', output_type,
-                                  errors_path, layer_name + "_cl_errors")
-                errors.loadNamedStyle(os.path.dirname(__file__) + '/qgis_styles/errors.qml')
-                QgsMapLayerRegistry.instance().addMapLayer(errors)
-                self.iface.legendInterface().refreshLayerSymbology(errors)
+                if len(errors) > 0:
+                    errors_path = None
+                    if output_type == 'shapefile':
+                        errors_path = path[:-4] + "_cl_errors.shp"
+                    elif output_type == 'postgis':
+                        errors_path = dict(path)
+                        errors_path['table_name'] = errors_path['table_name'] + '_errors'
+                    errors = to_layer(errors, layer.crs(), layer.dataProvider().encoding(), 'Point', output_type,
+                                      errors_path, layer_name + "_cl_errors")
+                    errors.loadNamedStyle(os.path.dirname(__file__) + '/qgis_styles/errors.qml')
+                    QgsMapLayerRegistry.instance().addMapLayer(errors)
+                    self.iface.legendInterface().refreshLayerSymbology(errors)
+                else:
+                    self.giveMessage('No errors detected!', QgsMessageBar.INFO)
 
             if self.settings['unlinks']:
-                unlinks_path = None
-                if output_type == 'shapefile':
-                    unlinks_path = path[:-4] + "_u.shp"
-                elif output_type == 'postgis':
-                    unlinks_path = dict(path)
-                    unlinks_path['table_name'] = unlinks_path['table_name'] + '_u'
-                unlinks = to_layer(unlinks, layer.crs(), layer.dataProvider().encoding(), 'Point', output_type,
-                                   unlinks_path, layer_name + "_u")
-                unlinks.loadNamedStyle(os.path.dirname(__file__) + '/qgis_styles/unlinks.qml')
-                QgsMapLayerRegistry.instance().addMapLayer(unlinks)
-                self.iface.legendInterface().refreshLayerSymbology(unlinks)
+                if len(unlinks) > 0:
+                    unlinks_path = None
+                    if output_type == 'shapefile':
+                        unlinks_path = path[:-4] + "_u.shp"
+                    elif output_type == 'postgis':
+                        unlinks_path = dict(path)
+                        unlinks_path['table_name'] = unlinks_path['table_name'] + '_u'
+                    unlinks = to_layer(unlinks, layer.crs(), layer.dataProvider().encoding(), 'Point', output_type,
+                                       unlinks_path, layer_name + "_u")
+                    unlinks.loadNamedStyle(os.path.dirname(__file__) + '/qgis_styles/unlinks.qml')
+                    QgsMapLayerRegistry.instance().addMapLayer(unlinks)
+                    self.iface.legendInterface().refreshLayerSymbology(unlinks)
+
+                else:
+                    self.giveMessage('No unlinks detected!', QgsMessageBar.INFO)
 
             cleaned = to_layer(cleaned_features, layer.crs(), layer.dataProvider().encoding(),
                                  'Linestring', output_type, path,
@@ -239,6 +246,7 @@ class NetworkCleanerTool(QObject):
             cleaned.updateExtents()
 
             self.giveMessage('Process ended successfully!', QgsMessageBar.INFO)
+            self.dlg.cleaningProgress.setValue(100)
 
         else:
             # notify the user that sth went wrong
@@ -312,83 +320,80 @@ class NetworkCleanerTool(QObject):
                 angle_threshold = self.settings['simplification_threshold']
                 fix_unlinks = self.settings['fix_unlinks']
                 orphans = self.settings['orphans']
-                errors = self.settings['errors']
                 getUnlinks = self.settings['unlinks']
-                [load_range, cl1_range, cl2_range, cl3_range, cl4_range, break_range, merge1_range, merge2_range, snap_range, unlinks_range] = self.settings['progress_ranges']
-                unlinks = []
+                [load_range, cl1_range, cl2_range, cl3_range, break_range, merge_range, snap_range, unlinks_range, fix_range] = self.settings['progress_ranges']
                 QgsMessageLog.logMessage('settings %s' % self.settings, level=QgsMessageLog.CRITICAL)
 
                 self.cl_progress.emit(0)
-                self.pseudo_graph.step = load_range/ layer.featureCount()
-                self.pseudo_graph.progress.connect(self.cl_progress.emit)
-                self.graph = sGraph({}, {})
-                self.pseudo_graph.load_edges_w_o_topology(clean_features_iter(layer.getFeatures()))
-                QgsMessageLog.logMessage('pseudo_graph edges added', level=QgsMessageLog.CRITICAL)
 
                 if break_at_vertices:
 
+                    self.pseudo_graph.step = load_range / layer.featureCount()
+                    self.pseudo_graph.progress.connect(self.cl_progress.emit)
+                    self.graph = sGraph({}, {})
+                    self.pseudo_graph.load_edges_w_o_topology(clean_features_iter(layer.getFeatures()))
+                    QgsMessageLog.logMessage('pseudo_graph edges added', level=QgsMessageLog.CRITICAL)
                     self.graph.step = break_range / len(self.pseudo_graph.sEdges)
                     self.graph.load_edges(self.pseudo_graph.break_features_iter(getUnlinks, angle_threshold, fix_unlinks))
                     unlinks = self.pseudo_graph.unlinks
                     QgsMessageLog.logMessage('pseudo_graph edges broken', level=QgsMessageLog.CRITICAL)
+                    self.pseudo_graph.progress.disconnect()
+                    self.graph.progress.connect(self.cl_progress.emit)
+                    self.graph.total_progress = self.pseudo_graph.total_progress
 
-                self.pseudo_graph.progress.disconnect()
-                self.graph.progress.connect(self.cl_progress.emit)
-                self.graph.total_progress = self.pseudo_graph.total_progress
+                else:
+                    self.graph = sGraph({}, {})
+                    self.graph.progress.connect(self.cl_progress.emit)
+                    self.graph.step = load_range / layer.featureCount()
+                    self.graph.load_edges(clean_features_iter(layer.getFeatures()))
+                    unlinks = self.graph.unlinks
+                    QgsMessageLog.logMessage('graph edges added', level=QgsMessageLog.CRITICAL)
+
                 self.graph.step = 2.0 * cl1_range/float(len(self.graph.sEdges))
                 self.graph.clean(True, False, snap_threshold, True)
                 QgsMessageLog.logMessage('graph clean parallel and closed pl', level=QgsMessageLog.CRITICAL)
 
+                if fix_unlinks:
+
+                    self.graph.step = fix_range / float(len(self.graph.sEdges))
+                    self.graph.fix_unlinks()
+                    QgsMessageLog.logMessage('unlinks added', level=QgsMessageLog.CRITICAL)
+                    unlinks = self.graph.unlinks
+                    QgsMessageLog.logMessage('unlinks added %s' % len(unlinks), level=QgsMessageLog.CRITICAL)
+
                 # clean iteratively until no error
-
-
-                if merge_type == 'intersections':
-
-                    self.graph.step = merge1_range / float(len(self.graph.sEdges))
-                    self.graph.merge_b_intersections(angle_threshold)
-                    self.graph.step = 2.0 * cl2_range / float(len(self.graph.sEdges))
-                    self.graph.clean(True, False, snap_threshold, True)
-                    QgsMessageLog.logMessage('merge and clean', level=QgsMessageLog.CRITICAL)
-
-                elif merge_type == 'collinear':
-
-                    self.graph.step = merge1_range / float(len(self.graph.sEdges))
-                    self.graph.merge_collinear(collinear_threshold, angle_threshold)
-                    self.graph.step = 2.0 * cl2_range / float(len(self.graph.sEdges))
-                    self.graph.clean(True, False, snap_threshold, True)
-                    QgsMessageLog.logMessage('merge and clean', level=QgsMessageLog.CRITICAL)
 
                 if snap_threshold != 0:
 
                     self.graph.step = snap_range / float(len(self.graph.sNodes))
                     self.graph.snap_endpoints(snap_threshold)
-                    self.graph.step = 2.0 * cl3_range / float(len(self.graph.sEdges))
+                    self.graph.step = 2.0 * cl2_range / float(len(self.graph.sEdges))
                     self.graph.clean(True, False, snap_threshold, True)
                     QgsMessageLog.logMessage('snap  and clean', level=QgsMessageLog.CRITICAL)
 
                 if merge_type == 'intersections':
 
-                    self.graph.step = merge2_range / float(len(self.graph.sEdges))
+                    self.graph.step = merge_range / float(len(self.graph.sEdges))
                     self.graph.merge_b_intersections(angle_threshold)
                     QgsMessageLog.logMessage('merge', level=QgsMessageLog.CRITICAL)
 
                 elif merge_type == 'collinear':
 
-                    self.graph.step = merge2_range / float(len(self.graph.sEdges))
+                    self.graph.step = merge_range / float(len(self.graph.sEdges))
                     self.graph.merge_collinear(collinear_threshold, angle_threshold)
                     QgsMessageLog.logMessage('merge', level=QgsMessageLog.CRITICAL)
 
                 if orphans:
                     # progress range 5
-                    self.graph.step = 2.0 * cl4_range / float(len(self.graph.sEdges))
+                    self.graph.step = 2.0 * cl3_range / float(len(self.graph.sEdges))
                     self.graph.clean(True, orphans, snap_threshold, False)
                     QgsMessageLog.logMessage('clean', level=QgsMessageLog.CRITICAL)
                 else:
-                    self.graph.step = 2.0 * cl4_range / float(len(self.graph.sEdges))
+                    self.graph.step = 2.0 * cl3_range / float(len(self.graph.sEdges))
                     self.graph.clean(True, False, snap_threshold, True)
                     QgsMessageLog.logMessage('clean', level=QgsMessageLog.CRITICAL)
 
-                if getUnlinks and not fix_unlinks:
+                if getUnlinks:
 
                     self.graph.step = unlinks_range / float(len(self.graph.sEdges))
                     self.graph.generate_unlinks()
@@ -401,7 +406,7 @@ class NetworkCleanerTool(QObject):
 
                 if is_debug: print "survived!"
                 self.graph.progress.disconnect()
-                self.cl_progress.emit(100)
+                self.cl_progress.emit(95)
                 # return cleaned data, errors and unlinks
                 ret = [f for f in clean_features_iter(map(lambda e: e.feature, self.graph.sEdges.values()))], self.graph.errors, unlinks
 

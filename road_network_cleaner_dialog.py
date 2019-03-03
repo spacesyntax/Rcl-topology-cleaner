@@ -52,7 +52,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         # Setup some defaults
         self.snapSpinBox.setRange(1, 30)
         self.snapSpinBox.setSingleStep(1)
-        self.snapSpinBox.setValue(5)
+        self.snapSpinBox.setValue(10)
         self.angularChangeSpinBox.setRange(1, 45)
         self.angularChangeSpinBox.setSingleStep(1)
         self.angularChangeSpinBox.setValue(10)
@@ -111,7 +111,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
             self.edit_mode = False
             self.snapCheckBox.setCheckState(2)
             self.simplifyCheckBox.setCheckState(2)
-            self.snapSpinBox.setValue(5)
+            self.snapSpinBox.setValue(10)
             self.angularChangeSpinBox.setValue(10)
             self.breakCheckBox.setCheckState(2)
             self.mergeCheckBox.setCheckState(2)
@@ -123,7 +123,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
             self.edit_mode = False
             self.snapCheckBox.setCheckState(2)
             self.simplifyCheckBox.setCheckState(2)
-            self.snapSpinBox.setValue(5)
+            self.snapSpinBox.setValue(10)
             self.angularChangeSpinBox.setValue(10)
             self.breakCheckBox.setCheckState(0)
             self.mergeCheckBox.setCheckState(2)
@@ -274,53 +274,43 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         getUnlinks = self.get_unlinks()
         settings = {'input': self.getNetwork(), 'output': self.getOutput(), 'snap': snap_threshold, 'break': break_at_vertices, 'merge': merge_type, 'orphans': orphans,
                     'errors': self.get_errors(), 'unlinks': getUnlinks, 'collinear_angle': self.getCollinearThreshold(), 'simplification_threshold': self.getSimplificationTolerance(),
-                    'fix_unlinks': fix_unlinks, 'output_type': self.get_output_type(), 'progress_ranges': self.get_progress_ranges(break_at_vertices, merge_type, snap_threshold, orphans, fix_unlinks, getUnlinks)}
+                    'fix_unlinks': fix_unlinks, 'output_type': self.get_output_type(), 'progress_ranges': self.get_progress_ranges(break_at_vertices, merge_type, snap_threshold, getUnlinks, fix_unlinks)}
         return settings
 
-    def get_progress_ranges(self, break_at_vertices, merge_type, snap_threshold, orphans, fix_unlinks, getUnlinks):
-        range = 100
-        #load_range, cl1_range, cl2_range, cl3_range, break_range, merge1_range, merge2_range, snap_range, unlinks_range = 0, 0, 0, 0, 0, 0, 0, 0, 0
+    def get_progress_ranges(self, break_at_vertices, merge_type, snap_threshold, getUnlinks, fix_unlinks):
 
         # hard-coded ranges
-        load_range = 10
-        cl1_range = 5 # necessary - closed polylines
-        range = range - (load_range + cl1_range)
-
-        cl2_range = 0
-        cl3_range = 0
-        cl4_range = 0
+        weigths = {'break': 4, 'load': 2, 'snap': 2, 'merge': 1, 'unlinks': 2, 'clean': 1, 'fix':1}
+        total_range = 95
+        total_pr_w = weigths['load']
+        total_pr_w += (float(3) * weigths['snap'])
+        if break_at_vertices:
+            total_pr_w += weigths['break']
         if merge_type in ('intersections', 'collinear'):
-            cl2_range = 5
-            cl4_range = 5
-        if orphans:
-            cl3_range = 5
-
-        range = range - (cl2_range + cl3_range + cl4_range)
-        unlinks_range = 0
-        if fix_unlinks or getUnlinks:
-            unlinks_range = 5
-
-        range -= unlinks_range
-
-        process_count = 0
-        if break_at_vertices:
-            process_count += 4  # double weight
-        if merge_type:
-            process_count += 1
+            total_pr_w += weigths['merge']
         if snap_threshold != 0:
-            process_count += 1
-        range = range / float(process_count)
+            total_pr_w += weigths['snap']
+        if getUnlinks:
+            total_pr_w += weigths['unlinks']
+        if fix_unlinks:
+            total_pr_w += weigths['fix']
 
-        break_range, merge1_range, merge2_range, snap_range = 0, 0, 0, 0
+        factor = total_range / float(total_pr_w)
+        load_range = weigths['load'] * float(factor)
+        cl1_range = weigths['snap'] * float(factor)
+        cl2_range = cl1_range
+        cl3_range = cl1_range
+        break_range, merge_range, snap_range, unlinks_range, fix_range = 0, 0, 0, 0, 0
         if break_at_vertices:
-            break_range = 4*range
-        if merge_type:
-            merge1_range = range - 5
-            merge2_range = 5
+            break_range = weigths['break'] * float(factor)
+        if merge_type in ('intersections', 'collinear'):
+            merge_range = weigths['merge'] * float(factor)
         if snap_threshold != 0:
-            snap_range = range
+            snap_range = weigths['snap'] * float(factor)
+        if fix_unlinks:
+            fix_range = weigths['fix'] * float(factor)
 
-        return [float(i) for i in [load_range, cl1_range, cl2_range, cl3_range, cl4_range, break_range, merge1_range, merge2_range, snap_range, unlinks_range]]
+        return [load_range, cl1_range, cl2_range, cl3_range, break_range, merge_range, snap_range, unlinks_range, fix_range]
 
     def get_dbsettings(self):
         settings = self.dbsettings_dlg.getDbSettings()

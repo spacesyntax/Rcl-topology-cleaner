@@ -87,12 +87,14 @@ def find_vertex_indices(polyline, points):
     return sorted(list(set(break_indices)))
 
 
-def angular_change(geom1,geom2):
+def angular_change(geom1, geom2):
     pl1 = geom1.asPolyline()
     pl2 = geom2.asPolyline()
-    points1 = set([pl1[0], pl1[-1]])
-    points2 = set([pl2[0], pl2[-1]])
+    points1 = {pl1[0], pl1[-1]}
+    points2 = {pl2[0], pl2[-1]}
     inter_point = points1.intersection(points2)
+    point1 = [p for p in points1 if p != inter_point]
+    point2 = [p for p in points1 if p != inter_point]
 
     # find index in geom1
     # if index 0, then get first vertex
@@ -102,6 +104,28 @@ def angular_change(geom1,geom2):
 
     return
 
+def angle_3_points(geom1, geom2):
+    pl1 = geom1.asPolyline()
+    pl2 = geom2.asPolyline()
+    p1 = [pl1[0], pl1[-1]]
+    p3 = [pl2[0], pl2[-1]]
+    p2 = set(p1).intersection(set(p3))
+    p1.remove(p2)
+    p3.remove(p2)
+    inter_vertex1 = math.hypot(abs(float(p2.x()) - float(p1.x())), abs(float(p2.y()) - float(p1.y())))
+    inter_vertex2 = math.hypot(abs(float(p2.x()) - float(p3.x())), abs(float(p2.y()) - float(p3.y())))
+    vertex1_2 = math.hypot(abs(float(p1.x()) - float(p3.x())), abs(float(p1.y()) - float(p3.y())))
+    A = ((inter_vertex1 ** 2) + (inter_vertex2 ** 2) - (vertex1_2 ** 2))
+    B = (2 * inter_vertex1 * inter_vertex2)
+    if B != 0:
+        cos_angle = A / B
+    else:
+        cos_angle = NULL
+    if cos_angle < -1:
+        cos_angle = int(-1)
+    if cos_angle > 1:
+        cos_angle = int(1)
+    return 180 - math.degrees(math.acos(cos_angle))
 
 def merge_geoms(geoms, simpl_threshold):
     # get attributes from longest
