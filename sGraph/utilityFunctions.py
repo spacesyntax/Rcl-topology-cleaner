@@ -109,9 +109,11 @@ def angle_3_points(geom1, geom2):
     pl2 = geom2.asPolyline()
     p1 = [pl1[0], pl1[-1]]
     p3 = [pl2[0], pl2[-1]]
-    p2 = set(p1).intersection(set(p3))
+    p2 = set(p1).intersection(set(p3)).pop()
     p1.remove(p2)
     p3.remove(p2)
+    p1 = p1.pop()
+    p3 = p3.pop()
     inter_vertex1 = math.hypot(abs(float(p2.x()) - float(p1.x())), abs(float(p2.y()) - float(p1.y())))
     inter_vertex2 = math.hypot(abs(float(p2.x()) - float(p3.x())), abs(float(p2.y()) - float(p3.y())))
     vertex1_2 = math.hypot(abs(float(p1.x()) - float(p3.x())), abs(float(p1.y()) - float(p3.y())))

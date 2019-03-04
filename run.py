@@ -10,7 +10,7 @@ layer_name = 'oproads_lon'
 # time with new      version: ~ 3 minutes
 # reduction: 80%
 
-layer_name = 'osm_lon_small_cl'
+layer_name = 'r_osm'
 layer = getLayerByName(layer_name)
 crs = layer.crs()
 encoding = layer.dataProvider().encoding()
@@ -51,7 +51,6 @@ QgsMapLayerRegistry.instance().addMapLayer(broken_layer)
 
 # 2. CLEAN || & CLOSED POLYLINES
 _time = time.time()
-graph.step = /float(5)
 graph.clean(True, False, snap_threshold, True)
 print time.time() - _time
 

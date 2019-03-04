@@ -326,10 +326,10 @@ class sGraph(QObject):
     # group points based on proximity - spatial index is not updated
     def snap_endpoints(self, snap_threshold):
 
-        # TODO: test when loading points
         res = map(lambda snode: self.ndSpIndex.insertFeature(snode.feature), self.sNodes.values())
         filtered_nodes = {}
-        for node in self.sNodes.values():
+        # exclude nodes where connectivity = 2 - they will be merged
+        for node in filter(lambda  n: n.adj_edges != 2, self.sNodes.values()):
             if self.killed is True:
                 break
             # find nodes within x distance
@@ -573,8 +573,8 @@ class sGraph(QObject):
 
         self.step = (len(self.sNodes) * self.step) / float(len(self.sNodes))
 
-        collinear_nodes = filter(lambda nd2: angle_3_points(self.sEdges[nd2].adj_edges[0].feature.geometry(), self.sEdges[nd2].adj_edges[1].feature.geometry()) <= collinear_threshold,
-                                 filter(lambda nd: nd.adj_edges == 2, self.sNodes.values()))
+        collinear_nodes = filter(lambda nd2: angle_3_points(self.sEdges[nd2.adj_edges[0]].feature.geometry(), self.sEdges[nd2.adj_edges[1]].feature.geometry()) <= collinear_threshold,
+                                 filter(lambda nd: len(nd.adj_edges) == 2, self.sNodes.values()))
         collinear_nodes = {nd.id: set(nd.topology) for nd in collinear_nodes}
 
         for group in self.con_comp_iter(collinear_nodes):
