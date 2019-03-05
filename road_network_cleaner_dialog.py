@@ -64,14 +64,15 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
         self.outputCleaned.setDisabled(False)
         if available_dbs:
-            self.postgisRadioButton.setDisabled(False)
-            self.dbsettings_dlg = DbSettingsDialog(available_dbs)
-            self.dbsettings_dlg.setDbOutput.connect(self.setDbOutput)
-            self.postgisRadioButton.clicked.connect(self.setDbOutput)
+            pass
         else:
-            self.postgisRadioButton.setDisabled(True)
+            available_dbs = {}
+        self.postgisRadioButton.setDisabled(False)
+        self.dbsettings_dlg = DbSettingsDialog(available_dbs)
+        self.dbsettings_dlg.setDbOutput.connect(self.setDbOutput)
+        self.postgisRadioButton.clicked.connect(self.setDbOutput)
 
-        # add GUI signals
+        # add GUI signals§
         self.browseCleaned.clicked.connect(self.setOutput)
         self.mergeCheckBox.stateChanged.connect(self.toggleMergeSettings)
         self.mergeCollinearCheckBox.stateChanged.connect(self.toggleMergeCollinearSettings)

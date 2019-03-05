@@ -10,7 +10,7 @@ layer_name = 'oproads_lon'
 # time with new      version: ~ 3 minutes
 # reduction: 80%
 
-layer_name = 'r_osm'
+layer_name = 'oproads_lon_small'
 layer = getLayerByName(layer_name)
 crs = layer.crs()
 encoding = layer.dataProvider().encoding()
@@ -18,12 +18,13 @@ geom_type = layer.dataProvider().geometryType()
 getUnlinks = True
 snap_threshold = 10
 angle_threshold = 15
-merge_type = 'intersections' # 'angle'
+merge_type = 'intersections'
+#merge_type = 'collinear'
 orphans = True
 fix_unlinks = False
-collinear_threshold = None
+collinear_threshold = 5
 duplicates = True
-path = '/Users/i.kolovou/Downloads/osm_lon_small_cl.shp'
+path = None
 
 # 1. LOAD
 _time = time.time()
@@ -39,30 +40,19 @@ print time.time() - _time
 _time = time.time()
 graph = sGraph({},{})
 pseudo_graph.step = len(pseudo_graph.sEdges)/ float(20)
-graph.load_edges(pseudo_graph.break_features_iter(getUnlinks, angle_threshold, fix_unlinks))
+#graph.load_edges(pseudo_graph.break_features_iter(getUnlinks, angle_threshold, fix_unlinks))
+graph.load_edges(clean_features_iter(layer.getFeatures()))
+
 print time.time() - _time
 
 broken_layer = to_layer(map(lambda e: e.feature, graph.sEdges.values()), crs, encoding, geom_type, 'memory', path, 'broken_layer')
 QgsMapLayerRegistry.instance().addMapLayer(broken_layer)
 
 # nodes
-# nodes = to_layer(map(lambda n: n.getFeature(), graph.sNodes.values()), crs, encoding, 1, 'memory', None, 'nodes')
+# nodes = to_layer(map(lambda n: n.getFeature(), graph.sNodes.values()), crs, encoding, 'Point', 'memory', None, 'nodes')
 # QgsMapLayerRegistry.instance().addMapLayer(nodes)
 
 # 2. CLEAN || & CLOSED POLYLINES
-_time = time.time()
-graph.clean(True, False, snap_threshold, True)
-print time.time() - _time
-
-# 3. MERGE
-_time = time.time()
-graph.merge_b_intersections(angle_threshold)
-print time.time() - _time
-
-merged_layer = to_layer(map(lambda e: e.feature, graph.sEdges.values()), crs, encoding, geom_type, 'memory', None, 'merged_layer')
-QgsMapLayerRegistry.instance().addMapLayer(merged_layer)
-
-# 4. CLEAN || & CLOSED POLYLINES
 _time = time.time()
 graph.clean(True, False, snap_threshold, True)
 print time.time() - _time
@@ -75,9 +65,26 @@ print time.time() - _time
 snapped_layer = to_layer(map(lambda e: e.feature, graph.sEdges.values()), crs, encoding, geom_type, 'memory', None, 'snapped_layer')
 QgsMapLayerRegistry.instance().addMapLayer(snapped_layer)
 
+# 4. CLEAN || & CLOSED POLYLINES
+_time = time.time()
+graph.clean(True, False, snap_threshold, True)
+print time.time() - _time
+
+_time = time.time()
+graph.merge_collinear(collinear_threshold, angle_threshold)
+print time.time() - _time
+
+# 3. MERGE
+_time = time.time()
+graph.merge_b_intersections(angle_threshold)
+print time.time() - _time
+
+merged_layer = to_layer(map(lambda e: e.feature, graph.sEdges.values()), crs, encoding, 'Linestring', 'memory', None, 'merged_layer')
+QgsMapLayerRegistry.instance().addMapLayer(merged_layer)
+
 # nodes
-nodes = to_layer(map(lambda n: n.getFeature(), graph.sNodes.values()), crs, encoding, 1, 'memory', None, 'nodes')
-QgsMapLayerRegistry.instance().addMapLayer(nodes)
+#nodes = to_layer(map(lambda n: n.getFeature(), graph.sNodes.values()), crs, encoding, 1, 'memory', None, 'nodes')
+#QgsMapLayerRegistry.instance().addMapLayer(nodes)
 
 # 6. CLEAN ALL
 _time = time.time()

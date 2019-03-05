@@ -571,31 +571,56 @@ class sGraph(QObject):
 
     def merge_collinear(self, collinear_threshold, angle_threshold=0):
 
-        self.step = (len(self.sNodes) * self.step) / float(len(self.sNodes))
+        filtered_nodes = dict(filter(lambda (id, nd): len(nd.topology) == 2 and len(nd.adj_edges) == 2, graph.sNodes.items()))
+        filtered_nodes = dict(filter(lambda (id, nd): angle_3_points(graph.sNodes[nd.topology[0]].feature.geometry().asPoint(), nd.feature.geometry().asPoint(), graph.sNodes[nd.topology[1]].feature.geometry().asPoint()) <= collinear_threshold, filtered_nodes.items()))
+        filtered_nodes = {id: nd.adj_edges for id, nd in filtered_nodes.items()}
+        filtered_edges = {}
+        for k, v in filtered_nodes.items():
+            try:
+                filtered_edges[v[0]].append(v[1])
+            except KeyError:
+                filtered_edges[v[0]] = [v[1]]
+            try:
+                filtered_edges[v[1]].append(v[0])
+            except KeyError:
+                filtered_edges[v[1]] = [v[0]]
 
-        collinear_nodes = filter(lambda nd2: angle_3_points(self.sEdges[nd2.adj_edges[0]].feature.geometry(), self.sEdges[nd2.adj_edges[1]].feature.geometry()) <= collinear_threshold,
-                                 filter(lambda nd: len(nd.adj_edges) == 2, self.sNodes.values()))
-        collinear_nodes = {nd.id: set(nd.topology) for nd in collinear_nodes}
+#nodes = to_layer(map(lambda n: graph.sNodes[n].getFeature(), filtered_nodes), crs, encoding, 'Point', 'memory', None,
+#                 'nodes')
+#QgsMapLayerRegistry.instance().addMapLayer(nodes)
 
-        for group in self.con_comp_iter(collinear_nodes):
+        self.step = (len(filtered_edges) * self.step) / float(len(self.sEdges))
 
-            if self.killed is True:
-                break
+        for group in self.collinear_comp_iter(filtered_edges):
+            nodes = [self.sEdges[e].nodes for e in group]
+            for idx, pair in enumerate(nodes[:-1]):
+                if pair[0] in nodes[idx + 1]:
+                    nodes[idx] = pair[::-1]
+            if nodes[-1][1] in nodes[-2]:
+                nodes[-1] = nodes[-1][::-1]
+            nodes = [n[0] for n in nodes] + [nodes[-1][-1]]
+            self.merge_edges(nodes, group, angle_threshold)
+        return
+
+    def collinear_comp_iter(self, group_dictionary):
+        components_passed = set([])
+        for id, top in group_dictionary.items():
 
             self.total_progress += self.step
             self.progress.emit(self.total_progress)
 
-            # find con_edges
-            con_edges = set(itertools.chain.from_iterable([self.sNodes[node].adj_edges for node in group]))
-            con_edges_nodes = {frozenset(self.sEdges[e].nodes): e for e in con_edges}
-            ordered_edges = [con_edges_nodes[i] for i in zip(group[:-1], group[1:])]
-            self.merge_edges(group, ordered_edges, angle_threshold)
-        return
-
-    def collinear_iter(self):
-        # get points with connectivity 2
-        # isolate
-        pass
+            if {id}.isdisjoint(components_passed) and len(top) != 2:
+                group = [[id]]
+                candidates = ['dummy', 'dummy']
+                while len(candidates) > 0:
+                    flat_group = group[:-1] + group[-1]
+                    candidates = map(
+                        lambda last_visited_node: set(group_dictionary[last_visited_node]).difference(set(flat_group)),
+                        group[-1])
+                    candidates = list(set(itertools.chain.from_iterable(candidates)))
+                    group = flat_group + [candidates]
+                    components_passed.update(set(candidates))
+                yield group[:-1]
 
     def edge_edges_iter(self):
         # what if two parallel edges at the edge - should become self loop
@@ -615,7 +640,7 @@ class sGraph(QObject):
     def route_polylines(self, startedge):
         # if edge has been passed
         startnode, endnode = self.sEdges[startedge].nodes
-        if len(self.sNodes[endnode].topology) != 2: # not set to account for self loops
+        if len(self.sNodes[endnode].topology) != 2 : # not set to account for self loops
             startnode, endnode = endnode, startnode
         group_nodes = [startnode, endnode]
         group_edges = [startedge]

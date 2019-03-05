@@ -14,11 +14,10 @@ from qgis.gui import QgsMessageBar
 # (NULL), point, (invalids), multipart geometries, snap (will be added later)
 points = []
 multiparts = []
+error_feat = QgsFeature()
 error_flds = QgsFields()
 error_flds.append(QgsField('error type', QVariant.String))
-error_feat = QgsFeature()
 error_feat.setFields(error_flds)
-
 # do not snap - because if self loop needs to break it will not
 
 # FEATURES -----------------------------------------------------------------
@@ -104,16 +103,8 @@ def angular_change(geom1, geom2):
 
     return
 
-def angle_3_points(geom1, geom2):
-    pl1 = geom1.asPolyline()
-    pl2 = geom2.asPolyline()
-    p1 = [pl1[0], pl1[-1]]
-    p3 = [pl2[0], pl2[-1]]
-    p2 = set(p1).intersection(set(p3)).pop()
-    p1.remove(p2)
-    p3.remove(p2)
-    p1 = p1.pop()
-    p3 = p3.pop()
+def angle_3_points(p1, p2, p3):
+
     inter_vertex1 = math.hypot(abs(float(p2.x()) - float(p1.x())), abs(float(p2.y()) - float(p1.y())))
     inter_vertex2 = math.hypot(abs(float(p2.x()) - float(p3.x())), abs(float(p2.y()) - float(p3.y())))
     vertex1_2 = math.hypot(abs(float(p1.x()) - float(p3.x())), abs(float(p1.y()) - float(p3.y())))
@@ -125,7 +116,7 @@ def angle_3_points(geom1, geom2):
         cos_angle = NULL
     if cos_angle < -1:
         cos_angle = int(-1)
-    if cos_angle > 1:
+    elif cos_angle > 1:
         cos_angle = int(1)
     return 180 - math.degrees(math.acos(cos_angle))
 
