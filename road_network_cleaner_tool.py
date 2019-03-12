@@ -328,15 +328,16 @@ class NetworkCleanerTool(QObject):
 
                 if break_at_vertices:
 
-                    self.pseudo_graph.step = load_range / layer.featureCount()
+                    self.pseudo_graph.step = load_range / float(layer.featureCount())
                     self.pseudo_graph.progress.connect(self.cl_progress.emit)
                     self.graph = sGraph({}, {})
+                    self.graph.total_progress = load_range
                     self.pseudo_graph.load_edges_w_o_topology(clean_features_iter(layer.getFeatures()))
-                    QgsMessageLog.logMessage('pseudo_graph edges added', level=QgsMessageLog.CRITICAL)
-                    self.graph.step = break_range / len(self.pseudo_graph.sEdges)
+                    QgsMessageLog.logMessage('pseudo_graph edges added %s' % load_range, level=QgsMessageLog.CRITICAL)
+                    self.pseudo_graph.step = break_range / float(len(self.pseudo_graph.sEdges))
                     self.graph.load_edges(self.pseudo_graph.break_features_iter(getUnlinks, angle_threshold, fix_unlinks))
                     unlinks = self.pseudo_graph.unlinks
-                    QgsMessageLog.logMessage('pseudo_graph edges broken', level=QgsMessageLog.CRITICAL)
+                    QgsMessageLog.logMessage('pseudo_graph edges broken %s' % break_range, level=QgsMessageLog.CRITICAL)
                     self.pseudo_graph.progress.disconnect()
                     self.graph.progress.connect(self.cl_progress.emit)
                     self.graph.total_progress = self.pseudo_graph.total_progress
@@ -344,60 +345,58 @@ class NetworkCleanerTool(QObject):
                 else:
                     self.graph = sGraph({}, {})
                     self.graph.progress.connect(self.cl_progress.emit)
-                    self.graph.step = load_range / layer.featureCount()
+                    self.graph.step = load_range / float(layer.featureCount())
                     self.graph.load_edges(clean_features_iter(layer.getFeatures()))
                     unlinks = self.graph.unlinks
-                    QgsMessageLog.logMessage('graph edges added', level=QgsMessageLog.CRITICAL)
+                    QgsMessageLog.logMessage('graph edges added %s' % load_range, level=QgsMessageLog.CRITICAL)
 
-                self.graph.step = 2.0 * cl1_range/float(len(self.graph.sEdges))
+                self.graph.step = cl1_range / (float(len(self.graph.sEdges)) * 2.0)
                 self.graph.clean(True, False, snap_threshold, True)
-                QgsMessageLog.logMessage('graph clean parallel and closed pl', level=QgsMessageLog.CRITICAL)
+                QgsMessageLog.logMessage('graph clean parallel and closed pl %s' % cl1_range, level=QgsMessageLog.CRITICAL)
 
                 if fix_unlinks:
 
                     self.graph.step = fix_range / float(len(self.graph.sEdges))
                     self.graph.fix_unlinks()
-                    QgsMessageLog.logMessage('unlinks added', level=QgsMessageLog.CRITICAL)
-                    unlinks = self.graph.unlinks
-                    QgsMessageLog.logMessage('unlinks added %s' % len(unlinks), level=QgsMessageLog.CRITICAL)
+                    QgsMessageLog.logMessage('unlinks added  %s' % fix_range, level=QgsMessageLog.CRITICAL)
 
-                # clean iteratively until no error
+                # TODO clean iteratively until no error
 
                 if snap_threshold != 0:
 
                     self.graph.step = snap_range / float(len(self.graph.sNodes))
                     self.graph.snap_endpoints(snap_threshold)
-                    self.graph.step = 2.0 * cl2_range / float(len(self.graph.sEdges))
+                    QgsMessageLog.logMessage('snap  %s' % snap_range, level=QgsMessageLog.CRITICAL)
+                    self.graph.step = cl2_range / (float(len(self.graph.sEdges)) * 2.0)
                     self.graph.clean(True, False, snap_threshold, True)
-                    QgsMessageLog.logMessage('snap  and clean', level=QgsMessageLog.CRITICAL)
+                    QgsMessageLog.logMessage('clean   %s' % cl2_range, level=QgsMessageLog.CRITICAL)
 
                 if merge_type == 'intersections':
 
-                    self.graph.step = merge_range / float(len(self.graph.sEdges))
+                    self.graph.step = merge_range / float(len(self.graph.sNodes))
                     self.graph.merge_b_intersections(angle_threshold)
-                    QgsMessageLog.logMessage('merge', level=QgsMessageLog.CRITICAL)
+                    QgsMessageLog.logMessage('merge %s' % merge_range, level=QgsMessageLog.CRITICAL)
 
                 elif merge_type == 'collinear':
 
                     self.graph.step = merge_range / float(len(self.graph.sEdges))
                     self.graph.merge_collinear(collinear_threshold, angle_threshold)
-                    QgsMessageLog.logMessage('merge', level=QgsMessageLog.CRITICAL)
+                    QgsMessageLog.logMessage('merge  %s' % merge_range, level=QgsMessageLog.CRITICAL)
 
                 if orphans:
-                    # progress range 5
-                    self.graph.step = 2.0 * cl3_range / float(len(self.graph.sEdges))
+                    self.graph.step = cl3_range / (float(len(self.graph.sEdges)) * 2.0)
                     self.graph.clean(True, orphans, snap_threshold, False)
-                    QgsMessageLog.logMessage('clean', level=QgsMessageLog.CRITICAL)
+                    QgsMessageLog.logMessage('clean  %s' % cl3_range, level=QgsMessageLog.CRITICAL)
                 else:
-                    self.graph.step = 2.0 * cl3_range / float(len(self.graph.sEdges))
+                    self.graph.step = cl3_range / (float(len(self.graph.sEdges)) * 2.0)
                     self.graph.clean(True, False, snap_threshold, True)
-                    QgsMessageLog.logMessage('clean', level=QgsMessageLog.CRITICAL)
+                    QgsMessageLog.logMessage('clean %s' % cl3_range, level=QgsMessageLog.CRITICAL)
 
                 if getUnlinks:
 
                     self.graph.step = unlinks_range / float(len(self.graph.sEdges))
                     self.graph.generate_unlinks()
-                    QgsMessageLog.logMessage('unlinks generated', level=QgsMessageLog.CRITICAL)
+                    QgsMessageLog.logMessage('unlinks generated %s' % unlinks_range, level=QgsMessageLog.CRITICAL)
                     unlinks = self.graph.unlinks
 
                 # add to errors multiparts and points

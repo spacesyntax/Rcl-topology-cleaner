@@ -34,9 +34,8 @@ def clean_features_iter(feat_iter):
 
         # point
         if f_geom.length() <= 0:
-            points.append(f_geom.asPoint())
             ml_error = QgsFeature(error_feat)
-            ml_error.setGeometry(f_geom)
+            ml_error.setGeometry(QgsGeometry.fromPoint(f_geom.asPolyline()[0]))
             ml_error.setAttributes(['point'])
             points.append(ml_error)
         elif f_geom.wkbType() == 2:

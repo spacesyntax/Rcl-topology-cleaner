@@ -8,6 +8,7 @@ class sEdge(QObject):
         self.id = id
         self.feature = feature
         self.nodes = nodes
+        self.visited = False
 
     def get_startnode(self):
         return self.nodes[0]

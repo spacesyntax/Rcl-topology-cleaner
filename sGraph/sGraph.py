@@ -76,9 +76,6 @@ class sGraph(QObject):
             if self.killed is True:
                 break
 
-            self.total_progress += self.step
-            self.progress.emit(self.total_progress)
-
             # add edge
             geometry = f.geometry().asPolyline()
             startpoint = geometry[0]
@@ -153,66 +150,6 @@ class sGraph(QObject):
         # spIndex self.edgeSpIndex.deleteFeature(self.sEdges[e].feature)
         return
 
-    def add_edges_from_feat(self, any_f, angle_threshold):
-
-        f_geom = any_f.feature.geometry()
-
-        if f_geom.length() <= 0:
-            points.append(f_geom.asPoint())
-            ml_error = QgsFeature(error_feat)
-            ml_error.setGeometry(f_geom)
-            ml_error.setAttributes(['point'])
-            self.points.append(ml_error)
-        elif f_geom.wkbType() == 2:
-            self.edge_id += 1
-            any_f.setFeatureId(self.edge_id)
-            self.edgeSpIndex.insertFeature(any_f)
-            startpoint = f_geom.asPolyline()[0]
-            endpoint = f_geom.asPolyline()[-1]
-            start = self.load_point(startpoint)
-            end = self.load_point(endpoint)
-            snodes = [start, end]
-            self.update_topology(snodes[0], snodes[1], self.edge_id)
-            sedge = sEdge(self.edge_id, any_f, snodes)
-            self.sEdges[self.edge_id] = sedge
-        # empty geometry
-        elif f_geom is NULL:
-            #self.empty_geometries.append()
-            pass
-        # invalid geometry
-        elif not f_geom.isGeosValid():
-            #self.invalids.append(copy_feature(f, QgsGeometry(), f.id()))
-            pass
-        # multilinestring
-        elif f_geom.wkbType() == 5:
-            ml_segms = f_geom.asMultiPolyline()
-            for ml in ml_segms:
-                ml_geom = QgsGeometry(QgsGeometry.fromPolyline(ml))
-                ml_feat = QgsFeature(any_f)
-                self.edge_id += 1
-                ml_feat.setFeatureId(self.edge_id)
-                ml_feat.setGeometry(ml_geom)
-                self.edgeSpIndex.insertFeature(ml_feat)
-                startpoint = ml_geom.asPolyline()[0]
-                endpoint = ml_geom.asPolyline()[-1]
-                start = self.load_point(startpoint)
-                end = self.load_point(endpoint)
-                snodes = [start, end]
-                self.update_topology(snodes[0], snodes[1], self.edge_id)
-                sedge = sEdge(self.edge_id, ml_feat, snodes)
-                self.sEdges[self.edge_id] = sedge
-                ml_error = QgsFeature(error_feat)
-                ml_error.setGeometry(QgsGeometry.fromPoint(ml_geom.asPolyline()[0]))
-                ml_error.setAttributes(['multipart'])
-                self.multiparts.append(ml_error)
-                ml_error = QgsFeature(error_feat)
-                ml_error.setGeometry(QgsGeometry.fromPoint(ml_geom.asPolyline()[-1]))
-                ml_error.setAttributes(['multipart'])
-                self.multiparts.append(ml_error)
-
-        return
-                    # introduce duplicates
-
     # create graph (broken_features_iter)
     # can be applied to edges w-o topology for speed purposes
     def break_features_iter(self, getUnlinks, angle_threshold, fix_unlinks=False):
@@ -228,7 +165,7 @@ class sGraph(QObject):
             f = sedge.feature
             f_geom = f.geometry()
             pl = f_geom.asPolyline()
-            lines = filter(lambda line: line!= f.id(), self.edgeSpIndex.intersects(f_geom.boundingBox()))
+            lines = filter(lambda line: line != f.id(), self.edgeSpIndex.intersects(f_geom.boundingBox()))
 
             # self intersections
             # include first and last
@@ -259,9 +196,6 @@ class sGraph(QObject):
                 yield f
 
     def fix_unlinks(self):
-
-
-        unlinks_id = 0
 
         self.edgeSpIndex = QgsSpatialIndex()
         self.step = self.step / 2.0
@@ -329,6 +263,7 @@ class sGraph(QObject):
         res = map(lambda snode: self.ndSpIndex.insertFeature(snode.feature), self.sNodes.values())
         filtered_nodes = {}
         # exclude nodes where connectivity = 2 - they will be merged
+        self.step = self.step / float(2)
         for node in filter(lambda  n: n.adj_edges != 2, self.sNodes.values()):
             if self.killed is True:
                 break
@@ -558,7 +493,6 @@ class sGraph(QObject):
         # do not merge two parallel self loops
 
         edges_passed = set([])
-        self.step = (len(self.sNodes) * self.step) / float(len(self.sEdges))
 
         for e in self.edge_edges_iter():
             if {e}.isdisjoint(edges_passed):
@@ -584,10 +518,6 @@ class sGraph(QObject):
                 filtered_edges[v[1]].append(v[0])
             except KeyError:
                 filtered_edges[v[1]] = [v[0]]
-
-#nodes = to_layer(map(lambda n: graph.sNodes[n].getFeature(), filtered_nodes), crs, encoding, 'Point', 'memory', None,
-#                 'nodes')
-#QgsMapLayerRegistry.instance().addMapLayer(nodes)
 
         self.step = (len(filtered_edges) * self.step) / float(len(self.sEdges))
 
@@ -661,8 +591,8 @@ class sGraph(QObject):
 
         # spIndex # TODO change OTF - insert/delete feature
         self.edgeSpIndex = QgsSpatialIndex()
-        self.step = self.step / 2.0
 
+        self.step = self.step / float(4)
         for e in self.sEdges.values():
             if self.killed is True:
                 break
@@ -673,8 +603,7 @@ class sGraph(QObject):
             self.edgeSpIndex.insertFeature(e.feature)
 
         unlinks_id = 0
-
-
+        self.step = float(3.0) * self.step
         for id, e in self.sEdges.items():
 
             if self.killed is True:
@@ -789,12 +718,51 @@ class sGraph(QObject):
         pass
 
     def collapse_to_medial_axis(self):
-
         pass
 
     def simplify_angle(self, max_angle_threshold):
-
         pass
+
+    def catchment_iterator(self, origin_point, closest_edge, cost_limit):
+        # find closest line
+        edge_geom = self.sEdges[closest_edge].feature.geometry()
+        nodes = set(self.sEdges[closest_edge].nodes)
+
+        # endpoints
+        branch = []
+        shortest_line = origin_point.shortestLine(edge_geom)
+        point_on_line = shortest_line.intersection(edge_geom)
+        fraction = edge_geom.lineLocatePoint(point_on_line)
+        fractions = [fraction, 1 - fraction]
+        degree = 0
+        for node, fraction in zip(nodes, fractions):
+            branch.append((node, self.sNodes[node].feature.geometry().distance(point_on_line) , closest_edge, fraction))
+
+        for k in self.sEdges.keys():
+            self.sEdges[k].visited = False
+
+        self.sEdges[closest_edge].visited = True
+
+        while len(branch) > 0:
+            new_nodes = []
+            for (n, agg_cost, edge, fr) in branch:
+                if agg_cost >= cost_limit:
+                    fraction = 1 - ((agg_cost - cost_limit) / float(cost_limit))
+                else:
+                    fraction = 1
+                    con_edges = filter(lambda e: e.visited is False, [self.sEdges[edg] for edg in set(self.sNodes[n].adj_edges)])
+                    new_nodes += map(lambda con_e: self.visit_edge(n, con_e, agg_cost), con_edges)
+                yield n, agg_cost, edge, fraction
+            branch = new_nodes
+            #degree += 1
+
+    def visit_edge(self, previous_nodes, con_edge, agg_cost):
+        con_edge_id = con_edge.id
+        self.sEdges[con_edge_id].visited = True
+        next_node = con_edge.nodes[0]
+        if next_node == previous_nodes:
+            next_node = con_edge.nodes[1]
+        return next_node, agg_cost + con_edge.len, con_edge_id, None #, degree + 1
 
     def kill(self):
         self.killed = True

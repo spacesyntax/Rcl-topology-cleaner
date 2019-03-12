@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>295</width>
-    <height>599</height>
+    <width>292</width>
+    <height>595</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -42,13 +42,6 @@
        </property>
        <property name="text">
         <string>Data source</string>
-       </property>
-      </widget>
-     </item>
-     <item row="39" column="0">
-      <widget class="QPushButton" name="settingsButton">
-       <property name="text">
-        <string>Settings</string>
        </property>
       </widget>
      </item>

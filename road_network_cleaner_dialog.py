@@ -89,7 +89,6 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.unlinksCheckBox.setCheckState(2)
 
         self.editDefaultButton.clicked.connect(lambda i=False: self.lockSettingsGUI(i))
-        self.edit_mode = False
         self.setClSettings()
 
     def closeEvent(self, event):
@@ -109,7 +108,6 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
     def setClSettings(self):
         if self.dataSourceCombo.currentText() == 'OpenStreetMap':
-            self.edit_mode = False
             self.snapCheckBox.setCheckState(2)
             self.simplifyCheckBox.setCheckState(2)
             self.snapSpinBox.setValue(10)
@@ -121,7 +119,6 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
             self.lockSettingsGUI(True)
 
         elif self.dataSourceCombo.currentText() == 'OrdnanceSurvey':
-            self.edit_mode = False
             self.snapCheckBox.setCheckState(2)
             self.simplifyCheckBox.setCheckState(2)
             self.snapSpinBox.setValue(10)
@@ -129,12 +126,10 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
             self.breakCheckBox.setCheckState(0)
             self.mergeCheckBox.setCheckState(2)
             self.orphansCheckBox.setCheckState(2)
-
             self.lockSettingsGUI(True)
 
         else:
-            self.edit_mode = False
-            self.lockSettingsGUI(True)
+            self.lockSettingsGUI(False)
 
         return
 
@@ -187,6 +182,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.errorsCheckBox.setDisabled(onoff)
         self.cleanButton.setDisabled(onoff)
         self.dataSourceCombo.setDisabled(onoff)
+        self.inputCombo.setDisabled(onoff)
 
     def lockSettingsGUI(self, onoff):
         self.orphansCheckBox.setDisabled(onoff)
@@ -198,10 +194,6 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.snapSpinBox.setDisabled(onoff)
         self.angularChangeSpinBox.setDisabled(onoff)
         self.angleSpinBox.setDisabled(onoff)
-        if onoff == True:
-            self.edit_mode = False
-        else:
-            self.edit_mode = True
 
     def getTolerance(self):
         if self.snapCheckBox.isChecked():
@@ -281,16 +273,17 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
     def get_progress_ranges(self, break_at_vertices, merge_type, snap_threshold, getUnlinks, fix_unlinks):
 
         # hard-coded ranges
-        weigths = {'break': 4, 'load': 2, 'snap': 2, 'merge': 1, 'unlinks': 2, 'clean': 1, 'fix':1}
+        weigths = {'break': 4, 'load': 2, 'snap': 2, 'merge': 1, 'unlinks': 1, 'clean': 1, 'fix': 1}
         total_range = 95
         total_pr_w = weigths['load']
-        total_pr_w += (float(3) * weigths['snap'])
+        total_pr_w += (float(2) * weigths['clean']) # 2 cleanings are happening by default
         if break_at_vertices:
             total_pr_w += weigths['break']
         if merge_type in ('intersections', 'collinear'):
             total_pr_w += weigths['merge']
         if snap_threshold != 0:
             total_pr_w += weigths['snap']
+            total_pr_w += weigths['clean']
         if getUnlinks:
             total_pr_w += weigths['unlinks']
         if fix_unlinks:
@@ -298,8 +291,8 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
         factor = total_range / float(total_pr_w)
         load_range = weigths['load'] * float(factor)
-        cl1_range = weigths['snap'] * float(factor)
-        cl2_range = cl1_range
+        cl1_range = weigths['clean'] * float(factor)
+        cl2_range = 0
         cl3_range = cl1_range
         break_range, merge_range, snap_range, unlinks_range, fix_range = 0, 0, 0, 0, 0
         if break_at_vertices:
@@ -308,8 +301,11 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
             merge_range = weigths['merge'] * float(factor)
         if snap_threshold != 0:
             snap_range = weigths['snap'] * float(factor)
+            cl2_range = cl1_range
         if fix_unlinks:
             fix_range = weigths['fix'] * float(factor)
+        if getUnlinks:
+            unlinks_range = weigths['unlinks'] * float(factor)
 
         return [load_range, cl1_range, cl2_range, cl3_range, break_range, merge_range, snap_range, unlinks_range, fix_range]
 
