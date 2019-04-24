@@ -1,7 +1,7 @@
 # general imports
 import itertools
 from PyQt4.QtCore import QObject, pyqtSignal, QVariant
-from qgis.core import QgsGeometry, QgsSpatialIndex, QgsFields, QgsField, QgsFeature
+from qgis.core import QgsGeometry, QgsSpatialIndex, QgsFields, QgsField, QgsFeature, QgsMessageLog
 from collections import defaultdict
 
 # plugin module imports
@@ -259,7 +259,7 @@ class sGraph(QObject):
 
     # group points based on proximity - spatial index is not updated
     def snap_endpoints(self, snap_threshold):
-
+        QgsMessageLog.logMessage('starting snapping', level=QgsMessageLog.CRITICAL)
         res = map(lambda snode: self.ndSpIndex.insertFeature(snode.feature), self.sNodes.values())
         filtered_nodes = {}
         # exclude nodes where connectivity = 2 - they will be merged
@@ -267,6 +267,10 @@ class sGraph(QObject):
         for node in filter(lambda  n: n.adj_edges != 2, self.sNodes.values()):
             if self.killed is True:
                 break
+
+            self.total_progress += self.step
+            self.progress.emit(self.total_progress)
+
             # find nodes within x distance
             node_geom = node.feature.geometry()
             nodes = filter(lambda nd: nd != node.id and node_geom.distance(self.sNodes[nd].feature.geometry()) <= snap_threshold,
@@ -274,6 +278,7 @@ class sGraph(QObject):
             if len(nodes) > 0:
                 filtered_nodes[node.id] = nodes
 
+        QgsMessageLog.logMessage('continuing snapping', level=QgsMessageLog.CRITICAL)
         self.step = (len(filtered_nodes) * self.step) / float(len(self.sNodes))
         for group in self.con_comp_iter(filtered_nodes):
 
@@ -723,46 +728,47 @@ class sGraph(QObject):
     def simplify_angle(self, max_angle_threshold):
         pass
 
-    def catchment_iterator(self, origin_point, closest_edge, cost_limit):
+    def catchment_iterator(self, origin_point, closest_edge, cost_limit, origin_name):
         # find closest line
         edge_geom = self.sEdges[closest_edge].feature.geometry()
         nodes = set(self.sEdges[closest_edge].nodes)
 
         # endpoints
-        branch = []
+        branches = []
         shortest_line = origin_point.shortestLine(edge_geom)
         point_on_line = shortest_line.intersection(edge_geom)
         fraction = edge_geom.lineLocatePoint(point_on_line)
         fractions = [fraction, 1 - fraction]
         degree = 0
         for node, fraction in zip(nodes, fractions):
-            branch.append((node, self.sNodes[node].feature.geometry().distance(point_on_line) , closest_edge, fraction))
+            branches.append((None, node, closest_edge, self.sNodes[node].feature.geometry().distance(point_on_line),))
 
         for k in self.sEdges.keys():
-            self.sEdges[k].visited = False
+            self.sEdges[k].visited[origin_name] = None
 
-        self.sEdges[closest_edge].visited = True
+        self.sEdges[closest_edge].visited[origin_name] = True
 
-        while len(branch) > 0:
-            new_nodes = []
-            for (n, agg_cost, edge, fr) in branch:
-                if agg_cost >= cost_limit:
-                    fraction = 1 - ((agg_cost - cost_limit) / float(cost_limit))
-                else:
-                    fraction = 1
-                    con_edges = filter(lambda e: e.visited is False, [self.sEdges[edg] for edg in set(self.sNodes[n].adj_edges)])
-                    new_nodes += map(lambda con_e: self.visit_edge(n, con_e, agg_cost), con_edges)
-                yield n, agg_cost, edge, fraction
-            branch = new_nodes
+        while len(branches) > 0:
+
+            branches = [nbr for (org, dest, edge, agg_cost) in branches if agg_cost < cost_limit and dest != [] for nbr in self.get_next_edges(dest, agg_cost, origin_name)]
+
+            #fraction = 1 - ((agg_cost - cost_limit) / float(cost_limit))
             #degree += 1
 
-    def visit_edge(self, previous_nodes, con_edge, agg_cost):
-        con_edge_id = con_edge.id
-        self.sEdges[con_edge_id].visited = True
-        next_node = con_edge.nodes[0]
-        if next_node == previous_nodes:
-            next_node = con_edge.nodes[1]
-        return next_node, agg_cost + con_edge.len, con_edge_id, None #, degree + 1
+    def get_next_edges(self, old_dest, agg_cost,origin_name):
+        new_origin = old_dest[0]
+        new_branches = []
+        for edg in set(self.sNodes[new_origin].adj_edges):
+            sedge = self.sEdges[edg]
+            if sedge.visited[origin_name] is None:
+                sedge.visited[origin_name] = new_origin
+                new_agg_cost = agg_cost + sedge.len
+                sedge.agg_cost[origin_name] = new_agg_cost
+                self.sEdges[edg] = sedge
+                new_dest = [n for n in sedge.nodes if n != new_origin]
+                new_branches.append((new_origin, new_dest, edg, new_agg_cost))
+        return new_branches
+
 
     def kill(self):
         self.killed = True

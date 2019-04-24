@@ -82,7 +82,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.shpRadioButton.clicked.connect(self.setShpOutput)
 
         self.dataSourceCombo.addItems(['OpenStreetMap', 'OrdnanceSurvey', 'other'])
-
+        self.lockSettingsGUI(True)
         self.dataSourceCombo.currentIndexChanged.connect(self.setClSettings)
 
         self.errorsCheckBox.setCheckState(2)
@@ -90,6 +90,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
         self.editDefaultButton.clicked.connect(lambda i=False: self.lockSettingsGUI(i))
         self.setClSettings()
+        self.lockSettingsGUI(True)
 
     def closeEvent(self, event):
         self.closingPlugin.emit()

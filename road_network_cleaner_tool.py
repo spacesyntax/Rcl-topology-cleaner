@@ -35,14 +35,16 @@ from sGraph.utilityFunctions import *
 
 # Import the debug library - required for the cleaning class in separate thread
 # set is_debug to False in release version
-is_debug = False
+is_debug = True
 try:
-    import pydevd
+    import pydevd_pycharm
     has_pydevd = True
 except ImportError, e:
     has_pydevd = False
     is_debug = False
 
+import sys
+#sys.path.append("pydevd-pycharm.egg")
 
 class NetworkCleanerTool(QObject):
 
@@ -156,6 +158,7 @@ class NetworkCleanerTool(QObject):
             cleaning = self.Worker(self.settings, self.iface)
             # start the cleaning in a new thread
             self.dlg.lockGUI(True)
+            self.dlg.lockSettingsGUI(True)
             thread = QThread()
             cleaning.moveToThread(thread)
             cleaning.finished.connect(self.workerFinished)
@@ -180,6 +183,8 @@ class NetworkCleanerTool(QObject):
         if is_debug:
             print 'trying to finish'
         self.dlg.lockGUI(False)
+        #TODO: only if edit default has been pressed before
+        self.dlg.lockSettingsGUI(False)
         # get cleaning settings
         layer_name = self.settings['input']
         path = self.settings['output']
@@ -306,7 +311,7 @@ class NetworkCleanerTool(QObject):
 
         def run(self):
             if has_pydevd and is_debug:
-                pydevd.settrace('localhost', port=53100, stdoutToServer=True, stderrToServer=True, suspend=False)
+                pydevd_pycharm.settrace('localhost', port=53100, stdoutToServer=True, stderrToServer=True, suspend=False)
             ret = None
             #if self.settings:
             try:

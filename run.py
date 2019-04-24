@@ -11,6 +11,7 @@ layer_name = 'oproads_lon'
 # reduction: 80%
 
 layer_name = 'oproads_lon_small'
+layer_name = 'Bhubneshwar'
 layer = getLayerByName(layer_name)
 crs = layer.crs()
 encoding = layer.dataProvider().encoding()
@@ -45,7 +46,7 @@ graph.load_edges(clean_features_iter(layer.getFeatures()))
 
 print time.time() - _time
 
-broken_layer = to_layer(map(lambda e: e.feature, graph.sEdges.values()), crs, encoding, geom_type, 'memory', path, 'broken_layer')
+broken_layer = to_layer(map(lambda e: e.feature, graph.sEdges.values()), crs, encoding, 'Linestring', 'memory', path, 'broken_layer')
 QgsMapLayerRegistry.instance().addMapLayer(broken_layer)
 
 # nodes
@@ -59,10 +60,51 @@ print time.time() - _time
 
 # 5. SNAP
 _time = time.time()
-graph.snap_endpoints(snap_threshold)
+#graph.snap_endpoints(snap_threshold)
 print time.time() - _time
 
-snapped_layer = to_layer(map(lambda e: e.feature, graph.sEdges.values()), crs, encoding, geom_type, 'memory', None, 'snapped_layer')
+
+_time = time.time()
+
+graph.ndSpIndex = QgsSpatialIndex()
+res = map(lambda snode: graph.ndSpIndex.insertFeature(snode.feature), graph.sNodes.values())
+filtered_nodes = {}
+# exclude nodes where connectivity = 2 - they will be merged
+graph.step = graph.step / float(2)
+for node in filter(lambda n: n.adj_edges != 2, graph.sNodes.values()):
+    # find nodes within x distance
+    node_geom = node.feature.geometry()
+    node_geom_buffer = node_geom.buffer(snap_threshold, 10)
+    nodes = graph.ndSpIndex.intersects(node_geom_buffer.boundingBox())
+    nodes = [n for n in nodes if n != node.id]
+    nodes = [n for n in nodes if node_geom.shortestLine(graph.sNodes[n].feature.geometry()).length() <= snap_threshold]
+
+
+print time.time() - _time
+print time.time() - _time
+
+
+
+    and node_geom_buffer.intersects(graph.sNodes[n].feature.geometry())]
+
+
+
+    nodes = filter(lambda nd: nd != node.id and node_geom_buffer.intersects(graph.sNodes[nd].feature.geometry()),
+                   graph.ndSpIndex.intersects(node_geom_buffer.boundingBox()))
+    if len(nodes) > 0:
+        filtered_nodes[node.id] = nodes
+
+
+
+
+
+
+
+
+
+
+
+snapped_layer = to_layer(map(lambda e: e.feature, graph.sEdges.values()), crs, encoding, 'Linestring', 'memory', None, 'snapped_layer')
 QgsMapLayerRegistry.instance().addMapLayer(snapped_layer)
 
 # 4. CLEAN || & CLOSED POLYLINES
@@ -70,9 +112,9 @@ _time = time.time()
 graph.clean(True, False, snap_threshold, True)
 print time.time() - _time
 
-_time = time.time()
-graph.merge_collinear(collinear_threshold, angle_threshold)
-print time.time() - _time
+#_time = time.time()
+#graph.merge_collinear(collinear_threshold, angle_threshold)
+#print time.time() - _time
 
 # 3. MERGE
 _time = time.time()
@@ -85,23 +127,6 @@ QgsMapLayerRegistry.instance().addMapLayer(merged_layer)
 # nodes
 #nodes = to_layer(map(lambda n: n.getFeature(), graph.sNodes.values()), crs, encoding, 1, 'memory', None, 'nodes')
 #QgsMapLayerRegistry.instance().addMapLayer(nodes)
-
-# 6. CLEAN ALL
-_time = time.time()
-graph.clean(True, False, snap_threshold, True)
-print time.time() - _time
-
-cleaned_layer = to_layer(map(lambda e: e.feature, graph.sEdges.values()), crs, encoding, geom_type, 'memory', None, 'cleaned_layer')
-QgsMapLayerRegistry.instance().addMapLayer(cleaned_layer)
-
-# 7. MERGE
-_time = time.time()
-graph.merge_b_intersections(angle_threshold)
-print time.time() - _time
-
-merged_layer = to_layer(map(lambda e: e.feature, graph.sEdges.values()), crs, encoding, geom_type, 'memory', None, 'merged_layer')
-QgsMapLayerRegistry.instance().addMapLayer(merged_layer)
-
 
 # 6. CLEAN ALL
 _time = time.time()

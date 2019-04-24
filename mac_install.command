@@ -24,15 +24,17 @@ fi
 if [ ! -d "$rcl_plugin_dir" ]; then
 	mkdir -p "$rcl_plugin_dir"
 	if [ $? -ne 0 ]; then
-		echo "ERROR: Couldn√'t create directory '$rcl_plugin_dir'"
+		echo "ERROR: Couldn't create directory '$rcl_plugin_dir'"
 		exit 1
 	fi
 fi
 
 echo "Copying RCL Cleaner QGIS plugin to QGIS plugin directory..."
-cp -r RCL-topology-cleaner/* "$rcl_plugin_dir/"
+dir=${0%/*}
+echo $dir 
+cp -r $dir/* "$rcl_plugin_dir/"
 if [ $? -ne 0 ]; then
-	echo "ERROR: Couldn't copy 'RCL-topology-cleaner' to '$rcl_plugin_dir/'"
+	echo "ERROR: Couldn't copy 'Rcl-topology-cleaner' to '$rcl_plugin_dir/'"
 	exit 1
 fi
 

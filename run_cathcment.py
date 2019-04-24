@@ -12,6 +12,8 @@ layer_name = 'oproads_lon'
 
 layer_name = 'r_osm_simpl_cl'
 origins_name = 'pt_network_w_o_times_nodes'
+origins_name = 'origins_test'
+
 layer = getLayerByName(layer_name)
 origins_layer = getLayerByName(origins_name)
 crs = layer.crs()
@@ -35,35 +37,52 @@ _time = time.time()
 for k, v in graph.sEdges.items():
     v.len = v.feature.geometry().length()
 
+
 _time = time.time()
-#for j in range(1, 100):
+# START
 
 for o in origins_layer.getFeatures():
+    # break
+    origin_name = str(o.id())
+    #print origin_name
+    origin_geom = o.geometry()
+    closest_edge = graph.edgeSpIndex.nearestNeighbor(origin_geom.asPoint(), 1)[0]
+    edge_geom = graph.sEdges[closest_edge].feature.geometry()
+    nodes = set(graph.sEdges[closest_edge].nodes)
+    graph.cost_limit = 600
+    graph.origin_name = origin_name
+    # endpoints
+    branches = []
+    shortest_line = o.geometry().shortestLine(edge_geom)
+    point_on_line = shortest_line.intersection(edge_geom)
+    fraction = edge_geom.lineLocatePoint(point_on_line)
+    fractions = [fraction, 1 - fraction]
+    degree = 0
+    for node, fraction in zip(nodes, fractions):
+        branches.append(([node, graph.sNodes[node].feature.geometry().distance(point_on_line)))
+    for k in graph.sEdges.keys():
+        graph.sEdges[k].visited[origin_name] = None
+    graph.sEdges[closest_edge].visited[origin_name] = True
+    graph.sEdges[closest_edge].agg_cost[origin_name] = -1
+    while len(branches) > 0:
+        branches = map(lambda (dest, agg_cost): graph.get_next_edges(dest, agg_cost), branches)
+        branches = list(itertools.chain.from_iterable(branches))
     break
 
-origin_geom = o.geometry()
-closest_edge = graph.edgeSpIndex.nearestNeighbor(origin_geom.asPoint(), 1)[0]
-graph.sEdges[closest_edge].visited = True
-for (n, agg_cost, edge, fr) in graph.catchment_iterator(origin_geom, closest_edge, 600):
-    pass
-    #print (n, agg_cost, edge, fr, degree)
-    #break
-
-
-        #try:
-        #    graph.sEdges.catchment[str(o.id())] = min([graph.sEdges.catchment['origin1'], agg_cost])
-        #except KeyError:
-        #    graph.sEdges.catchment[str(o.id())] = agg_cost
-
 print time.time() - _time
 print time.time() - _time
 
+### TEST 1
+#  1 origin - 600  -
+#  1 origin - 1200 - 0.09 - interpolate for 10.000 - 20 min
 
-1 origin - 600  -
-1 origin - 1200 - 0.09 - interpolate for 10.000 - 20 min - wish
+### TEST 2
+#  1 origin - 1200 - 0.021 - interpolate for 10.000 - 3.5 min
 
-600m - 1000 - 1.53 sec
-1200m
+# for 2000 - 0.7 min
+# NON LINEAR - 10 min
+
+
 
 
 

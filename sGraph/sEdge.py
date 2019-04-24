@@ -8,7 +8,11 @@ class sEdge(QObject):
         self.id = id
         self.feature = feature
         self.nodes = nodes
-        self.visited = False
+
+        # TODO: only for catchment
+        #self.visited = {}
+        #self.agg_cost = {}
+        #self.len = self.feature.geometry().length()
 
     def get_startnode(self):
         return self.nodes[0]
