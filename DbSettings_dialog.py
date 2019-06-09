@@ -50,9 +50,7 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
         self.okButton.clicked.connect(self.close)
         self.popDbs()
         self.dbCombo.currentIndexChanged.connect(self.popSchemas)
-        self.dbCombo.currentIndexChanged.connect(self.setDbOutput)
-        self.schemaCombo.currentIndexChanged.connect(self.setDbOutput)
-        self.nameLineEdit.textChanged.connect(self.setDbOutput)
+
 
 
     def popDbs(self):
@@ -98,14 +96,6 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
             pass
         for k, v in db_info.items():
             self.connstring += str(k) + '=' + str(v) + ' '
-        if 'service' in db_info.keys():
-            pass
-        else:
-            print db_info.keys
-            #if 'user' not in db_info.keys():
-            #    self.connstring += ' user=""'
-            #if 'password' not in db_info.keys():
-            #    self.connstring += ' password='
         return
 
     def closeEvent(self, event):

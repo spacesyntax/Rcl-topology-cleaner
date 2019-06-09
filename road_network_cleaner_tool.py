@@ -155,7 +155,7 @@ class NetworkCleanerTool(QObject):
             db_settings = self.dlg.get_dbsettings()
             self.settings.update(db_settings)
 
-        if self.settings['input']:
+        if self.settings['output'] != '':
 
             cleaning = self.Worker(self.settings, self.iface)
             # start the cleaning in a new thread

@@ -73,6 +73,9 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.dbsettings_dlg = DbSettingsDialog(available_dbs)
         self.dbsettings_dlg.setDbOutput.connect(self.setDbOutput)
         self.postgisRadioButton.clicked.connect(self.setDbOutput)
+        self.dbsettings_dlg.dbCombo.currentIndexChanged.connect(self.setDbPath)
+        self.dbsettings_dlg.schemaCombo.currentIndexChanged.connect(self.setDbPath)
+        self.dbsettings_dlg.nameLineEdit.textChanged.connect(self.setDbPath)
 
         # add GUI signals§
         self.browseCleaned.clicked.connect(self.setOutput)
@@ -146,22 +149,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
             # get from available dbs
             # path = {'database':, 'service':, 'host': , 'port': , 'password': , 'user': , 'schema':}
             database, schema, table_name = self.outputCleaned.text().split(':')
-            try:
-                service = self.dbsettings_dlg.available_dbs[database]['service']
-            except KeyError: service = None
-            try:
-                host = self.dbsettings_dlg.available_dbs[database]['host']
-            except KeyError: host = None
-            try:
-                port = self.dbsettings_dlg.available_dbs[database]['port']
-            except KeyError: port = None
-            try:
-                password = self.dbsettings_dlg.available_dbs[database]['password']
-            except KeyError: password = None
-            try:
-                user = self.dbsettings_dlg.available_dbs[database]['user']
-            except KeyError: user = None
-            return {'database': database, 'service': service, 'host': host, 'port': port, 'password': password, 'user': user, 'schema':schema, 'table_name': table_name}
+            return self.dbsettings_dlg.connstring, schema, table_name
         else:
             return None
 
@@ -334,15 +322,18 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.disable_browse()
         if self.postgisRadioButton.isChecked():
             self.outputCleaned.clear()
-            #if self.dbsettings_dlg.dbCombo.currentText() in self.dbsettings_dlg.available_dbs.keys():
-            #    self.dbsettings_dlg.popSchemas()
-            try:
-                self.dbsettings = self.dbsettings_dlg.getDbSettings()
-                db_layer_name = "%s:%s:%s" % (self.dbsettings['dbname'], self.dbsettings['schema'], self.dbsettings['table_name'])
-                self.outputCleaned.setText(db_layer_name)
-            except:
-                self.outputCleaned.clear()
+
             self.outputCleaned.setDisabled(True)
+
+    def setDbPath(self):
+        try:
+            self.dbsettings = self.dbsettings_dlg.getDbSettings()
+            db_layer_name = "%s:%s:%s" % (
+            self.dbsettings['dbname'], self.dbsettings['schema'], self.dbsettings['table_name'])
+            self.outputCleaned.setText(db_layer_name)
+        except:
+            self.outputCleaned.clear()
+        return
 
     def setTempOutput(self):
         self.disable_browse()
