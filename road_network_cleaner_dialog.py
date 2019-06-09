@@ -68,6 +68,8 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         else:
             available_dbs = {}
         self.postgisRadioButton.setDisabled(False)
+
+        # initialise nut do not connect to popschemas
         self.dbsettings_dlg = DbSettingsDialog(available_dbs)
         self.dbsettings_dlg.setDbOutput.connect(self.setDbOutput)
         self.postgisRadioButton.clicked.connect(self.setDbOutput)
@@ -332,7 +334,8 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.disable_browse()
         if self.postgisRadioButton.isChecked():
             self.outputCleaned.clear()
-
+            #if self.dbsettings_dlg.dbCombo.currentText() in self.dbsettings_dlg.available_dbs.keys():
+            #    self.dbsettings_dlg.popSchemas()
             try:
                 self.dbsettings = self.dbsettings_dlg.getDbSettings()
                 db_layer_name = "%s:%s:%s" % (self.dbsettings['dbname'], self.dbsettings['schema'], self.dbsettings['table_name'])

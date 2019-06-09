@@ -270,3 +270,4 @@ def getPostgisSchemas(connstring, commit=False):
             schemas.append(schema[0])
     #return the result even if empty
     return sorted(schemas)
+
