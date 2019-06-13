@@ -83,7 +83,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.mergeCollinearCheckBox.stateChanged.connect(self.toggleMergeCollinearSettings)
 
         self.memoryRadioButton.clicked.connect(self.setTempOutput)
-        self.memoryRadioButton.clicked.connect(self.update_output_text)
+        self.setTempOutput()
         self.shpRadioButton.clicked.connect(self.setShpOutput)
 
         self.dataSourceCombo.addItems(['OpenStreetMap', 'OrdnanceSurvey', 'other'])
@@ -96,6 +96,7 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
         self.editDefaultButton.clicked.connect(lambda i=False: self.lockSettingsGUI(i))
         self.setClSettings()
         self.lockSettingsGUI(True)
+        self.outputCleaned.setDisabled(True)
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
@@ -144,14 +145,21 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
     def getOutput(self):
         if self.shpRadioButton.isChecked():
-            return self.outputCleaned.text()
+            shp_path = self.outputCleaned.text()
+            return shp_path, shp_path[:-6] + "u.shp", shp_path[:-4] + "_errors.shp"
         elif self.postgisRadioButton.isChecked():
-            # get from available dbs
-            # path = {'database':, 'service':, 'host': , 'port': , 'password': , 'user': , 'schema':}
-            database, schema, table_name = self.outputCleaned.text().split(':')
-            return self.dbsettings_dlg.connstring, schema, table_name
+            try:
+                database, schema, table_name = self.outputCleaned.text().split(':')
+                db_path = self.dbsettings_dlg.connstring, schema, table_name
+                db_path_u = list(db_path)
+                db_path_u[2] = db_path_u[2][:-2] + 'u'
+                db_path_errors = list(db_path)
+                db_path_errors[2] = db_path_u[2] + '_errors'
+                return db_path, tuple(db_path_u), tuple(db_path_errors)
+            except ValueError:
+                return '', '', ''
         else:
-            return None
+            return None, None, None
 
     def popActiveLayers(self, layers_list):
         self.inputCombo.clear()
@@ -232,12 +240,6 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
 
     def get_unlinks(self):
         return self.unlinksCheckBox.isChecked()
-
-    def update_output_text(self):
-        if self.memoryRadioButton.isChecked():
-            return "cleaned"
-        else:
-            return
 
     def get_output_type(self):
         if self.shpRadioButton.isChecked():
@@ -326,13 +328,14 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
             self.outputCleaned.setDisabled(True)
 
     def setDbPath(self):
-        try:
-            self.dbsettings = self.dbsettings_dlg.getDbSettings()
-            db_layer_name = "%s:%s:%s" % (
-            self.dbsettings['dbname'], self.dbsettings['schema'], self.dbsettings['table_name'])
-            self.outputCleaned.setText(db_layer_name)
-        except:
-            self.outputCleaned.clear()
+        if self.postgisRadioButton.isChecked():
+            try:
+                self.dbsettings = self.dbsettings_dlg.getDbSettings()
+                db_layer_name = "%s:%s:%s" % (
+                self.dbsettings['dbname'], self.dbsettings['schema'], self.dbsettings['table_name'])
+                self.outputCleaned.setText(db_layer_name)
+            except:
+                self.outputCleaned.clear()
         return
 
     def setTempOutput(self):

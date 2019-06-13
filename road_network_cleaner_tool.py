@@ -35,7 +35,7 @@ from sGraph.utilityFunctions import *
 
 # Import the debug library - required for the cleaning class in separate thread
 # set is_debug to False in release version
-is_debug = True
+is_debug = False
 try:
     import pydevd_pycharm
     has_pydevd = True
@@ -189,7 +189,8 @@ class NetworkCleanerTool(QObject):
         self.dlg.lockSettingsGUI(False)
         # get cleaning settings
         layer_name = self.settings['input']
-        path = self.settings['output']
+        path, unlinks_path, errors_path  = self.settings['output'] # if postgis: connstring, schema, table_name
+
         output_type = self.settings['output_type']
         #  get settings from layer
         layer = getLayerByName(layer_name)
@@ -209,18 +210,12 @@ class NetworkCleanerTool(QObject):
 
         if ret:
 
-            cleaned_features, errors, unlinks = ret
+            cleaned_features, errors_features, unlinks_features = ret
 
+            print 'path', path
             if self.settings['errors']:
-                if len(errors) > 0:
-                    errors_path = None
-                    if output_type == 'shapefile':
-                        errors_path = path[:-4] + "_cl_errors.shp"
-                    elif output_type == 'postgis':
-                        errors_path = dict(path)
-                        errors_path['table_name'] = errors_path['table_name'] + '_errors'
-                    errors = to_layer(errors, layer.crs(), layer.dataProvider().encoding(), 'Point', output_type,
-                                      errors_path, layer_name + "_cl_errors")
+                if len(errors_features) > 0:
+                    errors = to_layer(errors_features, layer.crs(), layer.dataProvider().encoding(), 'Point', output_type, errors_path, layer_name + "_cl_errors")
                     errors.loadNamedStyle(os.path.dirname(__file__) + '/qgis_styles/errors.qml')
                     QgsMapLayerRegistry.instance().addMapLayer(errors)
                     self.iface.legendInterface().refreshLayerSymbology(errors)
@@ -228,15 +223,8 @@ class NetworkCleanerTool(QObject):
                     self.giveMessage('No errors detected!', QgsMessageBar.INFO)
 
             if self.settings['unlinks']:
-                if len(unlinks) > 0:
-                    unlinks_path = None
-                    if output_type == 'shapefile':
-                        unlinks_path = path[:-4] + "_u.shp"
-                    elif output_type == 'postgis':
-                        unlinks_path = dict(path)
-                        unlinks_path['table_name'] = unlinks_path['table_name'] + '_u'
-                    unlinks = to_layer(unlinks, layer.crs(), layer.dataProvider().encoding(), 'Point', output_type,
-                                       unlinks_path, layer_name + "_u")
+                if len(unlinks_features) > 0:
+                    unlinks = to_layer(unlinks_features, layer.crs(), layer.dataProvider().encoding(), 'Point', output_type, unlinks_path, layer_name + "_u")
                     unlinks.loadNamedStyle(os.path.dirname(__file__) + '/qgis_styles/unlinks.qml')
                     QgsMapLayerRegistry.instance().addMapLayer(unlinks)
                     self.iface.legendInterface().refreshLayerSymbology(unlinks)
@@ -244,9 +232,7 @@ class NetworkCleanerTool(QObject):
                 else:
                     self.giveMessage('No unlinks detected!', QgsMessageBar.INFO)
 
-            cleaned = to_layer(cleaned_features, layer.crs(), layer.dataProvider().encoding(),
-                                 'Linestring', output_type, path,
-                                 layer_name + '_cl')
+            cleaned = to_layer(cleaned_features, layer.crs(), layer.dataProvider().encoding(), 'Linestring', output_type, path, layer_name + '_cl')
             cleaned.loadNamedStyle(os.path.dirname(__file__) + '/qgis_styles/cleaned.qml')
             QgsMapLayerRegistry.instance().addMapLayer(cleaned)
             self.iface.legendInterface().refreshLayerSymbology(cleaned)

@@ -46,12 +46,9 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
         self.available_dbs = available_dbs
-
         self.okButton.clicked.connect(self.close)
         self.popDbs()
         self.dbCombo.currentIndexChanged.connect(self.popSchemas)
-
-
 
     def popDbs(self):
         self.dbCombo.clear()
@@ -83,6 +80,7 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
     def get_connstring(self, selected_db):
         db_info = self.available_dbs[selected_db]
         print 'tries', db_info, selected_db
+        # pass connsting property so that it can be called
         self.connstring = ''
         try:
             db_info['user'] = db_info['username']

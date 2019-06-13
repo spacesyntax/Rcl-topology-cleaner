@@ -28,7 +28,7 @@ unlink_feat.setFields(unlink_flds)
 
 error_feat = QgsFeature()
 error_flds = QgsFields()
-error_flds.append(QgsField('error type', QVariant.String))
+error_flds.append(QgsField('error_type', QVariant.String))
 error_feat.setFields(error_flds)
 
 

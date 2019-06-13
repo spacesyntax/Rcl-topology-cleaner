@@ -5,6 +5,8 @@ from qgis.core import QgsMapLayerRegistry, QgsFields, QgsField, QgsGeometry, Qgs
 from PyQt4.QtCore import  QVariant
 import itertools
 import psycopg2
+from psycopg2.extensions import AsIs
+
 from qgis.gui import QgsMessageBar
 
 
@@ -16,7 +18,7 @@ points = []
 multiparts = []
 error_feat = QgsFeature()
 error_flds = QgsFields()
-error_flds.append(QgsField('error type', QVariant.String))
+error_flds.append(QgsField('error_type', QVariant.String))
 error_feat.setFields(error_flds)
 # do not snap - because if self loop needs to break it will not
 
@@ -195,37 +197,45 @@ def to_layer(features, crs, encoding, geom_type, layer_type, path, name):
 
     elif layer_type == 'postgis':
 
-        layer = QgsVectorLayer(geom_type + '?crs=' + crs.authid(), name, "memory")
-        pr = layer.dataProvider()
-        pr.addAttributes(fields.toList())
-        layer.updateFields()
-        layer.startEditing()
-        pr.addFeatures(features)
-        layer.commitChanges()
-        uri = QgsDataSourceURI()
-        # passwords, usernames need to be empty if not provided or else connection will fail
-        if path['service']:
-            uri.setConnection(path['service'], path['database'], '', '')
-        elif path['password']:
-            uri.setConnection(path['host'], path['port'], path['database'], path['user'], path['password'])
-        else:
-            uri.setConnection(path['host'], path['port'], path['database'], path['user'], '')
-        #uri = "dbname='test' host=localhost port=5432 user='user' password='password' key=gid type=POINT table=\"public\".\"test\" (geom) sql="
-        #crs = QgsCoordinateReferenceSystem(int(crs.postgisSrid()), QgsCoordinateReferenceSystem.EpsgCrsId)
-        # layer - QGIS vector layer
-        uri.setDataSource(path['schema'], path['table_name'], "geom")
-        error = QgsVectorLayerImport.importLayer(layer, uri.uri(), "postgres", crs, False, False)
-        if error[0] != 0:
-            print "Error when creating postgis layer: ", error[1]
+        # this is needed to load the table later
+        # uri = connstring + """ type=""" + geom_types[geom_type] + """ table=\"""" + schema_name + """\".\"""" + table_name + """\" (geom) """
 
-        print uri.uri()
-        layer = QgsVectorLayer(uri.uri(), name, "postgres")
-
+        connstring, schema_name, table_name = path
+        uri = connstring + """ type=""" + geom_type + """ table=\"""" + schema_name + """\".\"""" + table_name + """\" (geom) """
+        crs_id = crs.postgisSrid()
+        try:
+            con = psycopg2.connect(connstring)
+            cur = con.cursor()
+            create_query = cur.mogrify("""DROP TABLE IF EXISTS %s.%s; CREATE TABLE %s.%s( geom geometry(%s, %s))""", (
+                    AsIs(schema_name), AsIs(table_name), AsIs(schema_name), AsIs(table_name),geom_type, AsIs(crs_id)))
+            cur.execute(create_query)
+            con.commit()
+            post_q_flds = {2: 'bigint', 6: 'numeric', 1: 'bool', 'else': 'text', 4: 'numeric'}
+            for f in fields:
+                f_type = f.type()
+                if f_type not in [2, 6, 1]:
+                    f_type = 'else'
+                attr_query = cur.mogrify("""ALTER TABLE %s.%s ADD COLUMN %s %s""", (AsIs(schema_name), AsIs(table_name), AsIs(f.name()), AsIs(post_q_flds[f_type])))
+                cur.execute(attr_query)
+                con.commit()
+            field_names = ",".join([f.name() for f in fields])
+            for feature in features:
+                attrs = [i if i else None for i in feature.attributes()]
+                insert_query = cur.mogrify("""INSERT INTO %s.%s (%s, geom) VALUES %s, ST_GeomFromText(%s,%s))""", (AsIs(schema_name), AsIs(table_name), AsIs(field_names), tuple(attrs), feature.geometry().exportToWkt(), AsIs(crs_id)))
+                idx = insert_query.find(', ST_GeomFromText') - 1
+                insert_query = insert_query[:idx] + insert_query[(idx + 1):]
+                cur.execute(insert_query)
+                con.commit()
+            pkey_query = cur.mogrify("""ALTER TABLE %s.%s DROP COLUMN IF EXISTS rcl_id; ALTER TABLE %s.%s ADD COLUMN rcl_id serial PRIMARY KEY NOT NULL;""", (AsIs(schema_name), AsIs(table_name), AsIs(schema_name), AsIs(table_name)))
+            cur.execute(pkey_query)
+            con.commit()
+            con.close()
+            layer = QgsVectorLayer(uri, table_name, 'postgres')
+        except psycopg2.DatabaseError, e:
+            print e
     return layer
 
-
 # LAYER -----------------------------------------------------------------
-
 
 def getLayerByName(name):
     layer = None
