@@ -136,7 +136,10 @@ class NetworkCleanerTool(QObject):
     # SOURCE: https://snorfalorpagus.net/blog/2013/12/07/multithreading-in-qgis-python-plugins/
 
     def updateOutputName(self):
-        self.dlg.outputCleaned.setText(self.dlg.inputCombo.currentText() + "_cl")
+        if self.dlg.memoryRadioButton.isChecked():
+            self.dlg.outputCleaned.setText(self.dlg.inputCombo.currentText() + "_cl")
+        else:
+            self.dlg.outputCleaned.clear()
         self.dlg.dbsettings_dlg.nameLineEdit.setText(self.dlg.inputCombo.currentText() + "_cl")
 
     def giveMessage(self, message, level):
@@ -329,7 +332,6 @@ class NetworkCleanerTool(QObject):
                     QgsMessageLog.logMessage('pseudo_graph edges added %s' % load_range, level=QgsMessageLog.CRITICAL)
                     self.pseudo_graph.step = break_range / float(len(self.pseudo_graph.sEdges))
                     self.graph.load_edges(self.pseudo_graph.break_features_iter(getUnlinks, angle_threshold, fix_unlinks))
-                    unlinks = self.pseudo_graph.unlinks
                     QgsMessageLog.logMessage('pseudo_graph edges broken %s' % break_range, level=QgsMessageLog.CRITICAL)
                     self.pseudo_graph.progress.disconnect()
                     self.graph.progress.connect(self.cl_progress.emit)
@@ -340,7 +342,6 @@ class NetworkCleanerTool(QObject):
                     self.graph.progress.connect(self.cl_progress.emit)
                     self.graph.step = load_range / float(layer.featureCount())
                     self.graph.load_edges(clean_features_iter(layer.getFeatures()))
-                    unlinks = self.graph.unlinks
                     QgsMessageLog.logMessage('graph edges added %s' % load_range, level=QgsMessageLog.CRITICAL)
 
                 self.graph.step = cl1_range / (float(len(self.graph.sEdges)) * 2.0)
@@ -376,13 +377,14 @@ class NetworkCleanerTool(QObject):
                     self.graph.merge_collinear(collinear_threshold, angle_threshold)
                     QgsMessageLog.logMessage('merge  %s' % merge_range, level=QgsMessageLog.CRITICAL)
 
+                # cleaned multiparts so that unlinks are generated properly
                 if orphans:
                     self.graph.step = cl3_range / (float(len(self.graph.sEdges)) * 2.0)
-                    self.graph.clean(True, orphans, snap_threshold, False)
+                    self.graph.clean(True, orphans, snap_threshold, False, True)
                     QgsMessageLog.logMessage('clean  %s' % cl3_range, level=QgsMessageLog.CRITICAL)
                 else:
                     self.graph.step = cl3_range / (float(len(self.graph.sEdges)) * 2.0)
-                    self.graph.clean(True, False, snap_threshold, True)
+                    self.graph.clean(True, False, snap_threshold, True, True)
                     QgsMessageLog.logMessage('clean %s' % cl3_range, level=QgsMessageLog.CRITICAL)
 
                 if getUnlinks:
@@ -392,6 +394,7 @@ class NetworkCleanerTool(QObject):
                     QgsMessageLog.logMessage('unlinks generated %s' % unlinks_range, level=QgsMessageLog.CRITICAL)
                     unlinks = self.graph.unlinks
 
+                cleaned_features = map(lambda e: e.feature, self.graph.sEdges.values())
                 # add to errors multiparts and points
                 self.graph.errors += multiparts
                 self.graph.errors += points
@@ -400,7 +403,7 @@ class NetworkCleanerTool(QObject):
                 self.graph.progress.disconnect()
                 self.cl_progress.emit(95)
                 # return cleaned data, errors and unlinks
-                ret = [f for f in clean_features_iter(map(lambda e: e.feature, self.graph.sEdges.values()))], self.graph.errors, unlinks
+                ret = cleaned_features, self.graph.errors, unlinks
 
             except Exception, e:
                 # forward the exception upstream

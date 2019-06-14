@@ -417,6 +417,39 @@ class sGraph(QObject):
                 self.remove_edge(self.sEdges[e].nodes, e)
         return
 
+    def clean_multipart(self, e):
+
+        self.total_progress += self.step
+        self.progress.emit(self.total_progress)
+
+        # only used in the last cleaning iteration - only updates self.sEdges and spIndex (allowed to be used once in the end)
+        # nodes are not added to the new edges
+
+        for singlepart in e.feature.geometry().asMultiPolyline():
+
+            # create new edge and update spIndex
+            single_geom = QgsGeometry.fromPolyline(singlepart)
+            single_feature = QgsFeature(e.feature)
+            single_feature.setGeometry(single_geom)
+            self.edge_id += 1
+            single_feature.setFeatureId(self.edge_id)
+            self.sEdges[self.edge_id] = sEdge(self.edge_id, single_feature, [])
+            self.edgeSpIndex.insertFeature(single_feature)
+
+            # add points as multipart errors
+            for p in single_geom.asPolyline():
+                err_f = QgsFeature(error_feat)
+                err_f.setGeometry(QgsGeometry.fromPoint(p))
+                err_f.setAttributes(['multipart'])
+                self.errors.append(err_f)
+
+        # delete old feature - spIndex
+
+        self.edgeSpIndex.deleteFeature(self.sEdges[e.id].feature)
+        del self.sEdges[e.id]
+
+        return
+
     def clean_orphan(self, e):
 
         self.total_progress += self.step
@@ -442,7 +475,7 @@ class sGraph(QObject):
     # find duplicate geometries
     # find orphans
 
-    def clean(self, duplicates, orphans, snap_threshold, closed_polylines):
+    def clean(self, duplicates, orphans, snap_threshold, closed_polylines, multiparts=False):
         # clean duplicates - delete longest from group using snap threshold
         step_original = float(self.step)
         if duplicates:
@@ -488,6 +521,20 @@ class sGraph(QObject):
 
                 if len(set(e.nodes)) == 1:
                     self.clean_orphan(e)
+
+        # break multiparts
+        if multiparts:
+            for e in self.sEdges.values():
+
+                if self.killed is True:
+                    break
+
+                self.total_progress += self.step
+                self.progress.emit(self.total_progress)
+
+                if e.feature.geometry().wkbType() == 5:
+                    self.clean_multipart(e)
+
         return
 
     # merge
@@ -618,28 +665,28 @@ class sGraph(QObject):
             self.progress.emit(self.total_progress)
 
             f_geom = e.feature.geometry()
-            lines = filter(lambda line: f_geom.crosses(self.sEdges[line].feature.geometry()) and id != line, self.edgeSpIndex.intersects(f_geom.boundingBox()))
+            # to avoid duplicate unlinks - id > line
+            lines = filter(lambda line: f_geom.crosses(self.sEdges[line].feature.geometry()) and id > line, self.edgeSpIndex.intersects(f_geom.boundingBox()))
 
-            unlinks = []
             for line in lines:
                 crossing_points = f_geom.intersection(self.sEdges[line].feature.geometry())
-                if crossing_points.geometry().wkbType() == 1:
+                # in some cases the startpoint or endpoint is returned - exclude
+                if crossing_points.geometry().wkbType() == 1 and crossing_points.asPoint() not in f_geom.asPolyline():
                     un_f = QgsFeature(unlink_feat)
                     un_f.setGeometry(crossing_points)
                     un_f.setFeatureId(unlinks_id)
                     un_f.setAttributes([unlinks_id])
                     unlinks_id += 1
-                    unlinks.append(un_f)
+                    self.unlinks.append(un_f)
                 elif crossing_points.geometry().wkbType() == 4:
                     for p in crossing_points.asMultiPoint():
-                        un_f = QgsFeature(unlink_feat)
-                        un_f.setGeometry(QgsGeometry.fromPoint(p))
-                        un_f.setFeatureId(unlinks_id)
-                        un_f.setAttributes([unlinks_id])
-                        unlinks_id += 1
-                        unlinks.append(un_f)
-            self.unlinks += unlinks
-
+                        if p not in f_geom.asPolyline():
+                            un_f = QgsFeature(unlink_feat)
+                            un_f.setGeometry(QgsGeometry.fromPoint(p))
+                            un_f.setFeatureId(unlinks_id)
+                            un_f.setAttributes([unlinks_id])
+                            unlinks_id += 1
+                            self.unlinks.append(un_f)
         return
 
 
@@ -679,6 +726,8 @@ class sGraph(QObject):
                 else:
                     merged_points += points[1:]
             merged_geom = QgsGeometry.fromPolyline(merged_points)
+            if merged_geom.wkbType() != 2:
+                print 'ml', merged_geom.wkbType()
 
         feat.setGeometry(merged_geom)
         feat.setFeatureId(self.edge_id)
