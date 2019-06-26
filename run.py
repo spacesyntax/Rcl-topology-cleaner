@@ -12,6 +12,8 @@ layer_name = 'oproads_lon'
 
 layer_name = 'oproads_lon_small'
 layer_name = 'Bhubneshwar'
+layer_name = 'Diss_Hyd_Meso_HS_trails_small'
+
 layer = getLayerByName(layer_name)
 crs = layer.crs()
 encoding = layer.dataProvider().encoding()
@@ -41,8 +43,8 @@ print time.time() - _time
 _time = time.time()
 graph = sGraph({},{})
 pseudo_graph.step = len(pseudo_graph.sEdges)/ float(20)
-#graph.load_edges(pseudo_graph.break_features_iter(getUnlinks, angle_threshold, fix_unlinks))
-graph.load_edges(clean_features_iter(layer.getFeatures()))
+graph.load_edges(pseudo_graph.break_features_iter(getUnlinks, angle_threshold, fix_unlinks))
+#graph.load_edges(clean_features_iter(layer.getFeatures()))
 
 print time.time() - _time
 
@@ -60,44 +62,7 @@ print time.time() - _time
 
 # 5. SNAP
 _time = time.time()
-#graph.snap_endpoints(snap_threshold)
-print time.time() - _time
-
-
-_time = time.time()
-
-graph.ndSpIndex = QgsSpatialIndex()
-res = map(lambda snode: graph.ndSpIndex.insertFeature(snode.feature), graph.sNodes.values())
-filtered_nodes = {}
-# exclude nodes where connectivity = 2 - they will be merged
-graph.step = graph.step / float(2)
-for node in filter(lambda n: n.adj_edges != 2, graph.sNodes.values()):
-    # find nodes within x distance
-    node_geom = node.feature.geometry()
-    node_geom_buffer = node_geom.buffer(snap_threshold, 10)
-    nodes = graph.ndSpIndex.intersects(node_geom_buffer.boundingBox())
-    nodes = [n for n in nodes if n != node.id]
-    nodes = [n for n in nodes if node_geom.shortestLine(graph.sNodes[n].feature.geometry()).length() <= snap_threshold]
-
-
-print time.time() - _time
-print time.time() - _time
-
-
-
-    and node_geom_buffer.intersects(graph.sNodes[n].feature.geometry())]
-
-
-
-    nodes = filter(lambda nd: nd != node.id and node_geom_buffer.intersects(graph.sNodes[nd].feature.geometry()),
-                   graph.ndSpIndex.intersects(node_geom_buffer.boundingBox()))
-    if len(nodes) > 0:
-        filtered_nodes[node.id] = nodes
-
-
-
-
-
+graph.snap_endpoints(snap_threshold)
 
 
 
