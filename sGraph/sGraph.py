@@ -69,7 +69,7 @@ class sGraph(QObject):
 
     # graph from feat iter
     # updates the id
-    def load_edges(self, feat_iter):
+    def load_edges(self, feat_iter, angle_threshold):
 
         for f in feat_iter:
 
@@ -77,9 +77,10 @@ class sGraph(QObject):
                 break
 
             # add edge
-            geometry = f.geometry().asPolyline()
-            startpoint = geometry[0]
-            endpoint = geometry[-1]
+            geometry = f.geometry().simplify(angle_threshold)
+            geometry_pl = geometry.asPolyline()
+            startpoint = geometry_pl[0]
+            endpoint = geometry_pl[-1]
             start = self.load_point(startpoint)
             end = self.load_point(endpoint)
             snodes = [start, end]
@@ -87,6 +88,7 @@ class sGraph(QObject):
             self.update_topology(snodes[0], snodes[1], self.edge_id)
 
             f.setFeatureId(self.edge_id)
+            f.setGeometry(geometry)
             sedge = sEdge(self.edge_id, f, snodes)
             self.sEdges[self.edge_id] = sedge
             #self.edgeSpIndex.insertFeature(f)
@@ -539,7 +541,7 @@ class sGraph(QObject):
 
     # merge
 
-    def merge_b_intersections(self, angle_threshold=0):
+    def merge_b_intersections(self, angle_threshold):
 
         # special cases: merge parallels (becomes orphan)
         # do not merge two parallel self loops

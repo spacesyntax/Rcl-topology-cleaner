@@ -146,20 +146,21 @@ class RoadNetworkCleanerDialog(QtGui.QDialog, FORM_CLASS):
     def getOutput(self):
         if self.shpRadioButton.isChecked():
             shp_path = self.outputCleaned.text()
-            return shp_path, shp_path[:-6] + "u.shp", shp_path[:-4] + "_errors.shp"
+            return shp_path, shp_path[:-4] + "_u.shp", shp_path[:-4] + "_errors.shp"
         elif self.postgisRadioButton.isChecked():
             try:
                 database, schema, table_name = self.outputCleaned.text().split(':')
                 db_path = self.dbsettings_dlg.connstring, schema, table_name
                 db_path_u = list(db_path)
-                db_path_u[2] = db_path_u[2][:-2] + 'u'
+                db_path_u[2] = db_path_u[2] + '_u'
                 db_path_errors = list(db_path)
                 db_path_errors[2] = db_path_u[2] + '_errors'
                 return db_path, tuple(db_path_u), tuple(db_path_errors)
             except ValueError:
                 return '', '', ''
         else:
-            return None, None, None
+            temp_name = self.outputCleaned.text()
+            return temp_name, temp_name + '_u', temp_name + '_errors'
 
     def popActiveLayers(self, layers_list):
         self.inputCombo.clear()

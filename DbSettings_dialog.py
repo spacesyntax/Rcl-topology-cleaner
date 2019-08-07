@@ -52,7 +52,7 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
 
     def popDbs(self):
         self.dbCombo.clear()
-        self.dbCombo.addItems(sorted(self.available_dbs.keys()))
+        self.dbCombo.addItems(['select db'] + sorted(self.available_dbs.keys()))
         return
 
     def getSelectedDb(self):
@@ -68,6 +68,9 @@ class DbSettingsDialog(QtGui.QDialog, FORM_CLASS):
             return {}
 
     def popSchemas(self):
+        idx = self.dbCombo.findText('select db')
+        if idx != -1:
+            self.dbCombo.removeItem(idx)
         self.schemaCombo.clear()
         schemas = []
         selected_db = self.getSelectedDb()

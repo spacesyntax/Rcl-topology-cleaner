@@ -6,6 +6,7 @@ from PyQt4.QtCore import  QVariant
 import itertools
 import psycopg2
 from psycopg2.extensions import AsIs
+import ntpath
 
 from qgis.gui import QgsMessageBar
 
@@ -28,14 +29,19 @@ def clean_features_iter(feat_iter):
     id = 0
     for f in feat_iter:
 
-        # dropZValue if geometry is 3D
-        if f.geometry().geometry().is3D():
-                f.geometry().geometry().dropZValue()
+        f_geom = f.geometry()  # can be None
 
-        f_geom = f.geometry()
+        # dropZValue if geometry is 3D
+        if f_geom is None:
+            pass
+        elif f.geometry().geometry().is3D():
+            f.geometry().geometry().dropZValue()
+            f_geom = f.geometry()
 
         # point
-        if f_geom.length() <= 0:
+        if f_geom is None:
+            pass
+        elif f_geom.length() <= 0:
             ml_error = QgsFeature(error_feat)
             ml_error.setGeometry(QgsGeometry.fromPoint(f_geom.asPolyline()[0]))
             ml_error.setAttributes(['point'])
@@ -168,13 +174,13 @@ def grouper(sequence):
 # WRITE -----------------------------------------------------------------
 
 # geom_type allowed: 'Point', 'Linestring', 'Polygon'
-def to_layer(features, crs, encoding, geom_type, layer_type, path, name):
+def to_layer(features, crs, encoding, geom_type, layer_type, path):
 
     first_feat = features[0]
     fields = first_feat.fields()
     layer = None
     if layer_type == 'memory':
-        layer = QgsVectorLayer(geom_type + '?crs=' + crs.authid(), name, "memory")
+        layer = QgsVectorLayer(geom_type + '?crs=' + crs.authid(), path, "memory")
         pr = layer.dataProvider()
         pr.addAttributes(fields.toList())
         layer.updateFields()
@@ -189,7 +195,7 @@ def to_layer(features, crs, encoding, geom_type, layer_type, path, name):
         if file_writer.hasError() != QgsVectorFileWriter.NoError:
             print "Error when creating shapefile: ", file_writer.errorMessage()
         del file_writer
-        layer = QgsVectorLayer(path, name, "ogr")
+        layer = QgsVectorLayer(path, ntpath.basename(path)[:-4], "ogr")
         pr = layer.dataProvider()
         layer.startEditing()
         pr.addFeatures(features)
